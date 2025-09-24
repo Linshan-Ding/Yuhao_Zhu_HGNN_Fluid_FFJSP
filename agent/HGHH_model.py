@@ -311,14 +311,6 @@ class HGNNScheduler(nn.Module):
 
         # 如果action_probs 中有 NaN，输出state中的各属性值
         if torch.isnan(action_probs).any():
-            # print("NaN detected in action_probs")
-            # print("ope_ma_adj:", state.ope_ma_adj)
-            # print("ope_pre_adj:", state.ope_pre_adj)
-            # print("ope_sub_adj:", state.ope_sub_adj)
-            # print("feat_opes:", state.feat_opes)
-            # print("feat_mas:", state.feat_mas)
-            # print("proc_times:", state.proc_times)
-            # print("eligible:", state.eligible)
             print("kind_task_available_list:", state.kind_task_available_list)
             print("h_ords_tensor:", h_ords_tensor)
             print("达成率", state.current_order_completed_rate)
