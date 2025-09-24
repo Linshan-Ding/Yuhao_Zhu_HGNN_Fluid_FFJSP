@@ -179,7 +179,6 @@ class HGNNScheduler(nn.Module):
         # 构造 actor 与 critic 网络
         self.actor = MLPActor(self.n_hidden_actor, self.actor_dim + 2, self.n_latent_actor, self.action_dim).to(self.device)
         self.critic = MLPCritic(self.n_hidden_critic, self.critic_dim + 1, self.n_latent_critic, 1).to(self.device)
-        self.actor_order_select = MLPActor(self.n_hidden_actor, self.actor_dim + 2, self.n_latent_actor, self.action_dim).to(self.device)
 
     def forward(self) -> None:
         """
