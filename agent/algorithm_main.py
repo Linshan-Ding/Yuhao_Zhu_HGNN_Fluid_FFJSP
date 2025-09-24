@@ -129,7 +129,7 @@ class SchedulingAlgorithm:
             self.machine_tuple = tuple(self.mbom_df['machine_id'].unique())
             self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
             # 加载参数配置
-            with open("./config.json", 'r') as load_f:
+            with open("../data/config.json", 'r') as load_f:
                 load_dict = json.load(load_f)
             self.env_paras = load_dict["env_paras"]
             self.model_paras = load_dict["model_paras"]
@@ -312,7 +312,7 @@ if __name__ == '__main__':
         # instance_name = random.choice(instance_names)
 
         # 打印当前工作目录和文件路径，以便调试
-        path = os.path.join('data', 'instance', 'competition', instance_name)
+        path = os.path.join('../data', 'instance', 'competition', instance_name)
         print("当前工作目录是:", os.getcwd())
         print("尝试打开的文件路径是:", path)
 
@@ -321,7 +321,7 @@ if __name__ == '__main__':
 
         # 2. 重置算法属性
         team_algorithm.reset()
-        team_algorithm.path = os.path.join('data', 'instance', 'competition', instance_name)
+        team_algorithm.path = os.path.join('../data', 'instance', 'competition', instance_name)
 
         # 4. 运行仿真
         result = platform.run_simulation(path, team_algorithm, True)

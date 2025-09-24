@@ -382,7 +382,7 @@ class CompetitionPlatform:
 
 if __name__ == '__main__':
     # 用于简单测试
-    instance_file = os.path.join('data', 'instance', 'competition', 'Introduction.txt')
+    instance_file = os.path.join('../data', 'instance', 'competition', 'Introduction.txt')
     platform = CompetitionPlatform()
     # 测试：解析实例文件
     instance_data = platform.parse_instance(instance_file)
