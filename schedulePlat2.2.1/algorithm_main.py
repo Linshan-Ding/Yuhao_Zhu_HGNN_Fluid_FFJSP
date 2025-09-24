@@ -12,12 +12,12 @@ from HGHH_model import Memory
 from PPO_model import PPO
 from collections import deque
 from competitionPlatform import CompetitionPlatform
-from visdom import Visdom
+# from visdom import Visdom
 
-viz = Visdom(env='ppo_hgnn_fluid')
-viz.line([-0.2], [0], win='computation_rate', opts=dict(title='computation_rate'))
-viz.line([0], [0], win='total_loss1', opts=dict(title='total_loss1'))
-viz.line([0], [0], win='total_loss2', opts=dict(title='total_loss2'))
+# viz = Visdom(env='ppo_hgnn_fluid')
+# viz.line([-0.2], [0], win='computation_rate', opts=dict(title='computation_rate'))
+# viz.line([0], [0], win='total_loss1', opts=dict(title='total_loss1'))
+# viz.line([0], [0], win='total_loss2', opts=dict(title='total_loss2'))
 
 
 # 参赛队伍算法（请封装成类）
@@ -305,7 +305,7 @@ if __name__ == '__main__':
     for epoch in range(1000):
         team_algorithm.epoch = epoch
         # 0. 配置竞赛案例
-        instance_name = 'train_num2000_lam0.05_change0__3.txt'  #'Introduction.txt' #
+        instance_name = 'test_num2000_lam0.05_change0__3.txt'  #'Introduction.txt' #
         # instance_names = ['train_num2000_lam0.05_change0__1.txt', 'train_num2000_lam0.05_change0__2.txt',
         #                   'train_num2000_lam0.05_change0__3.txt', 'train_num2000_lam0.05_change0__4.txt',
         #                   'train_num2000_lam0.05_change0__5.txt']
@@ -378,7 +378,7 @@ if __name__ == '__main__':
         orders = platform.getOrders(False)
         print("\n仿真结果:")
         print(f"订单达成率: {orders['fulfillment_rate'].values[0]:.2%}")
-        viz.line([-orders['fulfillment_rate'].values[0]], [epoch], win='computation_rate', update='append')
+        # viz.line([-orders['fulfillment_rate'].values[0]], [epoch], win='computation_rate', update='append')
         # viz.line([total_loss1], [epoch], win='total_loss1', update='append')
         # # viz.line([total_loss2], [epoch], win='total_loss2', update='append')
         #
