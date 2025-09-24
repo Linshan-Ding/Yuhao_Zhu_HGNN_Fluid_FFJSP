@@ -175,13 +175,13 @@ class SchedulingAlgorithm:
         """
         # 输出订单达成率
         self.current_order_completed_rate = self.orders_df['fulfillment_rate'].values[0]
-        print(f"当前订单达成率: {self.current_order_completed_rate:.2%}")
+        # print(f"当前订单达成率: {self.current_order_completed_rate:.2%}")
 
         # 删除丢弃的订单
         self.orders_df = self.orders_df[~self.orders_df['order_id'].isin(self.discard_orders_id_list)]
         # 删除已完工的订单
         self.orders_df = self.orders_df[~self.orders_df['order_id'].isin(self.finished_order_ids)]
-        print('当前调度订单数量：', len(self.orders_df))
+        # print('当前调度订单数量：', len(self.orders_df))
         # 读取机器状态
         self.machines_df = platform.getCurrentMachineStatus()
         """
@@ -263,8 +263,8 @@ class SchedulingAlgorithm:
                 self.memory.is_terminals.append(self.done)
                 self.reward_sum += self.reward
 
-        # 保存订单剔除决策网络回报
-        print("完工数量：", self.reward_sum)
+        # # 保存订单剔除决策网络回报
+        # print("完工数量：", self.reward_sum)
 
         if self.current_order_id < len(self.arrival_times):
             self.current_time = self.arrival_times[self.current_order_id]
@@ -313,8 +313,8 @@ if __name__ == '__main__':
 
         # 打印当前工作目录和文件路径，以便调试
         path = os.path.join('../data', 'instance', 'competition', instance_name)
-        print("当前工作目录是:", os.getcwd())
-        print("尝试打开的文件路径是:", path)
+        # print("当前工作目录是:", os.getcwd())
+        # print("尝试打开的文件路径是:", path)
 
         # 1. 创建仿真平台实例
         platform = CompetitionPlatform()
@@ -335,20 +335,9 @@ if __name__ == '__main__':
         """
         print("动作执行网络总回报：", sum(team_algorithm.memory.rewards))
         if len(team_algorithm.memory.rewards) > 0:
-            # 更新工序类型-机器决策策略网络
+            # 更新策略网络
             total_loss1 = team_algorithm.model.update(team_algorithm.memory)
             team_algorithm.memory.clear_memory()
-
-        # print("订单选择网络总回报：", sum(team_algorithm.memory_selected.rewards))
-        # if len(team_algorithm.memory_selected.rewards) > 0:
-        #     # 更新订单剔除策略网络
-        #     total_loss2 = team_algorithm.model_selected.update(team_algorithm.memory_selected)
-        #     team_algorithm.memory_selected.clear_memory()
-        #
-        # if len(team_algorithm.memory_discard.rewards) > 0:
-        #     # 更新订单剔除策略网络
-        #     team_algorithm.model_discard.update(team_algorithm.memory_discard)
-        #     team_algorithm.memory_discard.clear_memory()
 
         # """运行测试算例"""
         # # 打印当前工作目录和文件路径，以便调试
@@ -367,12 +356,8 @@ if __name__ == '__main__':
         # result = platform.run_simulation(path, team_algorithm, True)
 
         # # 保存模型文件到文件夹，并添订单达成率后缀
-        # save_file = f"train_ppo_policy_final_model2.1.pt"
+        # save_file = f"train_ppo_policy_model.pt"
         # torch.save(team_algorithm.model.policy.state_dict(), save_file)
-        # save_file_selected = f"train_ppo_policy_final_model_selected_test.pt"
-        # torch.save(team_algorithm.model_selected.policy.state_dict(), save_file_selected)
-        # save_file_discard = f"train_ppo_policy_final_model_discard_test1.pt"
-        # torch.save(team_algorithm.model_discard.policy.state_dict(), save_file_discard)
 
         # 5. 输出结果
         orders = platform.getOrders(False)
@@ -381,47 +366,21 @@ if __name__ == '__main__':
         # viz.line([-orders['fulfillment_rate'].values[0]], [epoch], win='computation_rate', update='append')
         # viz.line([total_loss1], [epoch], win='total_loss1', update='append')
         # # viz.line([total_loss2], [epoch], win='total_loss2', update='append')
-        #
+
+        # 保存最优模型并生成甘特图
         if order_completed_rate <= orders['fulfillment_rate'].values[0]:
             # 更新最优订单达成率模型
             order_completed_rate = orders['fulfillment_rate'].values[0]
-            platform.getGantta(0, 3000)
+            platform.getGantta(0, 1000)
             """
             def getGantta(self, startTime, endTime)
             生成甘特图
             :param startTime: 开始时间点
             :param endTime: 结束时间点
             """
-            # 5.1 保存训练后的算法模型参数
-            # 假设 team_algorithm.model.policy 是一个 PyTorch 模型
-            # 保存模型文件到文件夹，并添订单达成率后缀
-            save_file = f"train_ppo_policy_best_model2.2.pt"
+            # 保存训练后的算法模型参数
+            save_file = f"train_ppo_policy_model.pt"
             torch.save(team_algorithm.model.policy.state_dict(), save_file)
-        #     # save_file_selected = f"train_ppo_policy_best_model_selected_test.pt"
-        #     # torch.save(team_algorithm.model_selected.policy.state_dict(), save_file_selected)
-        #     # save_file_discard = f"train_ppo_policy_best_model_discard_test.pt"
-        #     # torch.save(team_algorithm.model_discard.policy.state_dict(), save_file_discard)
-        #     # 5.2 获取所有机器的历史作业记录
-        #     machine_records = platform.getMachineRecord()
-        #     """
-        #     def getMachineRecord(self, hasGantta=False) -> Dict[str, pd.DataFrame]:
-        #     获取所有机器的历史作业记录。
-        #
-        #     该方法返回一个字典，包含每台机器已分配的所有任务信息。
-        #
-        #     Args:
-        #         hasGantta (bool, optional): 是否返回甘特图。默认为False。
-        #
-        #     Returns:
-        #         Dict[str, pd.DataFrame]: 以机器ID为键的字典，值为包含该机器所有作业记录的DataFrame，
-        #             DataFrame包含以下列：
-        #                 - task_id: 任务ID
-        #                 - start_time: 任务开始时间
-        #                 - end_time: 任务结束时间
-        #     """
-        #     # with pd.ExcelWriter('machine_records.xlsx') as writer:
-        #     #     for sheet_name, df in machine_records.items():
-        #     #         df.to_excel(writer, sheet_name=str(sheet_name), index=False)
-        #
+
         #     # 6 记录最终结果数据，保存在txt。
         #     print(f"{instance_name},{orders['fulfillment_rate'].values[0]}, {result}", )
