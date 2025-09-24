@@ -177,8 +177,8 @@ class SchedulingAlgorithm:
         self.current_order_completed_rate = self.orders_df['fulfillment_rate'].values[0]
         # print(f"当前订单达成率: {self.current_order_completed_rate:.2%}")
 
-        # 删除丢弃的订单
-        self.orders_df = self.orders_df[~self.orders_df['order_id'].isin(self.discard_orders_id_list)]
+        # # 删除丢弃的订单
+        # self.orders_df = self.orders_df[~self.orders_df['order_id'].isin(self.discard_orders_id_list)]
         # 删除已完工的订单
         self.orders_df = self.orders_df[~self.orders_df['order_id'].isin(self.finished_order_ids)]
         # print('当前调度订单数量：', len(self.orders_df))
@@ -273,8 +273,8 @@ class SchedulingAlgorithm:
         else:
             self.current_time += 1000000
 
-        print("当前时间", self.current_time)
-        print("<丢弃订单数量>", self.environment.order_discard_count)
+        # print("当前时间", self.current_time)
+        # print("<丢弃订单数量>", self.environment.order_discard_count)
 
         # 更新丢弃的订单列表
         self.discard_orders_id_list.extend(self.environment.discard_order_ids)

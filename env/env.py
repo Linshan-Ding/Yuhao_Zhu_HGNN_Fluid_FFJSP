@@ -121,18 +121,12 @@ class SchedulingEnv(gym.Env):
         # 动作数据类型转换
         action1 = action[0]
         action2 = action[1]
-        # 选择任务和机器
+        # 选择工序类型和机器
         task_idx, machine_idx = self.action_dict.get(action1, (None, None))
         chosen_task = self.state.kind_task_tuple[task_idx]  # (r,j)
         chosen_machine = self.state.machine_tuple[machine_idx] # (m)
 
-        # # 选择交期最小的订单作为调度目标
-        # selected_order_id = min(self.state.kind_task_idle_id_list[chosen_task],
-        #                         key=lambda oid: self.orders_df[self.orders_df['order_id'] == oid]['due_date'].values[0])
-        # #选择交期最大的订单
-        # selected_order_id = max(self.state.kind_task_idle_id_list[chosen_task],
-        #                         key=lambda oid: self.orders_df[self.orders_df['order_id'] == oid]['due_date'].values[0])
-        # 随机选择订单作为调度目标
+        # 选择该工序类型阶段的订单
         selected_order_id = self.state.kind_task_idle_id_list[chosen_task][action2]
 
         # 更新机器状态：记录分配的任务ID，起始时间及结束时间（结束时间 = 当前时间 + 加工时间）
