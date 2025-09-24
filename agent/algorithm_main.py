@@ -297,7 +297,7 @@ class SchedulingAlgorithm:
 # 运行仿真
 if __name__ == '__main__':
     # 1. 定义初始订单完工率
-    order_completed_rate = 0.2  # 订单初始完工率
+    order_completed_rate = 0  # 订单初始完工率
     # 2. 创建参赛队伍算法实例
     team_algorithm = SchedulingAlgorithm()
     team_algorithm.epoch_total = 1000
@@ -378,8 +378,7 @@ if __name__ == '__main__':
             :param startTime: 开始时间点
             :param endTime: 结束时间点
             """
-            # 保存训练后的算法模型参数
-            save_file = f"train_ppo_policy_model.pt"
+            save_file = os.path.join('../result', f"ppo_policy_model.pt")
             torch.save(team_algorithm.model.policy.state_dict(), save_file)
 
         #     # 6 记录最终结果数据，保存在txt。
