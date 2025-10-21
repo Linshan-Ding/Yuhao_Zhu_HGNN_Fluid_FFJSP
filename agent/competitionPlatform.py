@@ -378,11 +378,12 @@ class CompetitionPlatform:
         ax.set_yticklabels(machines)
         ax.set_xlim(startTime, endTime)
         ax.grid(True)
-        plt.savefig("gantt_chart.png", bbox_inches="tight", dpi=300)
+        # 保存甘特图到result文件
+        plt.savefig(os.path.join('../result', 'gantt_chart.png'))
 
 if __name__ == '__main__':
     # 用于简单测试
-    instance_file = os.path.join('data', 'instance', 'competition', 'Introduction.txt')
+    instance_file = os.path.join('../data', 'instance', 'competition', 'Introduction.txt')
     platform = CompetitionPlatform()
     # 测试：解析实例文件
     instance_data = platform.parse_instance(instance_file)

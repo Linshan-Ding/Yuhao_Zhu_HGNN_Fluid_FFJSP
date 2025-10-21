@@ -2,15 +2,13 @@
 训练算法：异质神经网络定义、策略网络定义、值网络定义、PPO算法
 """
 import copy
-import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from fontTools.misc.bezierTools import epsilon
 from torch.distributions import Categorical
-from graph.hgnn import GATedge, MLPsim
+from agent.hgnn import GATedge, MLPsim
 from mlp import MLPCritic, MLPActor
-from typing import Tuple, Optional, Union, List
+from typing import Tuple, List
 import random
 
 
@@ -181,7 +179,6 @@ class HGNNScheduler(nn.Module):
         # 构造 actor 与 critic 网络
         self.actor = MLPActor(self.n_hidden_actor, self.actor_dim + 2, self.n_latent_actor, self.action_dim).to(self.device)
         self.critic = MLPCritic(self.n_hidden_critic, self.critic_dim + 1, self.n_latent_critic, 1).to(self.device)
-        self.actor_order_select = MLPActor(self.n_hidden_actor, self.actor_dim + 2, self.n_latent_actor, self.action_dim).to(self.device)
 
     def forward(self) -> None:
         """
@@ -313,14 +310,6 @@ class HGNNScheduler(nn.Module):
 
         # 如果action_probs 中有 NaN，输出state中的各属性值
         if torch.isnan(action_probs).any():
-            # print("NaN detected in action_probs")
-            # print("ope_ma_adj:", state.ope_ma_adj)
-            # print("ope_pre_adj:", state.ope_pre_adj)
-            # print("ope_sub_adj:", state.ope_sub_adj)
-            # print("feat_opes:", state.feat_opes)
-            # print("feat_mas:", state.feat_mas)
-            # print("proc_times:", state.proc_times)
-            # print("eligible:", state.eligible)
             print("kind_task_available_list:", state.kind_task_available_list)
             print("h_ords_tensor:", h_ords_tensor)
             print("达成率", state.current_order_completed_rate)
