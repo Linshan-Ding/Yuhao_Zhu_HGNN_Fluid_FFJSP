@@ -6,7 +6,7 @@ import os
 import json
 import pandas as pd
 import torch
-import copy, random
+import copy
 from env.env import SchedulingEnv
 from HGHH_model import Memory
 from PPO_model import PPO
