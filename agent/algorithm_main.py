@@ -6,7 +6,7 @@ import os
 import json
 import pandas as pd
 import torch
-import copy
+import copy, random
 from env.env import SchedulingEnv
 from HGHH_model import Memory
 from PPO_model import PPO
@@ -227,7 +227,7 @@ class SchedulingAlgorithm:
                 raise ValueError("--------------移动时钟报错---------------")
             elif next_idle_time > self.current_time:
                 self.current_time = next_idle_time
-                print(f"订单到达时刻无可选动作，移动时钟到下一个机器空闲点: {self.current_time} 秒")
+                # print(f"订单到达时刻无可选动作，移动时钟到下一个机器空闲点: {self.current_time} 秒")
 
             # 更新机器状态、订单状态
             for _, row in self.machines_df.iterrows():
@@ -309,7 +309,8 @@ if __name__ == '__main__':
         instance_names = ['train_num2000_lam0.05_change0__1.txt', 'train_num2000_lam0.05_change0__2.txt',
                           'train_num2000_lam0.05_change0__3.txt', 'train_num2000_lam0.05_change0__4.txt',
                           'train_num2000_lam0.05_change0__5.txt']
-        instance_name = random.choice(instance_names)
+        instance_index = epoch % len(instance_names)
+        instance_name = instance_names[instance_index]
 
         # 打印当前工作目录和文件路径，以便调试
         path = os.path.join('../data', 'instance', 'competition', instance_name)
@@ -339,19 +340,41 @@ if __name__ == '__main__':
             total_loss1 = team_algorithm.model.update(team_algorithm.memory)
             team_algorithm.memory.clear_memory()
 
+        # 保存该训练算例下的订单完工率到该算例的csv文件
+        orders = platform.getOrders(False)
+        current_completion_rate = orders['fulfillment_rate'].values[0]
+
+        # 创建结果目录
+        result_dir = '../result'
+        os.makedirs(result_dir, exist_ok=True)
+
+        # 保存到该算例对应的CSV文件
+        csv_filename = os.path.join(result_dir, f"train_curve_instance_{instance_index}.csv")
+
+        # 如果文件不存在，创建并写入表头
+        if not os.path.exists(csv_filename):
+            with open(csv_filename, 'w', encoding='utf-8') as f:
+                f.write("epoch,completion_rate\n")
+
+        # 追加当前周期的数据
+        with open(csv_filename, 'a', encoding='utf-8') as f:
+            f.write(f"{epoch},{current_completion_rate}\n")
+
+
+
         """运行测试算例"""
         instance_name_test = 'train_num2000_lam0.05_change0__3.txt'
         # 打印当前工作目录和文件路径，以便调试
-        path = os.path.join('data', 'instance', 'competition', instance_name_test)
-        print("当前工作目录是:", os.getcwd())
-        print("尝试打开的文件路径是:", path)
+        path = os.path.join('../data', 'instance', 'competition', instance_name_test)
+        # print("当前工作目录是:", os.getcwd())
+        # print("尝试打开的文件路径是:", path)
 
         # 1. 创建仿真平台实例
         platform = CompetitionPlatform()
 
         # 2. 重置算法属性
         team_algorithm.reset()
-        team_algorithm.path = os.path.join('data', 'instance', 'competition', instance_name_test)
+        team_algorithm.path = os.path.join('../data', 'instance', 'competition', instance_name_test)
 
         # 4. 运行仿真
         result = platform.run_simulation(path, team_algorithm, True)

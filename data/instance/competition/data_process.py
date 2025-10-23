@@ -20,9 +20,9 @@ def truncate_and_rewrite(input_file, output_file, max_length):
 
 # 示例使用
 if __name__ == "__main__":
-    input_file = 'num2000_lam0.05_change0__3.txt'  # 输入文件路径
-    output_file = 'test_num2000_lam0.05_change0__3.txt'  # 输出文件路径
-    max_length = 30  # 每行保留的最大元素数量
+    input_file = 'num2000_lam0.05_change0__5.txt'  # 输入文件路径
+    output_file = 'train_num2000_lam0.05_change0__5.txt'  # 输出文件路径
+    max_length = 100  # 每行保留的最大元素数量
 
     truncate_and_rewrite(input_file, output_file, max_length)
     print(f"文件已处理并保存到 {output_file}")
