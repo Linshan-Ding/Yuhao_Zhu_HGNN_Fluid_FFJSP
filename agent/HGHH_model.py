@@ -279,6 +279,7 @@ class HGNNScheduler(nn.Module):
             # 从eligible中隐去不可选订单索引
             if 0 < len(values) < max_long:
                 eligibles[:, kind_task_index, :, len(values):] = False
+        # 计算不同订单的交期均值和标准差
         mean_ords_tensor = torch.mean(h_ords_tensor)
         std_ords_tensor = torch.std(h_ords_tensor)
         h_ords_tensor = (h_ords_tensor - mean_ords_tensor) / (std_ords_tensor + 1e-5)

@@ -16,7 +16,7 @@ from typing import Dict, Tuple, Any, List
 from env.env_state import SchedulingState
 
 
-class SchedulingEnv(gym.Env):
+class SchedulingEnv:
     """
     调度问题 RL 环境
     - 观察空间包括机器状态矩阵和工序状态矩阵（可扩展为 Dict 格式）

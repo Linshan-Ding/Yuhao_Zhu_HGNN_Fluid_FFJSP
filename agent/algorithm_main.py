@@ -12,12 +12,12 @@ from HGHH_model import Memory
 from PPO_model import PPO
 from collections import deque
 from competitionPlatform import CompetitionPlatform
-# from visdom import Visdom
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'  # 临时方案
 
-# viz = Visdom(env='ppo_hgnn_fluid')
-# viz.line([-0.2], [0], win='computation_rate', opts=dict(title='computation_rate'))
-# viz.line([0], [0], win='total_loss1', opts=dict(title='total_loss1'))
-# viz.line([0], [0], win='total_loss2', opts=dict(title='total_loss2'))
+from visdom import Visdom
+viz = Visdom(env='ppo_hgnn')
+viz.line([0], [0], win='computation_rate', opts=dict(title='computation_rate'))
 
 
 # 参赛队伍算法（请封装成类）
@@ -305,11 +305,11 @@ if __name__ == '__main__':
     for epoch in range(1000):
         team_algorithm.epoch = epoch
         # 0. 配置竞赛案例
-        instance_name = 'test_num2000_lam0.05_change0__3.txt'  #'Introduction.txt' #
-        # instance_names = ['train_num2000_lam0.05_change0__1.txt', 'train_num2000_lam0.05_change0__2.txt',
-        #                   'train_num2000_lam0.05_change0__3.txt', 'train_num2000_lam0.05_change0__4.txt',
-        #                   'train_num2000_lam0.05_change0__5.txt']
-        # instance_name = random.choice(instance_names)
+        # instance_name = 'test_num2000_lam0.05_change0__3.txt'
+        instance_names = ['train_num2000_lam0.05_change0__1.txt', 'train_num2000_lam0.05_change0__2.txt',
+                          'train_num2000_lam0.05_change0__3.txt', 'train_num2000_lam0.05_change0__4.txt',
+                          'train_num2000_lam0.05_change0__5.txt']
+        instance_name = random.choice(instance_names)
 
         # 打印当前工作目录和文件路径，以便调试
         path = os.path.join('../data', 'instance', 'competition', instance_name)
@@ -339,33 +339,28 @@ if __name__ == '__main__':
             total_loss1 = team_algorithm.model.update(team_algorithm.memory)
             team_algorithm.memory.clear_memory()
 
-        # """运行测试算例"""
-        # # 打印当前工作目录和文件路径，以便调试
-        # path = os.path.join('data', 'instance', 'competition', instance_name_test)
-        # print("当前工作目录是:", os.getcwd())
-        # print("尝试打开的文件路径是:", path)
-        #
-        # # 1. 创建仿真平台实例
-        # platform = CompetitionPlatform()
-        #
-        # # 2. 重置算法属性
-        # team_algorithm.reset()
-        # team_algorithm.path = os.path.join('data', 'instance', 'competition', instance_name_test)
-        #
-        # # 4. 运行仿真
-        # result = platform.run_simulation(path, team_algorithm, True)
+        """运行测试算例"""
+        instance_name_test = 'train_num2000_lam0.05_change0__3.txt'
+        # 打印当前工作目录和文件路径，以便调试
+        path = os.path.join('data', 'instance', 'competition', instance_name_test)
+        print("当前工作目录是:", os.getcwd())
+        print("尝试打开的文件路径是:", path)
 
-        # # 保存模型文件到文件夹，并添订单达成率后缀
-        # save_file = f"train_ppo_policy_model.pt"
-        # torch.save(team_algorithm.model.policy.state_dict(), save_file)
+        # 1. 创建仿真平台实例
+        platform = CompetitionPlatform()
+
+        # 2. 重置算法属性
+        team_algorithm.reset()
+        team_algorithm.path = os.path.join('data', 'instance', 'competition', instance_name_test)
+
+        # 4. 运行仿真
+        result = platform.run_simulation(path, team_algorithm, True)
 
         # 5. 输出结果
         orders = platform.getOrders(False)
         print("\n仿真结果:")
         print(f"订单达成率: {orders['fulfillment_rate'].values[0]:.2%}")
-        # viz.line([-orders['fulfillment_rate'].values[0]], [epoch], win='computation_rate', update='append')
-        # viz.line([total_loss1], [epoch], win='total_loss1', update='append')
-        # # viz.line([total_loss2], [epoch], win='total_loss2', update='append')
+        viz.line([-orders['fulfillment_rate'].values[0]], [epoch], win='computation_rate', update='append')
 
         # 保存最优模型并生成甘特图
         if order_completed_rate <= orders['fulfillment_rate'].values[0]:
@@ -380,6 +375,3 @@ if __name__ == '__main__':
             """
             save_file = os.path.join('../result', f"ppo_policy_model.pt")
             torch.save(team_algorithm.model.policy.state_dict(), save_file)
-
-        #     # 6 记录最终结果数据，保存在txt。
-        #     print(f"{instance_name},{orders['fulfillment_rate'].values[0]}, {result}", )

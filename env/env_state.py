@@ -358,6 +358,7 @@ class SchedulingState:
         """
         # 创建模型
         model = gp.Model("FluidModel")
+        model.setParam('OutputFlag', 0)
 
         # 创建决策变量 X[(m, rj)]，取值范围 [0, 1]，表示机器 m 在工序 rj 上分配的加工比例
         X = {}
