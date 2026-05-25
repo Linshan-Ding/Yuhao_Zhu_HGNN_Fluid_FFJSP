@@ -165,8 +165,10 @@ class CompetitionPlatform:
             # 用new_orders_df 扩充 self.orders_df
             # 若有新订单，则合并到当前已激活的订单中
             if not new_orders_df.empty:
-                # 使用 concat 合并（假设订单ID是唯一的，此处无需额外去重）
-                self.orders_df = pd.concat([self.orders_df, new_orders_df],ignore_index=True)
+                if self.orders_df is None or self.orders_df.empty:
+                    self.orders_df = new_orders_df.copy().reset_index(drop=True)
+                else:
+                    self.orders_df = pd.concat([self.orders_df, new_orders_df], ignore_index=True)
                 self.orders_df['fulfillment_rate'] = self.fulfillment_rate
             return copy.deepcopy(self.orders_df)
         else:
@@ -212,11 +214,16 @@ class CompetitionPlatform:
         self.parse_instance(path)
         orders_df = copy.deepcopy(self.instance_data['orders_df'])
         self.orders_df_all = copy.deepcopy(self.instance_data['orders_df'])
+        self.orders_finished_df = pd.DataFrame()
+        self.orders_arrival_count = 0
+        self.order_completed_count = 0
+        self.fulfillment_rate = 0.0
         mbom_df = copy.deepcopy(self.instance_data['mbom_df'])
         # 定义仿真结束时刻（例如：最大交期+一定缓冲）
         max_time = orders_df['due_date'].max() + 10000
         begin_time = orders_df['arrival_time'].min()
         # 初始化self.orders_df和self.machines_df
+        self.orders_df = pd.DataFrame(columns=orders_df.columns)
         self.machines_df = copy.deepcopy(self.instance_data['machines_df'])
         self.next_time = begin_time  # 初始化当前时间
 
@@ -274,8 +281,11 @@ class CompetitionPlatform:
 
                 # 剔除已完成订单
                 if int(stage_id) + 1 == self.instance_data['q']:
-                    self.orders_finished_df = pd.concat([self.orders_finished_df,
-                                                         self.orders_df[self.orders_df['order_id'] == order_id]], ignore_index=True)
+                    finished_order = self.orders_df[self.orders_df['order_id'] == order_id].copy()
+                    if self.orders_finished_df is None or self.orders_finished_df.empty:
+                        self.orders_finished_df = finished_order.reset_index(drop=True)
+                    else:
+                        self.orders_finished_df = pd.concat([self.orders_finished_df, finished_order], ignore_index=True)
                     self.orders_df = self.orders_df[self.orders_df['order_id'] != order_id]  # 剔除完工订单
                     self.order_completed_count += 1
                     self.fulfillment_rate = self.order_completed_count / (self.orders_arrival_count + 1e-8)
@@ -299,7 +309,7 @@ class CompetitionPlatform:
                     self.machines_df.loc[row.name, 'end_time'] = None
 
         sim_result = {
-            'fulfillment_rate': orders_df['fulfillment_rate'].iloc[0] if not orders_df.empty else 0.0,
+            'fulfillment_rate': self.fulfillment_rate,
             'schedule': pd.DataFrame(self.schedule_data)
         }
         return sim_result
@@ -378,20 +388,4 @@ class CompetitionPlatform:
         ax.set_yticklabels(machines)
         ax.set_xlim(startTime, endTime)
         ax.grid(True)
-        # 保存甘特图到result文件
         plt.savefig(os.path.join('../result', 'gantt_chart.png'))
-
-if __name__ == '__main__':
-    # 用于简单测试
-    instance_file = os.path.join('../data', 'instance', 'competition', 'Introduction.txt')
-    platform = CompetitionPlatform()
-    # 测试：解析实例文件
-    instance_data = platform.parse_instance(instance_file)
-    print("MBOM:")
-    print(platform.getMBOM().head())
-    print("订单信息:")
-    print(platform.getOrders())
-    print("机器状态:")
-    print(platform.getCurrentMachineStatus())
-    # 测试：当前时间
-    print("当前仿真时间:", platform.getSimulationTime())

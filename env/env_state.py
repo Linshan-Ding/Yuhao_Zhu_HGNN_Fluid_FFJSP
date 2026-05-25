@@ -2,19 +2,15 @@
 环境文件：输入动作，返回各节点的状态、奖励、各节点的邻接矩阵
 """
 
-import sys
-import gym
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import random
-import copy
-import pandas as pd
-from gym import spaces
-from typing import Dict, Tuple, Any, List
-import gurobipy as gp
-from gurobipy import GRB
+import time
+try:
+    import gurobipy as gp
+    from gurobipy import GRB
+except ImportError:
+    gp = None
+    GRB = None
 
 
 # 定义调度状态类
@@ -75,12 +71,26 @@ class SchedulingState:
         self.order_discard_count = 0  # 当前决策点丢弃订单总数
         self.action_dict = None # 状态动作
         self.current_order_completed_rate = None # 当前订单达成率
+        self.fluid_recompute_interval = 1
+        self.fluid_time_limit = 2
+        self.fluid_enabled = True
+        self.fluid_threads = 0
+        self.fluid_profile = True
+        self.order_top_k = 5
+        self.fluid_fallback_fraction = 0.1
+        self.fluid_solve_count = 0
+        self.fluid_solve_seconds = 0.0
+        self._fluid_update_count = 0
+        self._fluid_cache_key = None
+        self._fluid_cache_value = None
+        self._fluid_trigger_key = None
 
     def initialize_from_mbom(self, mbom_df):
         """从MBOM DataFrame初始化必要数据结构和状态的静态特征"""
         # 获取所有产品类型
         self.kind_tuple = tuple(mbom_df['product_type'].unique())
         self.machine_tuple = tuple(mbom_df['machine_id'].unique())
+        self.machine_index_dict = {machine_id: index for index, machine_id in enumerate(self.machine_tuple)}
 
         # 创建每种工件类型的工序顺序字典
         self.task_r_dict = {}
@@ -122,6 +132,7 @@ class SchedulingState:
 
         # 创建工序类型元组
         self.kind_task_tuple = tuple((r, j) for r in self.kind_tuple for j in self.task_r_dict[r])
+        self.kind_task_index_dict = {task: index for index, task in enumerate(self.kind_task_tuple)}
 
         # 初始化各工序类型节点的状态矩阵
         num_tasks = sum(len(v) for v in self.task_r_dict.values())
@@ -142,7 +153,7 @@ class SchedulingState:
             if (r, j) in self.machine_rj_dict:
                 machines = self.machine_rj_dict[(r, j)]
                 for m in machines:
-                    m_index = self.machine_tuple.index(m)
+                    m_index = self.machine_index_dict[m]
                     self.proc_times[i, m_index] = 1 / self.time_mrj_dict[m][(r, j)]  # 速率为时间的倒数
 
         # 初始化机器-工序类型邻接矩阵
@@ -151,7 +162,7 @@ class SchedulingState:
             if (r, j) in self.machine_rj_dict:
                 machines = self.machine_rj_dict[(r, j)]
                 for m in machines:
-                    m_index = self.machine_tuple.index(m)
+                    m_index = self.machine_index_dict[m]
                     self.ope_ma_adj[i, m_index] = True
         # 依据工序顺序创建工序类型紧前、紧后邻接矩阵
         self.ope_pre_adj = torch.full((num_tasks, num_tasks), False)
@@ -347,6 +358,34 @@ class SchedulingState:
 
         return min_due_dates
 
+    def _build_fluid_cache_key(self, kind_task_min_due_date_diff):
+        unprocessed = tuple(sorted((str(rj[0]), str(rj[1]), int(count))
+                                   for rj, count in self.kind_task_unprocessed.items()))
+        due_diff = tuple(sorted((str(rj[0]), str(rj[1]), round(float(diff), 4))
+                                for rj, diff in kind_task_min_due_date_diff.items()))
+        return unprocessed, due_diff
+
+    def _fallback_fluid_solution(self):
+        fluid_x = {}
+        for m in self.machine_tuple:
+            for rj in self.kind_task_unprocessed:
+                if rj in self.time_mrj_dict.get(m, {}):
+                    fluid_x[(m, rj)] = self.fluid_fallback_fraction
+        return fluid_x, 0.0
+
+    def _build_fluid_trigger_key(self, machines_df):
+        unprocessed = tuple(sorted((str(rj[0]), str(rj[1]), int(count))
+                                   for rj, count in self.kind_task_unprocessed.items()))
+        machine_state = []
+        for machine_id in self.machine_tuple:
+            rows = machines_df[machines_df['machine_id'] == machine_id]
+            if rows.empty:
+                machine_state.append((str(machine_id), None, None))
+            else:
+                row = rows.iloc[0]
+                machine_state.append((str(machine_id), str(row['task_id']), row['end_time']))
+        return unprocessed, tuple(machine_state)
+
     def solve_fluid_model(self, kind_task_min_due_date_diff, min_due_date=False):
         """
         求解“最大化所有工序处理速率/未处理量的下界”，从而最小化最大完工时间的流体模型。
@@ -356,6 +395,16 @@ class SchedulingState:
         返回：
           fluid_x：dict，形如 { (machine, rj): 分配比例 }
         """
+        if not self.fluid_enabled or gp is None or GRB is None:
+            return self._fallback_fluid_solution()
+        solve_start_time = time.perf_counter()
+        self.fluid_solve_count += 1
+        try:
+            return self._solve_fluid_model_impl(kind_task_min_due_date_diff, min_due_date)
+        finally:
+            self.fluid_solve_seconds += time.perf_counter() - solve_start_time
+
+    def _solve_fluid_model_impl(self, kind_task_min_due_date_diff, min_due_date=False):
         # 创建模型
         model = gp.Model("FluidModel")
         model.setParam('OutputFlag', 0)
@@ -433,7 +482,9 @@ class SchedulingState:
 
         # 关闭输出日志，并设置求解时间限制（单位秒）
         model.Params.LogToConsole = 0
-        model.Params.TimeLimit = 30
+        model.Params.TimeLimit = self.fluid_time_limit
+        if int(self.fluid_threads or 0) > 0:
+            model.Params.Threads = int(self.fluid_threads)
 
         # 求解模型
         model.optimize()
@@ -474,7 +525,16 @@ class SchedulingState:
         kind_task_min_due_date_diff = {key: min_due_date - self.current_time for key, min_due_date in kind_task_min_due_date.items()}
 
         # 求解流体模型
+        if not self.kind_task_unprocessed:
+            return {}, 0.0
+
+        cache_key = self._build_fluid_cache_key(kind_task_min_due_date_diff)
+        if cache_key == self._fluid_cache_key and self._fluid_cache_value is not None:
+            return self._fluid_cache_value
+
         fluid_x, objective = self.solve_fluid_model(kind_task_min_due_date_diff, min_due_date=False)
+        self._fluid_cache_key = cache_key
+        self._fluid_cache_value = (fluid_x, objective)
 
         # 流体解中每种工序的可选加工机器（分配比例为0则不可选该机器）
         self.machine_rj_fluid_dict = {rj: [] for rj in self.kind_task_unprocessed}
@@ -505,8 +565,19 @@ class SchedulingState:
         self.kind_task_unprocessed, self.kind_task_unprocessed_id_list = self.get_workload_distribution(orders_df)
         # 如果需要重新求解流体模型，则调用求解函数
         if fluid_x_resolve:
-            self.fluid_x, _ = self.calculate_fluid_parameters()
+            interval = max(int(self.fluid_recompute_interval), 1)
+            trigger_key = self._build_fluid_trigger_key(machines_df)
+            trigger_changed = trigger_key != self._fluid_trigger_key
+            should_resolve = self.fluid_x is None or (trigger_changed and self._fluid_update_count % interval == 0)
+            if should_resolve:
+                self.fluid_x, _ = self.calculate_fluid_parameters()
+                self._fluid_trigger_key = trigger_key
             self.update_fluid_state()  # 更新流体状态特征
+        if fluid_x_resolve:
+            self._fluid_update_count += 1
+        elif self.fluid_x is None:
+            self.fluid_x, _ = self._fallback_fluid_solution()
+            self.update_fluid_state()
         self.kind_task_available_list, self.kind_task_idle_id_list, self.machine_idle_rj_dict, self.kind_task_idle_id_due_date_list \
             = self.get_available_rj(current_time, orders_df, machines_df)
         # 更新机器状态矩阵 [[],...] 每一行：[可选工序类型数、最早可用时间、是否可用、可选连续工序类型数, 流体模型利用率]
@@ -543,7 +614,7 @@ class SchedulingState:
         # 更新机器-工序类型边状态矩阵（流体处理速率、是否可用）
         for i, (r, j) in enumerate(self.kind_task_tuple):
             for m in self.machine_tuple:
-                m_index = self.machine_tuple.index(m)
+                m_index = self.machine_index_dict[m]
                 if (m, (r, j)) in self.fluid_x:
                     self.task_machine_edge_fluid_rate_matrix[i, m_index] = self.fluid_x[(m, (r, j))]
                     self.task_machine_edge_fluid_available_matrix[i, m_index] = 1
@@ -553,7 +624,7 @@ class SchedulingState:
         # 更新离散参数下工序类型-机器可选矩阵
         for i, (r, j) in enumerate(self.kind_task_tuple):
             for m in self.machine_tuple:
-                m_index = self.machine_tuple.index(m)
+                m_index = self.machine_index_dict[m]
                 if (r, j) in self.kind_task_available_list and m in self.machine_idle_rj_dict.get((r, j), []):
                     self.eligible[i, m_index] = True
                     # 更新流体解下工序类型-机器可选矩阵
@@ -570,3 +641,47 @@ class SchedulingState:
                 self.eligible_rj_orders[i] = True
             else:
                 self.eligible_rj_orders[i] = False
+
+    def to_policy_obs(self):
+        top_k = max(int(getattr(self, "order_top_k", 0) or 0), 0)
+        max_orders = 1
+        if self.kind_task_idle_id_due_date_list:
+            if top_k > 0:
+                max_orders = max([min(len(v), top_k) for v in self.kind_task_idle_id_due_date_list.values()] + [1])
+            else:
+                max_orders = max([len(v) for v in self.kind_task_idle_id_due_date_list.values()] + [1])
+
+        due_dates = torch.zeros((len(self.kind_task_tuple), max_orders), dtype=torch.float32)
+        order_mask = torch.zeros((len(self.kind_task_tuple), max_orders), dtype=torch.bool)
+        for task_index, task_key in enumerate(self.kind_task_tuple):
+            values = self.kind_task_idle_id_due_date_list.get(task_key, [])
+            if values:
+                selected_values = values[:max_orders]
+                due_dates[task_index, :len(selected_values)] = torch.tensor(selected_values, dtype=torch.float32)
+                order_mask[task_index, :len(selected_values)] = True
+
+        valid_pair_count = int(self.eligible_fluid.sum().item())
+        valid_order_count = int(order_mask.sum().item())
+        padded_action_tokens = int(len(self.kind_task_tuple) * len(self.machine_tuple) * max_orders)
+        valid_action_tokens = int((self.eligible_fluid.unsqueeze(-1) & order_mask.unsqueeze(1)).sum().item())
+
+        return {
+            "raw_opes": self.feat_opes.detach().clone(),
+            "raw_mas": self.feat_mas.detach().clone(),
+            "proc_time": self.proc_times.detach().clone(),
+            "ope_ma_adj": self.ope_ma_adj.detach().clone(),
+            "ope_pre_adj": self.ope_pre_adj.detach().clone(),
+            "ope_sub_adj": self.ope_sub_adj.detach().clone(),
+            "eligible": self.eligible_fluid.detach().clone(),
+            "due_dates": due_dates,
+            "order_mask": order_mask,
+            "current_order_completed_rate": float(self.current_order_completed_rate or 0.0),
+            "num_tasks": len(self.kind_task_tuple),
+            "num_machines": len(self.machine_tuple),
+            "max_orders": max_orders,
+            "valid_pair_count": valid_pair_count,
+            "valid_order_count": valid_order_count,
+            "valid_action_tokens": valid_action_tokens,
+            "padded_action_tokens": padded_action_tokens,
+            "order_top_k": top_k,
+        }
