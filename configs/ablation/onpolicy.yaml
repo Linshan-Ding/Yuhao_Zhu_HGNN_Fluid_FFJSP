@@ -1,0 +1,3 @@
+# 探索消融：纯 on-policy，仅靠熵正则探索，无 epsilon-greedy 分量
+variant: {name: FSHGRL-OnPolicy}
+exploration: {epsilon0: 0.0, epsilon_min: 0.0, behaviour_correction: true}

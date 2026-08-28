@@ -1,0 +1,3 @@
+# 探索消融：使用未修正的重要性比率 pi_theta / pi_old（旧实现）
+variant: {name: FSHGRL-Uncorrected}
+exploration: {behaviour_correction: false}

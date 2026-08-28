@@ -1,4 +1,10 @@
 __pycache__/
 *.py[cod]
-result/gantt_chart.png
-result/ppo_policy_model.pt
+*.pt
+result/*/
+result/*.csv
+result/paper_values.tex
+result/figures/
+!result/.gitkeep
+.venv/
+.idea/

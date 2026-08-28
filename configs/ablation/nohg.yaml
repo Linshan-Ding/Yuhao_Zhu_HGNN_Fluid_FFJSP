@@ -1,0 +1,2 @@
+# FSHGRL-NoHG：异构图注意力编码器换成 MLP（参数量匹配）
+variant: {name: FSHGRL-NoHG, encoder: mlp}

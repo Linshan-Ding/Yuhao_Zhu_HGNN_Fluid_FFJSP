@@ -1,0 +1,5 @@
+# FSHGRL-NoAll：同时去掉流体特征、流体模型与剪枝（与旧版 FSHGRL-NF 可比）
+variant: {name: FSHGRL-NoAll, fluid_node_features: false}
+fluid: {mode: "off", enabled: false}
+action_space: {pruning_mode: none}
+reward: {potential_weight: 0.0}
