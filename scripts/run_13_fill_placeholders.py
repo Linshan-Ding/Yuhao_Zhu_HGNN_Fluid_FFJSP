@@ -27,7 +27,7 @@ SOURCES = {
     "A4": "eval_results.csv: FSHGRL 相对最优规则的提升",
     "A5": "eval_results.csv: FSHGRL 相对最优学习基线的提升",
     "A6": "eval_results.csv: FSHGRL 的 decision_time_ms 均值（秒）",
-    "B1": "log.csv: 各方法的 steps 上限（等交互预算）",
+    "B1": "log.csv: 各方法实际消耗的交互步数区间（等 epoch 预算下的实测范围）",
     "B2": "固定值：超参随机搜索试验次数",
     "B3": "log.csv: 各方法实际训练的 epoch 数（等预算，取各 run 的最大 iter）",
     "H2": "configs/env.yaml: fluid.slack_floor",
