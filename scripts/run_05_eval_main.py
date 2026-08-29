@@ -15,6 +15,8 @@ VARIANT_CONFIG = {
     "noff": "ablation/noff.yaml", "nofp": "ablation/nofp.yaml", "rp": "ablation/rp.yaml",
     "hp": "ablation/hp.yaml", "nofa": "ablation/nofa.yaml", "nosa": "ablation/nosa.yaml",
     "nohg": "ablation/nohg.yaml", "noall": "ablation/noall.yaml",
+    "maxmin": "ablation/fluid_maxmin.yaml", "nonoop": "ablation/nonoop.yaml",
+    "nobc": "ablation/nobc.yaml",
 }
 BASELINE_TAGS = {"drlg": "DRLG", "ahpdqn": "AHP-DQN", "hsddqn": "HSDDQN"}
 

@@ -29,7 +29,6 @@ SOURCES = {
     "A6": "eval_results.csv: FSHGRL 的 decision_time_ms 均值（秒）",
     "B1": "log.csv: 各方法的 steps 上限（等交互预算）",
     "B2": "固定值：超参随机搜索试验次数",
-    "H1": "configs/env.yaml: action_space.theta_crit",
     "H2": "configs/env.yaml: fluid.slack_floor",
     "H3": "configs/env.yaml: fluid.slack_bucket_s",
     "H4": "configs/env.yaml: reward.potential_weight",
@@ -53,7 +52,10 @@ SOURCES = {
     "S6": "pruning_stats.csv: 相对不剪枝的耗时节省",
     "S7": "exact_results.csv: FSHGRL 达到 eta_off 的百分比",
     "S8": "exact_results.csv: 最优规则达到 eta_off 的百分比",
-    "P-TIE": "pruning_stats.csv: DDT=500,S=100 的 p_singleton",
+    "P-TIE": "pruning_stats.csv: main 档 p_singleton 均值",
+    "C-DDT600": "case_results.csv: case3d DDT=600 三个规模的 eta",
+    "C-DDT900": "case_results.csv: case3d DDT=900 三个规模的 eta",
+    "C-DDT1200": "case_results.csv: case3d DDT=1200 三个规模的 eta",
     "P-MILPCHK": "exact_results.csv: replay_match 计数",
 }
 
@@ -91,6 +93,7 @@ exact = load("exact_results.csv")
 evals = load("eval_results.csv")
 stats = load("stats_summary.csv")
 arrival = load("arrival_results.csv")
+case3d = load("case3d_results.csv")
 index = load("../data/instances/index.csv")
 
 values, missing = {}, []
@@ -101,9 +104,14 @@ values["A2"] = num(pruning, "retention_all")
 values["S2"], values["S3"] = values["A1"], values["A2"]
 values["S4"] = num(pruning, "retention_crit")
 values["S5"] = num(pruning, "delta_eta")
-if pruning:
-    tie = [r for r in pruning if "DDT500_S100" in r["instance_id"]]
-    values["P-TIE"] = num(tie, "p_singleton") if tie else None
+values["P-TIE"] = num(pruning, "p_singleton")
+
+# ---- 案例研究：每个 DDT 档按订单规模列出 eta（正文按 "0.28, 0.38, 0.33" 的形式引用）
+for ddt in (600, 900, 1200):
+    rows_d = sorted((r for r in case3d if str(r.get("DDT", "")).startswith(str(ddt))),
+                    key=lambda r: float(r["S"]))
+    if rows_d:
+        values[f"C-DDT{ddt}"] = ", ".join(f"{float(r['eta_best']):.2f}" for r in rows_d)
 
 # ---- 精确解
 if exact:
@@ -157,7 +165,6 @@ if stats:
 # ---- 配置与常量
 from configs.config import load_config  # noqa: E402
 cfg = load_config()
-values["H1"] = cfg.get("action_space.theta_crit")
 values["H2"] = cfg.get("fluid.slack_floor")
 values["H3"] = cfg.get("fluid.slack_bucket_s")
 values["H4"] = cfg.get("reward.potential_weight")

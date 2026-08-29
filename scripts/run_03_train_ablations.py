@@ -18,6 +18,10 @@ VARIANTS = {
     "nosa":  ["ablation/nosa.yaml"],
     "nohg":  ["ablation/nohg.yaml"],
     "noall": ["ablation/noall.yaml"],
+    # 以下三个变体不动五机制网格，各改一处设计决策
+    "maxmin": ["ablation/fluid_maxmin.yaml"],   # 流体目标：max-min 交期可行比 vs 吞吐对齐
+    "nonoop": ["ablation/nonoop.yaml"],         # 关闭主动空闲，退回 non-delay 策略类
+    "nobc":   ["ablation/nobc.yaml"],           # 关闭规则热启动，从随机初始化训练
 }
 
 for tag, extra in VARIANTS.items():
