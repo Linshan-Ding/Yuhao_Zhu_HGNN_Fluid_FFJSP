@@ -160,7 +160,10 @@ if logs:
 
 step("预注册判据裁决（docs/experiment-spec.md §8）")
 # 判据在跑实验之前就写死在 spec 里，这里只做机械核对，不做任何事后调整。
-RULES = {"MOR", "FIFO", "MWKR", "SPT", "EDD", "Random", "RRC"}
+# 从 agent.baselines.rules 导入，不在这里另抄一份：此前这里硬编码的集合漏掉了
+# 后加的 SPT-Idle，而它很可能就是最强的那条规则——主判据会因此对着错误的对手比较。
+from agent.baselines.rules import RULES as _RULE_LIST      # noqa: E402
+RULES = set(_RULE_LIST)
 lookup = {r.comparison.replace("FSHGRL vs. ", ""): (r, h)
           for (r, *_), h in zip(results, holm)}
 

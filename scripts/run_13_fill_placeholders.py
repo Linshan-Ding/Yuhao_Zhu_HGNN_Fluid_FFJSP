@@ -115,7 +115,8 @@ values["S5"] = num(pruning, "delta_eta")
 
 # 与规则的对比全部从统计表读，不另算，避免同一个量两处对不上
 _st = load("stats_summary.csv")
-_RULES = {"MOR", "FIFO", "MWKR", "SPT", "EDD", "RANDOM", "RRC", "SPT-IDLE"}
+from agent.baselines.rules import RULES as _RULE_LIST      # noqa: E402
+_RULES = {r.upper() for r in _RULE_LIST}   # 单一真源，避免与 rules.py 漂移
 
 
 def _fmt(row):
@@ -196,8 +197,10 @@ if evals:
     for r in main_rows:
         by_variant[r["variant"]].append(float(r["eta"]))
     ours_eta = float(np.mean(by_variant["FSHGRL"])) if by_variant.get("FSHGRL") else None
+    # 同样用单一真源：这里漏掉 SPT-Idle 会让"相对最优规则的提升"对着一条较弱的
+    # 规则计算，把 A4 系统性地算大
     rules = {k: float(np.mean(v)) for k, v in by_variant.items()
-             if k in {"MOR", "FIFO", "MWKR", "SPT", "EDD", "Random", "RRC"}}
+             if k.upper() in _RULES}
     drls = {k: float(np.mean(v)) for k, v in by_variant.items()
             if k in {"DRLG", "AHP-DQN", "HSDDQN"}}
     if ours_eta and rules:
