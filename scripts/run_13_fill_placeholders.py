@@ -57,6 +57,9 @@ SOURCES = {
     "P-RND": "stats_summary.csv: FSHGRL vs Random 的 mean_diff 与 p_holm",
     "P-BEST": "stats_summary.csv: FSHGRL vs 最强规则 的 mean_diff 与 p_holm",
     "P-RRC": "stats_summary.csv: FSHGRL vs RRC 的 mean_diff 与 p_holm",
+    "P-DRL": "stats_summary.csv: FSHGRL vs 最强学习基线 的 mean_diff 与 p_holm",
+    "P-DRLWIN": "eval_results.csv: FSHGRL 领先最强学习基线的算例数 / 15",
+    "P-PARTIAL": "stats_summary.csv: 只满足显著性或只满足效应量的对比数",
     "P-TIE": "pruning_stats.csv: main 档 p_singleton 均值",
     "C-DDT600": "case_results.csv: case3d DDT=600 三个规模的 eta",
     "C-DDT900": "case_results.csv: case3d DDT=900 三个规模的 eta",
@@ -135,6 +138,37 @@ for _r in _st:
 if _best_rule is not None:
     values["P-BEST"] = (_best_rule["comparison"].replace("FSHGRL vs. ", "")
                         + " 的 " + _fmt(_best_rule))
+
+# 最强学习基线：与 FSHGRL 差距最小的那个 DRL 基线
+_DRL = {"DRLG", "AHP-DQN", "HSDDQN"}
+_best_drl, _bd = None, None
+for _r in _st:
+    _v = _r["comparison"].upper().replace("FSHGRL VS. ", "")
+    if _v in _DRL and (_bd is None or float(_r["mean_diff"]) < _bd):
+        _best_drl, _bd = _r, float(_r["mean_diff"])
+if _best_drl is not None:
+    values["P-DRL"] = (_best_drl["comparison"].replace("FSHGRL vs. ", "")
+                       + " 的 " + _fmt(_best_drl))
+    _tag = _best_drl["comparison"].replace("FSHGRL vs. ", "")
+    _ours = {r["instance_id"]: float(r["eta"]) for r in evals
+             if r["variant"] == "FSHGRL" and r["tier"] == "main"}
+    _them = {r["instance_id"]: float(r["eta"]) for r in evals
+             if r["variant"] == _tag and r["tier"] == "main"}
+    _both = set(_ours) & set(_them)
+    if _both:
+        values["P-DRLWIN"] = f"{sum(1 for i in _both if _ours[i] > _them[i])}/{len(_both)}"
+
+# 只满足显著性或只满足效应量（而非两者）的对比数——预注册判据要求两者兼备
+_partial = 0
+for _r in _st:
+    try:
+        _sig = float(_r["p_holm"]) < 0.05
+        _eff = abs(float(_r["cliff_delta"])) >= 0.33
+    except (TypeError, ValueError):
+        continue
+    if _sig != _eff:
+        _partial += 1
+values["P-PARTIAL"] = f"{_partial}/{len(_st)}" if _st else None
 values["P-TIE"] = num(pruning, "p_singleton")
 
 # ---- 案例研究：每个 DDT 档按订单规模列出 eta（正文按 "0.28, 0.38, 0.33" 的形式引用）
