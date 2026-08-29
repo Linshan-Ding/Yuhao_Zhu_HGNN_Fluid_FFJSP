@@ -28,7 +28,6 @@ SOURCES = {
     "A5": "eval_results.csv: FSHGRL 相对最优学习基线的提升",
     "A6": "eval_results.csv: FSHGRL 的 decision_time_ms 均值（秒）",
     "B1": "log.csv: 各方法实际消耗的交互步数区间（等 epoch 预算下的实测范围）",
-    "B2": "固定值：超参随机搜索试验次数",
     "B3": "log.csv: 各方法实际训练的 epoch 数（等预算，取各 run 的最大 iter）",
     "H2": "configs/env.yaml: fluid.slack_floor",
     "H3": "configs/env.yaml: fluid.slack_bucket_s",
@@ -71,9 +70,14 @@ SOURCES = {
 
 
 def load(name):
+    """缺文件时返回空列表而不是 None。
+
+    返回 None 会让调用方在遍历时抛 TypeError 而不是走"这一项还没数据"的分支——
+    本脚本的职责恰恰是把缺口整理成清单报出来，自己先崩掉就什么都报不出来了。
+    """
     path = RESULT / name
     if not path.exists():
-        return None
+        return []
     with path.open(encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
@@ -298,7 +302,6 @@ _r2_det = _det if _rollouts else int(cfg.get("runtime.eval_rollouts"))
 values["R3"] = int(values["R1"] or 0) * int(_r2_det)
 values["O1"] = 8
 values["O2"] = "1e-6"
-values["B2"] = 20
 
 import torch  # noqa: E402
 from agent.networks import ActorCritic  # noqa: E402
