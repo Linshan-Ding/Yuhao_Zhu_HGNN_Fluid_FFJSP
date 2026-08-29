@@ -5,10 +5,10 @@ FSHGRL-RP / FSHGRL-HP 是同基数对照，分离"宏观引导"与"单纯缩小�
 """
 import time
 
-from _bootstrap import ROOT, done, run_py, step
+from _bootstrap import ROOT, done, run_py, step, training_budget
 
 N_RUNS = 5
-EPOCHS = 1000
+EPOCHS = training_budget()   # 唯一真源：configs/algo.yaml ppo.total_epochs
 VARIANTS = {
     "noff":  ["ablation/noff.yaml"],
     "nofp":  ["ablation/nofp.yaml"],

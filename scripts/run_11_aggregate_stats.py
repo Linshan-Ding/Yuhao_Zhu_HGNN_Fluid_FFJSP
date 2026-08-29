@@ -122,6 +122,42 @@ append_rows(ROOT / "result" / "friedman_nemenyi.csv",
             FRIED_COLUMNS)
 print(f"  Friedman p={fn['friedman_p']:.2e}  CD={fn['critical_difference']:.3f}", flush=True)
 
+step("训练预算口径的稳健性检查（等 epoch vs 等交互步数）")
+# 等 epoch 不等于等环境交互：主动空闲让每个 episode 的决策点变多，实测主方法
+# 约 3100 步/epoch 而 NoNoOp 约 2300，相差三成。若结论只在其中一种口径下成立，
+# 那它就是预算口径的产物而不是方法的性质，必须查出来。
+budget_rows = []
+logs = {}
+for d in sorted((ROOT / "result").glob("*_run*")):
+    f = d / "log.csv"
+    if not f.exists():
+        continue
+    rows = list(csv.DictReader(f.open(encoding="utf-8")))
+    if rows:
+        logs[d.name] = [(int(x["iter"]), int(x["steps"]),
+                         float(x["eta_val"]) if x["eta_val"] else None) for x in rows]
+if logs:
+    cap = min(r[-1][1] for r in logs.values())
+    for name, rows in sorted(logs.items()):
+        best_ep = max((v for _, _, v in rows if v is not None), default=float("nan"))
+        within = [(i, s, v) for i, s, v in rows if s <= cap]
+        best_st = max((v for _, _, v in within if v is not None), default=float("nan"))
+        budget_rows.append({"run": name, "epochs": rows[-1][0] + 1, "steps": rows[-1][1],
+                            "steps_per_epoch": round(rows[-1][1] / (rows[-1][0] + 1), 1),
+                            "best_eta_val_equal_epoch": round(best_ep, 4),
+                            "best_eta_val_equal_steps": round(best_st, 4),
+                            "step_cap": cap})
+    order_ep = [r["run"] for r in sorted(budget_rows, key=lambda r: -r["best_eta_val_equal_epoch"])]
+    order_st = [r["run"] for r in sorted(budget_rows, key=lambda r: -r["best_eta_val_equal_steps"])]
+    same = order_ep == order_st
+    print(f"  共同步数上限 {cap}；两种口径下方法排序{'一致' if same else '不一致'}", flush=True)
+    if not same:
+        print("  [警告] 结论对预算口径敏感——等 epoch 与等交互步数给出不同排序，"
+              "必须在论文中同时报告两种口径", flush=True)
+    append_rows(ROOT / "result" / "budget_check.csv", budget_rows,
+                ["run", "epochs", "steps", "steps_per_epoch",
+                 "best_eta_val_equal_epoch", "best_eta_val_equal_steps", "step_cap"])
+
 step("预注册判据裁决（docs/experiment-spec.md §8）")
 # 判据在跑实验之前就写死在 spec 里，这里只做机械核对，不做任何事后调整。
 RULES = {"MOR", "FIFO", "MWKR", "SPT", "EDD", "Random", "RRC"}
@@ -177,4 +213,4 @@ append_rows(ROOT / "result" / "preregistered_verdict.csv",
 
 done(t0, ROOT / "result" / "stats_summary.csv", ROOT / "result" / "eval_ci.csv",
      ROOT / "result" / "variance_decomposition.csv", ROOT / "result" / "friedman_nemenyi.csv",
-     ROOT / "result" / "preregistered_verdict.csv")
+     ROOT / "result" / "preregistered_verdict.csv", ROOT / "result" / "budget_check.csv")
