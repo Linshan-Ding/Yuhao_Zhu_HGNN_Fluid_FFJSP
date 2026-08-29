@@ -75,10 +75,19 @@ def make_chooser(method: str, cfg, checkpoint: Path | None, rng):
         env.observation(actions, sol), env.problem.n_stage, 0.0, greedy=True)[0]
 
 
+# 随机策略：同一算例上多次 rollout 才有意义。其余方法在固定算例上贪心求解，
+# 逐次 rollout 的结果逐位相同——重复 10 次不是 10 个样本，只是把同一个数抄十遍，
+# 既浪费算力，又会让"每单元 R3 次运行"这句话在统计上具有误导性。
+STOCHASTIC = {"Random", "RRC"}
+
+
 def evaluate(method: str, tiers: List[str], cfg, checkpoint: Path | None,
              run_id: str, variant: str, n_rollout: int, out: Path) -> Path:
     rng = np.random.default_rng()
     chooser = make_chooser(method, cfg, checkpoint, rng)
+    if method not in STOCHASTIC and n_rollout > 1:
+        print(f"[INFO] {method} 在固定算例上是确定性的，rollout 数 {n_rollout} -> 1", flush=True)
+        n_rollout = 1
     rows = []
     for tier in tiers:
         for meta in read_index(tier):

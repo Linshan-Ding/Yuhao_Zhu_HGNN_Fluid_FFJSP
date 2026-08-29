@@ -42,7 +42,7 @@ SOURCES = {
     "O1": "run_06 常量 ORACLE_ROLLOUTS",
     "O2": "run_06 oracle 并列容差",
     "R1": "configs/algo.yaml: runtime.n_runs",
-    "R2": "configs/algo.yaml: runtime.eval_rollouts",
+    "R2": "configs/algo.yaml: runtime.eval_rollouts（确定性方法为 1，见 eval.py）",
     "R3": "R1 x R2",
     "R4": "result/<run>/commit.txt",
     "R5": "eval_results.csv: main 档 FSHGRL 总行数",
