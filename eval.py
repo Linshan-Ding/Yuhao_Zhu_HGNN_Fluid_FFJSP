@@ -27,7 +27,7 @@ from result.logger import append_rows
 
 EVAL_COLUMNS = ["instance_id", "tier", "S", "DDT", "method", "variant", "run_id",
                 "eta", "nu", "decision_time_ms", "steps", "a_f_mean", "a_feas_mean",
-                "p_singleton", "phi_star_mean", "feasible"]
+                "p_singleton", "phi_star_mean", "noop_rate", "noop_offer_rate", "feasible"]
 
 
 def _run_episode(env: SchedulingEnv, chooser) -> dict:
@@ -47,6 +47,11 @@ def _run_episode(env: SchedulingEnv, chooser) -> dict:
         "a_feas_mean": round(float(np.mean(env.stats.n_feasible)), 3) if env.stats.n_feasible else 0.0,
         "p_singleton": round(env.stats.singleton / max(len(env.stats.n_pruned), 1), 4),
         "phi_star_mean": round(float(np.mean(env.stats.phi_star)), 4) if env.stats.phi_star else "",
+        # 主动空闲的使用率：预注册判据 C-NOOP 直接读这一列。
+        # 分母是"被提供了 no-op 的决策点"，不是全部决策点——否则防死锁约束
+        # 把 no-op 挡掉的时点会稀释掉策略实际的选择倾向。
+        "noop_rate": round(env.stats.noop_used / max(env.stats.noop_offered, 1), 4),
+        "noop_offer_rate": round(env.stats.noop_offered / max(steps, 1), 4),
         "feasible": 1,
     }
 
@@ -70,10 +75,19 @@ def make_chooser(method: str, cfg, checkpoint: Path | None, rng):
         env.observation(actions, sol), env.problem.n_stage, 0.0, greedy=True)[0]
 
 
+# 随机策略：同一算例上多次 rollout 才有意义。其余方法在固定算例上贪心求解，
+# 逐次 rollout 的结果逐位相同——重复 10 次不是 10 个样本，只是把同一个数抄十遍，
+# 既浪费算力，又会让"每单元 R3 次运行"这句话在统计上具有误导性。
+STOCHASTIC = {"Random", "RRC"}
+
+
 def evaluate(method: str, tiers: List[str], cfg, checkpoint: Path | None,
              run_id: str, variant: str, n_rollout: int, out: Path) -> Path:
     rng = np.random.default_rng()
     chooser = make_chooser(method, cfg, checkpoint, rng)
+    if method not in STOCHASTIC and n_rollout > 1:
+        print(f"[INFO] {method} 在固定算例上是确定性的，rollout 数 {n_rollout} -> 1", flush=True)
+        n_rollout = 1
     rows = []
     for tier in tiers:
         for meta in read_index(tier):

@@ -16,7 +16,7 @@ from typing import Callable, Dict, List, Sequence, Tuple
 import numpy as np
 
 from agent.baselines.rules import select as rule_select
-from environment.env import SchedulingEnv
+from environment.env import SchedulingEnv, is_noop
 
 
 @dataclass
@@ -113,10 +113,14 @@ def analyse_instance(env_factory: Callable[[], SchedulingEnv], instance_id: str,
         if not feasible:
             break
         pruned, sol = env.candidate_actions()
+        # |A_f| 的统计只计派工动作：主动空闲不是"被剪枝保留下来的候选"，
+        # 把它算进去会让剪枝率与 P(|A_f|=1) 凭空各偏移一个，
+        # 而这两个量直接进稿件 Table T-NEW-4。
+        dispatch = [a for a in pruned if not is_noop(a)]
         rec.epochs += 1
         rec.a_feas.append(len(feasible))
-        rec.a_pruned.append(len(pruned))
-        if len(pruned) == 1:
+        rec.a_pruned.append(len(dispatch))
+        if len(dispatch) == 1:
             rec.singleton += 1
         if sol.status == "optimal":
             rec.support.append(sol.support_size)

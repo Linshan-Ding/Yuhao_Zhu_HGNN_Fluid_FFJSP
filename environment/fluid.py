@@ -72,7 +72,7 @@ class FluidRelaxation:
     """事件触发 + 缓存 + 热启动的流体松弛求解器（稿件 §3.3.1）。"""
 
     def __init__(self, cfg) -> None:
-        self.mode = str(cfg.get("fluid.mode", "due_date_aware"))
+        self.mode = str(cfg.get("fluid.mode", "throughput"))
         self.enabled = bool(cfg.get("fluid.enabled", True)) and self.mode != "off"
         self.slack_floor = float(cfg.get("fluid.slack_floor", 1.0))
         self.use_flow_balance = bool(cfg.get("fluid.use_flow_balance", True))
@@ -84,14 +84,21 @@ class FluidRelaxation:
 
     # ---------------------------------------------------------------- 触发键
     def trigger_key(self, workload: Dict[int, float], slack: Dict[int, float],
-                    idle_machines: Sequence[int]) -> tuple:
-        """chi(t)，稿件 Eq. (26)：活跃类型集 + 取整负载 + 离散化松弛期 + 空闲机器集。"""
+                    idle_machines: Sequence[int] | None = None) -> tuple:
+        """chi(t)，稿件 Eq. (26)：活跃类型集 + 取整负载 + 离散化松弛期。
+
+        **不含空闲机器集**。LP 的机器容量约束 sum_task u[m, task] <= 1 是对全部出现在
+        合格对中的机器施加的，与"此刻哪些机器空闲"无关——`_solve_impl` 根本不接收该
+        参数，解对它恒不变。把它放进缓存键，只会让每次派工都使缓存失效：实测原实现
+        zeta = 0.997（命中率 0.3%），LP 几乎每个决策点重解一次，占 rollout 用时的一半，
+        而稿件 §4.9 的摊销成本论证正建立在 zeta 较小之上。参数保留只为兼容旧调用。
+        """
         bucket = max(self.slack_bucket, 1e-9)
+        tasks = sorted(workload)
         return (
-            tuple(sorted(workload)),
-            tuple(int(np.ceil(workload[t])) for t in sorted(workload)),
-            tuple(int(np.floor(slack.get(t, 0.0) / bucket)) for t in sorted(workload)),
-            tuple(sorted(int(m) for m in idle_machines)),
+            tuple(tasks),
+            tuple(int(np.ceil(workload[t])) for t in tasks),
+            tuple(int(np.floor(slack.get(t, 0.0) / bucket)) for t in tasks),
         )
 
     # ---------------------------------------------------------------- 主入口
@@ -127,6 +134,8 @@ class FluidRelaxation:
 
     # ------------------------------------------------------------ LP 构造/求解
     def _solve_impl(self, workload, slack_hat, rates, eligible, stage_pairs) -> FluidSolution:
+        if self.mode == "throughput":
+            return self._solve_throughput(workload, slack_hat, rates, eligible, stage_pairs)
         tasks = sorted(workload)
         pairs: List[Tuple[int, int]] = []
         for task in tasks:
@@ -203,6 +212,96 @@ class FluidRelaxation:
         sol = FluidSolution(
             alloc={p: float(max(res.x[var_index[p]], 0.0)) for p in pairs},
             phi_star=float(max(res.x[phi_col], 0.0)),
+            solver="highs", status="optimal",
+        )
+        self._finalize(sol, pairs, tasks, rates)
+        return sol
+
+    def _solve_throughput(self, workload, slack_hat, rates, eligible, stage_pairs) -> FluidSolution:
+        """交期内吞吐最大化：max sum_rj min(delta_hat_rj * lambda_rj, W_rj)。
+
+        为什么换掉 max-min：max-min 交期可行比是**均衡型**目标，它把产能摊平到所有工序
+        类型上；而按时完工件数在过载下要的是**集中与选择性放弃**——把产能给还救得回来的
+        工作，放弃已经救不回来的。两者方向相反，实测 max-min 引导比 SPT 还差 0.058。
+        本目标与 eta 直接同向：它就是"流体意义下能按时交付多少件"。
+
+        分段线性凹函数用辅助变量线性化：y_rj <= delta_hat * lambda_rj 且 y_rj <= W_rj。
+        证书 Phi* 定义为 sum(y)/sum(W)，即可按时交付的工作量占比，仍落在 [0, 1]，
+        因而可直接用作势函数塑形的势（无需再截断）。
+        """
+        tasks = sorted(workload)
+        pairs: List[Tuple[int, int]] = []
+        for task in tasks:
+            for machine in eligible.get(task, []):
+                if rates[task, machine] > 0:
+                    pairs.append((int(machine), int(task)))
+        if not pairs:
+            return FluidSolution(status="no_eligible_pair")
+
+        var_index = {p: i for i, p in enumerate(pairs)}
+        n_u = len(pairs)
+        y_index = {task: n_u + k for k, task in enumerate(tasks)}
+        n_var = n_u + len(tasks)
+
+        c = np.zeros(n_var)
+        for task in tasks:
+            c[y_index[task]] = -1.0                    # min(-sum y) == max(sum y)
+
+        rows: List[np.ndarray] = []
+        rhs: List[float] = []
+
+        # y_rj - delta_hat * sum_m mu u <= 0
+        for task in tasks:
+            row = np.zeros(n_var)
+            scale = float(slack_hat.get(task, self.slack_floor))
+            for machine in eligible.get(task, []):
+                if (machine, task) in var_index:
+                    row[var_index[(machine, task)]] = -scale * float(rates[task, machine])
+            row[y_index[task]] = 1.0
+            rows.append(row)
+            rhs.append(0.0)
+
+        # 机器容量
+        for machine in sorted({m for m, _ in pairs}):
+            row = np.zeros(n_var)
+            for (cand_m, _), idx in var_index.items():
+                if cand_m == machine:
+                    row[idx] = 1.0
+            rows.append(row)
+            rhs.append(1.0)
+
+        # 阶段间流平衡（与 max-min 版本相同）
+        if self.use_flow_balance:
+            for prev_task, next_task in stage_pairs:
+                if prev_task not in workload or next_task not in workload:
+                    continue
+                row = np.zeros(n_var)
+                for machine in eligible.get(prev_task, []):
+                    if (machine, prev_task) in var_index:
+                        row[var_index[(machine, prev_task)]] -= (
+                            float(workload[next_task]) * float(rates[prev_task, machine]))
+                for machine in eligible.get(next_task, []):
+                    if (machine, next_task) in var_index:
+                        row[var_index[(machine, next_task)]] += (
+                            float(workload[prev_task]) * float(rates[next_task, machine]))
+                rows.append(row)
+                rhs.append(0.0)
+
+        a_ub = np.vstack(rows)
+        b_ub = np.asarray(rhs, dtype=float)
+        # y_rj <= W_rj 直接写进变量上界，不必再占一行约束
+        bounds = [(0.0, 1.0)] * n_u + [(0.0, float(workload[t])) for t in tasks]
+
+        res = linprog(c, A_ub=a_ub, b_ub=b_ub, bounds=bounds, method="highs",
+                      options={"time_limit": self.time_limit} if self.time_limit > 0 else None)
+        if not res.success or res.x is None:
+            return FluidSolution(status=f"highs_{res.status}", solver="highs")
+
+        total_w = sum(float(workload[t]) for t in tasks)
+        throughput = float(sum(max(res.x[y_index[t]], 0.0) for t in tasks))
+        sol = FluidSolution(
+            alloc={p: float(max(res.x[var_index[p]], 0.0)) for p in pairs},
+            phi_star=throughput / total_w if total_w > 0 else 0.0,
             solver="highs", status="optimal",
         )
         self._finalize(sol, pairs, tasks, rates)

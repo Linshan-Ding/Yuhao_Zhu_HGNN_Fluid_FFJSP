@@ -27,9 +27,8 @@ SOURCES = {
     "A4": "eval_results.csv: FSHGRL 相对最优规则的提升",
     "A5": "eval_results.csv: FSHGRL 相对最优学习基线的提升",
     "A6": "eval_results.csv: FSHGRL 的 decision_time_ms 均值（秒）",
-    "B1": "log.csv: 各方法的 steps 上限（等交互预算）",
-    "B2": "固定值：超参随机搜索试验次数",
-    "H1": "configs/env.yaml: action_space.theta_crit",
+    "B1": "log.csv: 各方法实际消耗的交互步数区间（等 epoch 预算下的实测范围）",
+    "B3": "log.csv: 各方法实际训练的 epoch 数（等预算，取各 run 的最大 iter）",
     "H2": "configs/env.yaml: fluid.slack_floor",
     "H3": "configs/env.yaml: fluid.slack_bucket_s",
     "H4": "configs/env.yaml: reward.potential_weight",
@@ -42,7 +41,7 @@ SOURCES = {
     "O1": "run_06 常量 ORACLE_ROLLOUTS",
     "O2": "run_06 oracle 并列容差",
     "R1": "configs/algo.yaml: runtime.n_runs",
-    "R2": "configs/algo.yaml: runtime.eval_rollouts",
+    "R2": "configs/algo.yaml: runtime.eval_rollouts（确定性方法为 1，见 eval.py）",
     "R3": "R1 x R2",
     "R4": "result/<run>/commit.txt",
     "R5": "eval_results.csv: main 档 FSHGRL 总行数",
@@ -53,15 +52,32 @@ SOURCES = {
     "S6": "pruning_stats.csv: 相对不剪枝的耗时节省",
     "S7": "exact_results.csv: FSHGRL 达到 eta_off 的百分比",
     "S8": "exact_results.csv: 最优规则达到 eta_off 的百分比",
-    "P-TIE": "pruning_stats.csv: DDT=500,S=100 的 p_singleton",
+    "S9": "stats_summary.csv: FSHGRL vs FSHGRL-NONOOP 的 mean_diff",
+    "P-RND": "stats_summary.csv: FSHGRL vs Random 的 mean_diff 与 p_holm",
+    "P-BEST": "stats_summary.csv: FSHGRL vs 最强规则 的 mean_diff 与 p_holm",
+    "P-RRC": "stats_summary.csv: FSHGRL vs RRC 的 mean_diff 与 p_holm",
+    "P-DRL": "stats_summary.csv: FSHGRL vs 最强学习基线 的 mean_diff 与 p_holm",
+    "P-DRLWIN": "eval_results.csv: FSHGRL 领先最强学习基线的算例数 / 15",
+    "P-PARTIAL": "stats_summary.csv: 只满足显著性或只满足效应量的对比数",
+    "AF-MAIN": "eval_results.csv: FSHGRL 的 a_f_mean 均值",
+    "AF-NOBC": "eval_results.csv: FSHGRL-NOBC 的 a_f_mean 均值",
+    "P-TIE": "pruning_stats.csv: main 档 p_singleton 均值",
+    "C-DDT600": "case_results.csv: case3d DDT=600 三个规模的 eta",
+    "C-DDT900": "case_results.csv: case3d DDT=900 三个规模的 eta",
+    "C-DDT1200": "case_results.csv: case3d DDT=1200 三个规模的 eta",
     "P-MILPCHK": "exact_results.csv: replay_match 计数",
 }
 
 
 def load(name):
+    """缺文件时返回空列表而不是 None。
+
+    返回 None 会让调用方在遍历时抛 TypeError 而不是走"这一项还没数据"的分支——
+    本脚本的职责恰恰是把缺口整理成清单报出来，自己先崩掉就什么都报不出来了。
+    """
     path = RESULT / name
     if not path.exists():
-        return None
+        return []
     with path.open(encoding="utf-8") as handle:
         return list(csv.DictReader(handle))
 
@@ -91,6 +107,7 @@ exact = load("exact_results.csv")
 evals = load("eval_results.csv")
 stats = load("stats_summary.csv")
 arrival = load("arrival_results.csv")
+case3d = load("case3d_results.csv")
 index = load("../data/instances/index.csv")
 
 values, missing = {}, []
@@ -101,9 +118,82 @@ values["A2"] = num(pruning, "retention_all")
 values["S2"], values["S3"] = values["A1"], values["A2"]
 values["S4"] = num(pruning, "retention_crit")
 values["S5"] = num(pruning, "delta_eta")
-if pruning:
-    tie = [r for r in pruning if "DDT500_S100" in r["instance_id"]]
-    values["P-TIE"] = num(tie, "p_singleton") if tie else None
+
+# 与规则的对比全部从统计表读，不另算，避免同一个量两处对不上
+_st = load("stats_summary.csv")
+from agent.baselines.rules import RULES as _RULE_LIST      # noqa: E402
+_RULES = {r.upper() for r in _RULE_LIST}   # 单一真源，避免与 rules.py 漂移
+
+
+def _fmt(row):
+    return (f"{float(row['mean_diff']):+.4f}（Holm 校正 p = {float(row['p_holm']):.2g}，"
+            f"Cliff δ = {float(row['cliff_delta']):+.2f}）")
+
+
+_best_rule, _best_diff = None, None
+for _r in _st:
+    _v = _r["comparison"].upper().replace("FSHGRL VS. ", "")
+    if _v.endswith("FSHGRL-NONOOP"):
+        values["S9"] = f"{float(_r['mean_diff']):+.4f}"
+    if _v == "RANDOM":
+        values["P-RND"] = _fmt(_r)
+    if _v == "RRC":
+        values["P-RRC"] = _fmt(_r)
+    # 最强规则 = 与 FSHGRL 差距最小的那条规则（mean_diff 最小）
+    if _v in _RULES and (_best_diff is None or float(_r["mean_diff"]) < _best_diff):
+        _best_rule, _best_diff = _r, float(_r["mean_diff"])
+if _best_rule is not None:
+    values["P-BEST"] = (_best_rule["comparison"].replace("FSHGRL vs. ", "")
+                        + " 的 " + _fmt(_best_rule))
+
+# 最强学习基线：与 FSHGRL 差距最小的那个 DRL 基线
+_DRL = {"DRLG", "AHP-DQN", "HSDDQN"}
+_best_drl, _bd = None, None
+for _r in _st:
+    _v = _r["comparison"].upper().replace("FSHGRL VS. ", "")
+    if _v in _DRL and (_bd is None or float(_r["mean_diff"]) < _bd):
+        _best_drl, _bd = _r, float(_r["mean_diff"])
+if _best_drl is not None:
+    values["P-DRL"] = (_best_drl["comparison"].replace("FSHGRL vs. ", "")
+                       + " 的 " + _fmt(_best_drl))
+    _tag = _best_drl["comparison"].replace("FSHGRL vs. ", "")
+    _ours = {r["instance_id"]: float(r["eta"]) for r in evals
+             if r["variant"] == "FSHGRL" and r["tier"] == "main"}
+    _them = {r["instance_id"]: float(r["eta"]) for r in evals
+             if r["variant"] == _tag and r["tier"] == "main"}
+    _both = set(_ours) & set(_them)
+    if _both:
+        values["P-DRLWIN"] = f"{sum(1 for i in _both if _ours[i] > _them[i])}/{len(_both)}"
+
+# 只满足显著性或只满足效应量（而非两者）的对比数——预注册判据要求两者兼备
+_partial = 0
+for _r in _st:
+    try:
+        _sig = float(_r["p_holm"]) < 0.05
+        _eff = abs(float(_r["cliff_delta"])) >= 0.33
+    except (TypeError, ValueError):
+        continue
+    if _sig != _eff:
+        _partial += 1
+values["P-PARTIAL"] = f"{_partial}/{len(_st)}" if _st else None
+
+# |A_f| 是策略相关量，不是剪枝强度；正文据此提醒不要跨变体比较
+_af = defaultdict(list)
+for _r in evals:
+    if _r["tier"] == "main" and _r.get("a_f_mean"):
+        _af[_r["variant"]].append(float(_r["a_f_mean"]))
+if _af.get("FSHGRL"):
+    values["AF-MAIN"] = round(float(np.mean(_af["FSHGRL"])), 2)
+if _af.get("FSHGRL-NOBC"):
+    values["AF-NOBC"] = round(float(np.mean(_af["FSHGRL-NOBC"])), 2)
+values["P-TIE"] = num(pruning, "p_singleton")
+
+# ---- 案例研究：每个 DDT 档按订单规模列出 eta（正文按 "0.28, 0.38, 0.33" 的形式引用）
+for ddt in (600, 900, 1200):
+    rows_d = sorted((r for r in case3d if str(r.get("DDT", "")).startswith(str(ddt))),
+                    key=lambda r: float(r["S"]))
+    if rows_d:
+        values[f"C-DDT{ddt}"] = ", ".join(f"{float(r['eta_best']):.2f}" for r in rows_d)
 
 # ---- 精确解
 if exact:
@@ -123,8 +213,10 @@ if evals:
     for r in main_rows:
         by_variant[r["variant"]].append(float(r["eta"]))
     ours_eta = float(np.mean(by_variant["FSHGRL"])) if by_variant.get("FSHGRL") else None
+    # 同样用单一真源：这里漏掉 SPT-Idle 会让"相对最优规则的提升"对着一条较弱的
+    # 规则计算，把 A4 系统性地算大
     rules = {k: float(np.mean(v)) for k, v in by_variant.items()
-             if k in {"MOR", "FIFO", "MWKR", "SPT", "EDD", "Random", "RRC"}}
+             if k.upper() in _RULES}
     drls = {k: float(np.mean(v)) for k, v in by_variant.items()
             if k in {"DRLG", "AHP-DQN", "HSDDQN"}}
     if ours_eta and rules:
@@ -157,16 +249,59 @@ if stats:
 # ---- 配置与常量
 from configs.config import load_config  # noqa: E402
 cfg = load_config()
-values["H1"] = cfg.get("action_space.theta_crit")
 values["H2"] = cfg.get("fluid.slack_floor")
 values["H3"] = cfg.get("fluid.slack_bucket_s")
 values["H4"] = cfg.get("reward.potential_weight")
-values["R1"] = cfg.get("runtime.n_runs")
-values["R2"] = cfg.get("runtime.eval_rollouts")
-values["R3"] = int(cfg.get("runtime.n_runs")) * int(cfg.get("runtime.eval_rollouts"))
+# 等预算：取全部 run 的 iter 上限；若各方法不一致则报错，等预算被破坏必须暴露出来
+_budgets = set()
+for _d in sorted((ROOT / "result").glob("*_run*")):
+    _log = _d / "log.csv"
+    if _log.exists():
+        _rows = list(csv.DictReader(_log.open(encoding="utf-8")))
+        if _rows:
+            _budgets.add(int(_rows[-1]["iter"]) + 1)
+if _budgets:
+    values["B3"] = max(_budgets)
+    if len(_budgets) > 1:
+        print(f"  [警告] 各 run 的训练预算不一致：{sorted(_budgets)}——等预算被破坏，"
+              f"方法间的比较不可用", flush=True)
+
+# R1 必须是**实际跑了几个 run**，不是 configs 里推荐几个。二者不一致时按配置填，
+# 等于在论文里报告没有做过的重复实验。
+_seed_counts = {}
+for _d in sorted((ROOT / "result").glob("*_run*")):
+    if (_d / "checkpoint_best.pt").exists():
+        _seed_counts.setdefault(_d.name.rsplit("_run", 1)[0], 0)
+        _seed_counts[_d.name.rsplit("_run", 1)[0]] += 1
+if _seed_counts:
+    _actual = min(_seed_counts.values())
+    values["R1"] = _actual
+    _cfg_runs = int(cfg.get("runtime.n_runs", 0))
+    if _actual < _cfg_runs:
+        print(f"  [注意] configs 推荐 {_cfg_runs} 次独立 run，实际每个方法只有 "
+              f"{_actual} 次；R1 按实际填 {_actual}，论文须相应说明未测量 run 间方差",
+              flush=True)
+else:
+    values["R1"] = cfg.get("runtime.n_runs")
+# R2 也必须反映实际：确定性方法（贪心求解，逐次 rollout 逐位相同）只跑 1 次，
+# 只有随机基线跑多次。直接从 eval_results.csv 数每个算例上的行数最稳妥。
+_rollouts = {}
+for _r in evals:
+    if _r["tier"] == "main":
+        _rollouts.setdefault((_r["variant"], _r["instance_id"]), 0)
+        _rollouts[(_r["variant"], _r["instance_id"])] += 1
+if _rollouts:
+    _det = min(_rollouts.values())
+    _sto = max(_rollouts.values())
+    values["R2"] = _det if _det == _sto else f"{_det}（确定性方法）/ {_sto}（随机基线）"
+else:
+    values["R2"] = cfg.get("runtime.eval_rollouts")
+# R3 由实际值相乘，不能再回头读 configs——否则 R1 按实际填、R3 按推荐填，
+# 同一张表里两个数自相矛盾
+_r2_det = _det if _rollouts else int(cfg.get("runtime.eval_rollouts"))
+values["R3"] = int(values["R1"] or 0) * int(_r2_det)
 values["O1"] = 8
 values["O2"] = "1e-6"
-values["B2"] = 20
 
 import torch  # noqa: E402
 from agent.networks import ActorCritic  # noqa: E402

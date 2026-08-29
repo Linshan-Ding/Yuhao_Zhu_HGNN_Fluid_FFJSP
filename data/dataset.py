@@ -58,21 +58,31 @@ def _gap_for_target_rho(proc_range, stage_count, machines_per_stage, target_rho)
 
 
 def make_small(cfg, rng, rows):
+    """精确求解参照档。**结构必须与训练分布一致**，只有订单数变小。
+
+    此前该档自带 3 阶段/2 机/2 产品/工时[20,120]，与训练的 5/5/5、工时[25,450]
+    完全不同。在其上测得的"最优性间隙"因此混杂了结构外推误差：实测 FSHGRL 只达
+    离线最优的 77.6%，而无需训练的规则达 85.7%——读起来像方法不如规则，实际是拿
+    分布外的算例去量分布内的间隙。结构改为从 param_table 继承，不再在此处覆盖。
+    """
     d = cfg.get("design.small")
     pt = cfg.get("param_table")
     proc_range = d.get("proc_time_range", pt["proc_time_range"])
-    gap = _gap_for_target_rho(proc_range, int(d["stage_count"]),
-                              int(d["machines_per_stage"]), d.get("target_rho_sys", 1.3))
+    J = int(d.get("stage_count", pt["stage_count"]))
+    mps = int(d.get("machines_per_stage", pt["machines_per_stage"]))
+    n_prod = int(d.get("product_count", pt["product_count"]))
+    gap = _gap_for_target_rho(proc_range, J, mps, d.get("target_rho_sys", 2.5))
     for S in d["order_counts"]:
         for ddt in d["ddt_levels"]:
             for k in range(int(d["instances_per_cell"])):
                 iid = f"small_S{S}_DDT{ddt}_c{k+1}"
                 _emit(build_instance(
                     rng, instance_id=iid, tier="small",
-                    product_count=int(d["product_count"]), stage_count=int(d["stage_count"]),
-                    machines_per_stage=[int(d["machines_per_stage"])] * int(d["stage_count"]),
+                    product_count=n_prod, stage_count=J,
+                    machines_per_stage=[mps] * J,
                     order_count=int(S), proc_time_range=proc_range,
                     ddt=float(ddt), mean_interarrival=gap,
+                    ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
                     arrival_process="poisson"), rows)
 
 
@@ -80,6 +90,10 @@ def make_main(cfg, rng, rows):
     d = cfg.get("design.main")
     pt = cfg.get("param_table")
     J = int(pt["stage_count"])
+    # 到达率由目标系统负荷反推，而不是取参数表区间的中点：中点对应 rho_sys≈0.47，
+    # 实测该负荷下 96% 的决策点只有一张订单可选，订单维度从不被触发。
+    gap = _gap_for_target_rho(pt["proc_time_range"], J, int(pt["machines_per_stage"]),
+                              d.get("target_rho_sys", 1.2))
     for ddt in d["ddt_levels"]:
         for S in d["order_counts"]:
             iid = f"main_DDT{ddt}_S{S}"
@@ -88,8 +102,8 @@ def make_main(cfg, rng, rows):
                 product_count=int(pt["product_count"]), stage_count=J,
                 machines_per_stage=[int(pt["machines_per_stage"])] * J,
                 order_count=int(S), proc_time_range=pt["proc_time_range"],
-                ddt=float(ddt),
-                mean_interarrival=float(sum(pt["interarrival_range"])) / 2.0,
+                ddt=float(ddt), mean_interarrival=gap,
+                ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
                 arrival_process="poisson"), rows)
 
 
@@ -106,6 +120,7 @@ def make_arrival(cfg, rng, rows):
                 machines_per_stage=[int(pt["machines_per_stage"])] * J,
                 order_count=int(d["order_count"]), proc_time_range=pt["proc_time_range"],
                 ddt=float(d["ddt"]), mean_interarrival=float(gap),
+                ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
                 arrival_process=proc), rows)
 
 
@@ -121,7 +136,9 @@ def make_ood(cfg, rng, rows):
             stage_count=J, machines_per_stage=[mps] * J,
             order_count=int(cond.get("order_count", d["order_count_default"])),
             proc_time_range=pt["proc_time_range"], ddt=float(d["ddt"]),
-            mean_interarrival=float(sum(pt["interarrival_range"])) / 2.0,
+            mean_interarrival=_gap_for_target_rho(pt["proc_time_range"], J, mps,
+                                                  cfg.get("design.main").get("target_rho_sys", 1.2)),
+            ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
             arrival_process="poisson"), rows)
 
 
@@ -136,7 +153,10 @@ def make_val(cfg, rng, rows):
             machines_per_stage=[int(pt["machines_per_stage"])] * J,
             order_count=int(d["order_count"]), proc_time_range=pt["proc_time_range"],
             ddt=float(d["ddt"]),
-            mean_interarrival=float(sum(pt["interarrival_range"])) / 2.0,
+            mean_interarrival=_gap_for_target_rho(pt["proc_time_range"], J,
+                                                  int(pt["machines_per_stage"]),
+                                                  cfg.get("design.main").get("target_rho_sys", 1.2)),
+            ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
             arrival_process="poisson"), rows)
 
 
@@ -152,6 +172,7 @@ def make_case3d(cfg, rng, rows):
                 machines_per_stage=mps, order_count=int(S),
                 proc_time_range=d["proc_time_range"], ddt=float(ddt),
                 mean_interarrival=float(ddt) / 6.0, arrival_process="poisson",
+                ddt_spread=cfg.get("param_table").get("ddt_spread", (1.0, 1.0)),
                 eligibility_prob=0.8), rows)
 
 

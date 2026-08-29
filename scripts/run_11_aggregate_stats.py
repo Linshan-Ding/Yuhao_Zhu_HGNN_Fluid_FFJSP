@@ -6,11 +6,11 @@
 """
 import csv
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 
-from _bootstrap import ROOT, done, step
+from _bootstrap import EXCLUDED_RUN_PREFIXES, ROOT, done, step, training_budget
 
 from analysis.stats import (bca_ci, benjamini_hochberg, friedman_nemenyi, holm_bonferroni,
                             mixed_effects_estimate, paired_compare, variance_decomposition)
@@ -24,6 +24,17 @@ FRIED_COLUMNS = ["method", "mean_rank", "critical_difference", "friedman_stat",
 CI_COLUMNS = ["variant", "instance_id", "eta_mean", "ci_lo", "ci_hi", "n_runs"]
 
 t0 = time.time()
+
+# run_11 是聚合步骤，天然幂等：重跑一次应当得到同一份文件，而不是把行数翻倍。
+# append_rows 是追加语义（对 eval_results.csv 是对的，对派生产物不是），
+# 因此这里先清掉本脚本自己的产物。此前重跑会让 stats_summary.csv 行数翻倍，
+# 而 run_13 从中挑"最强规则"、统计"只满足单条判据的对比数"，都会被污染。
+for _stale in ("stats_summary.csv", "eval_ci.csv", "variance_decomposition.csv",
+               "friedman_nemenyi.csv", "preregistered_verdict.csv", "budget_check.csv"):
+    _f = ROOT / "result" / _stale
+    if _f.exists():
+        _f.unlink()
+
 path = ROOT / "result" / "eval_results.csv"
 if not path.exists():
     raise SystemExit("[FAIL] 缺少 result/eval_results.csv，请先运行 run_05")
@@ -122,5 +133,119 @@ append_rows(ROOT / "result" / "friedman_nemenyi.csv",
             FRIED_COLUMNS)
 print(f"  Friedman p={fn['friedman_p']:.2e}  CD={fn['critical_difference']:.3f}", flush=True)
 
+step("训练预算口径的稳健性检查（等 epoch vs 等交互步数）")
+# 等 epoch 不等于等环境交互：主动空闲让每个 episode 的决策点变多，实测主方法
+# 约 3100 步/epoch 而 NoNoOp 约 2300，相差三成。若结论只在其中一种口径下成立，
+# 那它就是预算口径的产物而不是方法的性质，必须查出来。
+budget_rows = []
+logs = {}
+# 等预算的那一批 run 是"跑完的那些"，它们的 epoch 数彼此相同。configs 里的推荐
+# 预算不能用作判据——本轮就是有意跑在推荐值以下的。因此取各 run epoch 数的众数
+# 作为本轮实际预算，把还在训练、epoch 数零散偏低的 run 排除掉。
+_epochs = {}
+for d in sorted((ROOT / "result").glob("*_run*")):
+    f = d / "log.csv"
+    if not f.exists() or d.name.startswith(EXCLUDED_RUN_PREFIXES):
+        continue
+    rr = list(csv.DictReader(f.open(encoding="utf-8")))
+    if rr:
+        _epochs[d.name] = int(rr[-1]["iter"]) + 1
+_BUDGET = Counter(_epochs.values()).most_common(1)[0][0] if _epochs else 0
+for d in sorted((ROOT / "result").glob("*_run*")):
+    f = d / "log.csv"
+    # 与 checkpoints() 用同一套排除规则：冒烟 run 只有 3 个 epoch，若混进来会把
+    # "共同步数上限"压到它的量级，使步数对齐的比较退化并触发假警报
+    if not f.exists() or d.name.startswith(EXCLUDED_RUN_PREFIXES):
+        continue
+    rows = list(csv.DictReader(f.open(encoding="utf-8")))
+    # 训练尚未跑满预算的 run 会把"共同步数上限"压低，使步数对齐的比较退化。
+    # 只纳入已达预算的 run，并把被排除的列出来，避免"悄悄少了一个方法"。
+    if rows and int(rows[-1]["iter"]) + 1 >= _BUDGET > 0:
+        logs[d.name] = [(int(x["iter"]), int(x["steps"]),
+                         float(x["eta_val"]) if x["eta_val"] else None) for x in rows]
+    elif rows:
+        print(f"  [跳过] {d.name}：只跑到 {int(rows[-1]['iter']) + 1}/{_BUDGET} epoch，"
+              f"尚未达预算", flush=True)
+print(f"  本轮实际等预算 = {_BUDGET} epoch（取各 run 的众数），"
+      f"纳入 {len(logs)} 个已达预算的 run", flush=True)
+if logs:
+    cap = min(r[-1][1] for r in logs.values())
+    for name, rows in sorted(logs.items()):
+        best_ep = max((v for _, _, v in rows if v is not None), default=float("nan"))
+        within = [(i, s, v) for i, s, v in rows if s <= cap]
+        best_st = max((v for _, _, v in within if v is not None), default=float("nan"))
+        budget_rows.append({"run": name, "epochs": rows[-1][0] + 1, "steps": rows[-1][1],
+                            "steps_per_epoch": round(rows[-1][1] / (rows[-1][0] + 1), 1),
+                            "best_eta_val_equal_epoch": round(best_ep, 4),
+                            "best_eta_val_equal_steps": round(best_st, 4),
+                            "step_cap": cap})
+    order_ep = [r["run"] for r in sorted(budget_rows, key=lambda r: -r["best_eta_val_equal_epoch"])]
+    order_st = [r["run"] for r in sorted(budget_rows, key=lambda r: -r["best_eta_val_equal_steps"])]
+    same = order_ep == order_st
+    print(f"  共同步数上限 {cap}；两种口径下方法排序{'一致' if same else '不一致'}", flush=True)
+    if not same:
+        print("  [警告] 结论对预算口径敏感——等 epoch 与等交互步数给出不同排序，"
+              "必须在论文中同时报告两种口径", flush=True)
+append_rows(ROOT / "result" / "budget_check.csv", budget_rows,
+            ["run", "epochs", "steps", "steps_per_epoch",
+             "best_eta_val_equal_epoch", "best_eta_val_equal_steps", "step_cap"])
+
+step("预注册判据裁决（docs/experiment-spec.md §8）")
+# 判据在跑实验之前就写死在 spec 里，这里只做机械核对，不做任何事后调整。
+# 从 agent.baselines.rules 导入，不在这里另抄一份：此前这里硬编码的集合漏掉了
+# 后加的 SPT-Idle，而它很可能就是最强的那条规则——主判据会因此对着错误的对手比较。
+from agent.baselines.rules import RULES as _RULE_LIST      # noqa: E402
+RULES = set(_RULE_LIST)
+lookup = {r.comparison.replace("FSHGRL vs. ", ""): (r, h)
+          for (r, *_), h in zip(results, holm)}
+
+verdict_rows = []
+
+
+def judge(tag, variant, need_delta=True):
+    if variant not in lookup:
+        verdict_rows.append((tag, variant, "无数据", ""))
+        return
+    res, p_h = lookup[variant]
+    ok = (p_h < 0.05 and res.mean_diff > 0) and (not need_delta or res.cliff_delta >= 0.33)
+    verdict_rows.append((tag, variant, "成立" if ok else "不成立",
+                         f"diff={res.mean_diff:+.4f} p_holm={p_h:.2e} delta={res.cliff_delta:+.3f}"))
+
+
+present_rules = [v for v in by_variant if v in RULES]
+if present_rules:
+    best_rule = max(present_rules, key=lambda v: float(np.nanmean(instance_means(v))))
+    print(f"  最强规则（由数据选出，非人工指定）= {best_rule} "
+          f"eta={float(np.nanmean(instance_means(best_rule))):.4f}", flush=True)
+    judge("主判据", best_rule)
+else:
+    verdict_rows.append(("主判据", "最强规则", "无数据", "eval_results.csv 中没有规则基线行"))
+
+judge("C3  引导 vs 缩减", "FSHGRL-RP")
+judge("C-OBJ 目标对齐", "FSHGRL-MAXMIN", need_delta=False)
+judge("C-NOOP 主动空闲", "FSHGRL-NONOOP", need_delta=False)
+judge("C-BC  热启动", "FSHGRL-NOBC", need_delta=False)
+
+noop_used = [float(r["noop_rate"]) for r in records
+             if r["variant"] == "FSHGRL" and r.get("noop_rate") not in (None, "")]
+if noop_used:
+    rate = 100 * float(np.mean(noop_used))
+    verdict_rows.append(("C-NOOP 使用率", "FSHGRL", "成立" if rate > 2 else "不成立",
+                         f"no-op 使用率={rate:.2f}%（门槛 >2%）"))
+
+print()
+for tag, variant, ok, detail in verdict_rows:
+    print(f"  [{ok:^4}] {tag:<16} {variant:<18} {detail}", flush=True)
+failed = [v for v in verdict_rows if v[2] == "不成立"]
+if failed:
+    print("\n  以下判据不成立，按 §8.3 收窄论断到成立的区间，不要追加机制：", flush=True)
+    for tag, variant, _, detail in failed:
+        print(f"    - {tag} ({variant}): {detail}", flush=True)
+append_rows(ROOT / "result" / "preregistered_verdict.csv",
+            [{"criterion": t, "variant": v, "verdict": o, "detail": d}
+             for t, v, o, d in verdict_rows],
+            ["criterion", "variant", "verdict", "detail"])
+
 done(t0, ROOT / "result" / "stats_summary.csv", ROOT / "result" / "eval_ci.csv",
-     ROOT / "result" / "variance_decomposition.csv", ROOT / "result" / "friedman_nemenyi.csv")
+     ROOT / "result" / "variance_decomposition.csv", ROOT / "result" / "friedman_nemenyi.csv",
+     ROOT / "result" / "preregistered_verdict.csv", ROOT / "result" / "budget_check.csv")

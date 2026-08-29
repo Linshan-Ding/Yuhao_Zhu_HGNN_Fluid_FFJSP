@@ -1,0 +1,3 @@
+# 消融：把流体目标退回 max-min 交期可行比（均衡型），检验"目标对齐"的贡献
+variant: {name: FSHGRL-MaxMin}
+fluid: {mode: due_date_aware}

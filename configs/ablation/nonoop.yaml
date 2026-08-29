@@ -1,0 +1,5 @@
+# 消融变体 FSHGRL-NoNoOp：关闭主动空闲，退化为 non-delay 策略。
+# 用于回答"主动空闲这一自由度是否真的有价值"——若该变体不劣于主方法，
+# 说明 no-op 在本问题上无效，应如实报告并从方法中移除。
+action_space:
+  allow_noop: false

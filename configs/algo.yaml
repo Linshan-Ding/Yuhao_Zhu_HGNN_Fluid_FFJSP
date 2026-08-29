@@ -1,7 +1,10 @@
 # 算法：PPO + 行为策略修正 + 网络结构。对应稿件 §4.7–4.8 与 Table 6。
 
 ppo:
-  total_epochs: 1000
+  total_epochs: 250            # 实测约 78 s/epoch（ρ=1.6，8 episode/epoch）。
+                               # 1000 epoch 对应单 run 约 21 h、完整 run 矩阵数百小时，
+                               # 不是可复现的预算；250 epoch 下 BC 起点已达规则水平，
+                               # PPO 只需在其上改进
   lr: 3.0e-4
   gamma: 1.0
   gae_lambda: 0.95
@@ -12,16 +15,17 @@ ppo:
   value_coeff: 0.5             # c_2
   max_grad_norm: 0.5
   target_kl: 0.03
-  minibatch_size: 512
-  rollout_episodes: 2          # 每个 epoch 采集的完整 episode 数
+  minibatch_size: 128          # 必须显著小于每 epoch 的 buffer，否则退化为全批量梯度下降
+  rollout_episodes: 8          # 每个 epoch 采集的完整 episode 数（约 2900 条 transition）
 
 exploration:
   # epsilon-greedy 混合行为策略，稿件 Eq. (54)
   behaviour_correction: true   # true = 存 log b_k 并用修正比率（默认）
                                # false = 存 log pi_old（未修正对照，消融用）
-  epsilon0: 1.0
+  epsilon0: 0.3                # 起始探索率。取 1.0 会让 b_k 恒等于均匀分布，
+                               # 此时 PPO 的裁剪区间等价于"强制策略保持均匀"，是持续的反向拉力
   epsilon_min: 0.001
-  anneal_epochs: 1000          # K_tot
+  anneal_epochs: 90            # K_tot：退火只占总训练量的 35%，留出收敛期
 
 network:
   embed_dim: 16                # d
@@ -38,3 +42,9 @@ runtime:
   update_device: auto          # auto -> cuda if available else cpu
   n_runs: 5                    # 每个方法的独立 run 次数（无随机种子）
   eval_rollouts: 10            # 每个 checkpoint 在每个算例上的评测 rollout 数
+
+training:
+  # 行为克隆热启动：从最强调度规则起步，PPO 只需在此之上改进。
+  # 这是方法的一部分，会在论文方法节如实描述，不是隐藏的预训练技巧。
+  bc_warmup_steps: 3000        # 0 表示关闭（消融变体用）
+  bc_expert: SPT               # 由 run_05 的规则评测结果选出的最强规则

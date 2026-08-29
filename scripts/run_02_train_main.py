@@ -1,10 +1,10 @@
 """训练主方法 FSHGRL：N_RUNS 次独立 run（不设随机种子，每次训练即天然独立重复）。"""
 import time
 
-from _bootstrap import ROOT, done, run_py, step
+from _bootstrap import ROOT, done, run_py, step, training_budget
 
 N_RUNS = 5
-EPOCHS = 1000            # 与 configs/algo.yaml 一致；改训练量请改 configs
+EPOCHS = training_budget()   # 唯一真源：configs/algo.yaml ppo.total_epochs
 
 for i in range(1, N_RUNS + 1):
     name = f"fshgrl_run{i}"

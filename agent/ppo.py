@@ -70,8 +70,10 @@ class PPOAgent:
             idx = int(torch.multinomial(behaviour, 1).item())
 
         logp = float(torch.log(behaviour[idx].clamp_min(1e-12)).item())
+        logp_target = float(torch.log(probs[idx].clamp_min(1e-12)).item())
         ratio_bound = (n / epsilon) if epsilon > 0 else float("inf")
-        return idx, logp, float(value.item()), {"n_candidates": n, "ratio_bound": ratio_bound}
+        return idx, logp, float(value.item()), {"n_candidates": n, "ratio_bound": ratio_bound,
+                                                "logp_target": logp_target}
 
     def update(self, buffer: RolloutBuffer) -> Dict[str, float]:
         if len(buffer) == 0:
@@ -81,6 +83,10 @@ class PPOAgent:
         ret = torch.as_tensor(buffer.returns, dtype=torch.float32, device=self.device)
         logp_old = torch.as_tensor([t.logp_behaviour for t in buffer.data],
                                    dtype=torch.float32, device=self.device)
+        # KL 早停必须以目标策略为基准。用 log b_k 算出的"KL"在第一次梯度步之前就非零
+        # （它衡量的是行为混合分布与目标策略的距离），会把 update_epochs 误削成 1。
+        logp_target_old = torch.as_tensor([t.logp_target for t in buffer.data],
+                                          dtype=torch.float32, device=self.device)
 
         stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0,
                  "approx_kl": 0.0, "clip_frac": 0.0, "ratio_max": 0.0, "n_updates": 0.0}
@@ -116,7 +122,7 @@ class PPOAgent:
                 self.optimizer.step()
 
                 with torch.no_grad():
-                    approx_kl = float((logp_old[batch] - logp_new).mean().item())
+                    approx_kl = float((logp_target_old[batch] - logp_new).mean().item())
                     stats["policy_loss"] += float(policy_loss.item())
                     stats["value_loss"] += float(value_loss.item())
                     stats["entropy"] += float(entropy.item())

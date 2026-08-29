@@ -12,14 +12,19 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-OP_DIM, MA_DIM, ACT_DIM = 12, 5, 3
+OP_DIM, MA_DIM, ACT_DIM = 12, 5, 5      # 动作特征第 5 列为 no-op 标志位
+# critic 的额外全局输入：eta_t / 未到达比例 / 剩余订单比例 / 时间进度 / 丢弃率
+CRITIC_EXTRA = 5
 
 
-def mlp(sizes: List[int], out_act: bool = False) -> nn.Sequential:
+def mlp(sizes: List[int], out_act: bool = False, norm: bool = True) -> nn.Sequential:
+    """隐藏层带 LayerNorm —— 观测特征跨三个数量级，无归一化时线性层难以利用小量纲特征。"""
     layers: List[nn.Module] = []
     for i in range(len(sizes) - 1):
         layers.append(nn.Linear(sizes[i], sizes[i + 1]))
         if i < len(sizes) - 2 or out_act:
+            if norm:
+                layers.append(nn.LayerNorm(sizes[i + 1]))
             layers.append(nn.ELU())
     return nn.Sequential(*layers)
 
@@ -88,15 +93,15 @@ class ActorCritic(nn.Module):
 
         feat = 4 * dim + ACT_DIM + 1                # h_op ‖ h_ma ‖ hbar_O ‖ hbar_M ‖ 动作特征 ‖ eta_t
         if self.use_action_attention:
-            heads = int(cfg.get("network.action_attention_heads", 1))
-            self.q = nn.Linear(feat, feat)
-            self.k = nn.Linear(feat, feat)
-            self.v = nn.Linear(feat, feat)
-            self.heads = heads
+            heads = max(int(cfg.get("network.action_attention_heads", 1)), 1)
+            while feat % heads != 0:                # MultiheadAttention 要求 embed_dim 可整除 heads
+                heads -= 1
+            self.action_attn = nn.MultiheadAttention(feat, heads, batch_first=True)
+            self.action_norm = nn.LayerNorm(feat)
         hidden = list(cfg.get("network.actor_hidden", [128, 128, 128]))
         self.actor = mlp([feat] + hidden + [1])
         c_hidden = list(cfg.get("network.critic_hidden", [128, 128, 128]))
-        self.critic = mlp([2 * dim + 1] + c_hidden + [1])
+        self.critic = mlp([2 * dim + CRITIC_EXTRA] + c_hidden + [1])
 
     def encode(self, obs: dict, n_stage: int):
         op = obs["op"]
@@ -114,16 +119,26 @@ class ActorCritic(nn.Module):
         idx = obs["act_index"]
         eta = obs["eta_t"].reshape(1, 1)
         n_act = idx.shape[0]
+        act_feat = obs["act_feat"]
+        node_feat = torch.cat([h_op[idx[:, 0]], h_ma[idx[:, 1]]], dim=-1)
+        if act_feat.shape[1] >= ACT_DIM:
+            # 主动空闲不对应任何 (工序类型, 机器) 节点对，其占位下标 (0,0) 的嵌入是
+            # 随状态漂移的噪声。按标志位屏蔽，让 no-op 行只由池化全局量与标志位决定。
+            keep = (1.0 - act_feat[:, ACT_DIM - 1]).unsqueeze(-1)
+            node_feat = node_feat * keep
         feats = torch.cat([
-            h_op[idx[:, 0]], h_ma[idx[:, 1]],
+            node_feat,
             g_op.unsqueeze(0).expand(n_act, -1), g_ma.unsqueeze(0).expand(n_act, -1),
-            obs["act_feat"], eta.expand(n_act, 1)], dim=-1)
+            act_feat, eta.expand(n_act, 1)], dim=-1)
         if self.use_action_attention and n_act > 1:
-            q, k, v = self.q(feats), self.k(feats), self.v(feats)
-            attn = torch.softmax(q @ k.transpose(0, 1) / (feats.shape[-1] ** 0.5), dim=-1)
-            feats = attn @ v
+            # 残差 + LayerNorm 是必需的，不是装饰：候选集只有 1--5 个元素且特征高度相似，
+            # 纯 attn @ v 会把所有候选映射成 mean(v)，logits 全等、策略恒为均匀分布，
+            # 梯度比无注意力时小约三个数量级。
+            attended, _ = self.action_attn(feats.unsqueeze(0), feats.unsqueeze(0),
+                                           feats.unsqueeze(0), need_weights=False)
+            feats = self.action_norm(feats + attended.squeeze(0))
         logits = self.actor(feats).squeeze(-1)
-        value = self.critic(torch.cat([g_op, g_ma, eta.squeeze(0)], dim=-1)).squeeze(-1)
+        value = self.critic(torch.cat([g_op, g_ma, obs["global_feat"]], dim=-1)).squeeze(-1)
         return logits, value
 
 

@@ -5,10 +5,10 @@
 """
 import time
 
-from _bootstrap import ROOT, done, run_py, step
+from _bootstrap import ROOT, done, run_py, step, training_budget
 
 N_RUNS = 5
-EPOCHS = 1000
+EPOCHS = training_budget()   # 唯一真源：configs/algo.yaml ppo.total_epochs
 BASELINES = ["DRLG", "AHP-DQN", "HSDDQN"]
 
 for method in BASELINES:

@@ -10,20 +10,66 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
+from agent.baselines.rules import select as rule_select
 from agent.buffer import RolloutBuffer
-from agent.networks import ActorCritic
+from agent.networks import ActorCritic, obs_to_tensors
 from agent.ppo import PPOAgent
 from configs.config import ROOT, load_config
 from data.dataset import read_index
 from data.generator import load_instance_csv, sample_training_instance
-from environment.env import SchedulingEnv
+from environment.env import SchedulingEnv, is_noop
 from result.logger import CsvLogger, VisdomLogger
 
 LOG_COLUMNS = ["iter", "steps", "eta_val", "eta_train", "reward", "policy_loss", "value_loss",
                "entropy", "approx_kl", "clip_frac", "ratio_max", "ratio_bound", "epsilon",
                "sps", "fluid_solve_count", "fluid_cache_hit", "zeta", "phi_star_mean",
                "a_f_mean", "elapsed_s"]
+
+
+def behaviour_clone(net, cfg, rng, param_table, device, steps: int, expert: str) -> float:
+    """用最强调度规则做行为克隆热启动（稿件 §4.8.3）。
+
+    动机是可证的下界而不是调参技巧：PPO 从随机初始化出发时，早期策略近似均匀，
+    其性能远低于一条好规则；先把策略克隆到规则水平，PPO 只需在此之上改进。
+    这条规则在论文中如实报告为方法的一部分，不是隐藏的预训练。
+
+    交叉熵在**完整动作集**（含 no-op）上归一化。曾经试过把 no-op 屏蔽掉，理由是
+    "别把规则永不空闲的限制一起克隆过来"，实测是错的：屏蔽后 no-op 那一维拿不到
+    任何梯度，其 logit 停留在随机初值上，贪心策略于是随机空转 —— BC 结束时
+    eta_val = 0.06，而专家 SPT 约为 0.6。热启动的意义正是**性能下界**，
+    "规则 + 随机空转"根本不构成下界。因此把 no-op 纳入分母、由专家标签把它压低，
+    起点即 non-delay 的规则水平；主动空闲这一自由度改由后续 PPO 的 epsilon-贪婪
+    探索（epsilon_0 = 0.3，no-op 被采样的概率不低于 epsilon/|A_f|）与熵正则去发现。
+    """
+    if steps <= 0:
+        return float("nan")
+    optimizer = torch.optim.Adam(net.parameters(), lr=float(cfg.get("ppo.lr")))
+    collected, losses = 0, []
+    while collected < steps:
+        env = SchedulingEnv(sample_training_instance(rng, param_table), cfg)
+        while not env.done and collected < steps:
+            actions, sol = env.candidate_actions()
+            if not actions:
+                break
+            expert_idx = rule_select(expert, env, actions, rng)
+            n_dispatch = sum(1 for a in actions if not is_noop(a))
+            if n_dispatch > 1:                         # 单个派工候选时没有可学的信息
+                obs = obs_to_tensors(env.observation(actions, sol), device)
+                logits, _ = net(obs, env.problem.n_stage)
+                loss = F.cross_entropy(logits.unsqueeze(0),
+                                       torch.tensor([expert_idx], device=device))
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(net.parameters(),
+                                               float(cfg.get("ppo.max_grad_norm", 0.5)))
+                optimizer.step()
+                losses.append(float(loss.item()))
+            collected += 1
+            if env.step(actions[expert_idx])[1]:
+                break
+    return float(np.mean(losses)) if losses else float("nan")
 
 
 def evaluate(net, cfg, instances, device, n_rollout: int = 1) -> float:
@@ -72,11 +118,21 @@ def main() -> None:
     rng = np.random.default_rng()
     param_table = cfg.get("param_table")
 
+    bc_steps = int(cfg.get("training.bc_warmup_steps", 0))
+    if bc_steps > 0:
+        expert = str(cfg.get("training.bc_expert", "SPT"))
+        t_bc = time.time()
+        bc_loss = behaviour_clone(net, cfg, rng, param_table, device, bc_steps, expert)
+        eta_bc = evaluate(net, cfg, val_instances, device)
+        print(f"[{args.run_name}] BC 热启动完成：expert={expert} steps={bc_steps} "
+              f"loss={bc_loss:.4f} eta_val={eta_bc:.4f} ({time.time() - t_bc:.0f}s)", flush=True)
+
     best_eta, total_steps, started = -1.0, 0, time.time()
     for epoch in range(total_epochs):
         epsilon = agent.epsilon(epoch)
         buffer = RolloutBuffer()
         etas, rewards, phis, cand, bound = [], [], [], [], 0.0
+        n_solve = n_hit = 0                      # 流体 LP 求解/缓存命中，用于摊销成本 zeta
         t0 = time.time()
         for _ in range(rollout_episodes):
             env = SchedulingEnv(sample_training_instance(rng, param_table), cfg)
@@ -88,7 +144,8 @@ def main() -> None:
                 obs = env.observation(actions, sol)
                 idx, logp, value, info = agent.act(obs, env.problem.n_stage, epsilon)
                 reward, done, _ = env.step(actions[idx])
-                buffer.add(obs=obs, action_index=idx, logp_behaviour=logp, reward=reward,
+                buffer.add(obs=obs, action_index=idx, logp_behaviour=logp,
+                           logp_target=info["logp_target"], reward=reward,
                            value=value, done=done, n_candidates=info["n_candidates"],
                            n_stage=env.problem.n_stage)
                 ep_reward += reward
@@ -100,6 +157,8 @@ def main() -> None:
             etas.append(env.eta)
             rewards.append(ep_reward)
             phis.extend(env.stats.phi_star)
+            n_solve += env.fluid.stats.solve_count
+            n_hit += env.fluid.stats.cache_hit_count
 
         stats = agent.update(buffer)
         elapsed = time.time() - t0
@@ -116,6 +175,8 @@ def main() -> None:
                "reward": round(float(np.mean(rewards)), 5),
                "ratio_bound": round(bound, 3), "epsilon": round(epsilon, 5),
                "sps": round(len(buffer) / max(elapsed, 1e-9), 2),
+               "fluid_solve_count": n_solve, "fluid_cache_hit": n_hit,
+               "zeta": round(n_solve / max(n_solve + n_hit, 1), 4),
                "phi_star_mean": round(float(np.mean(phis)), 4) if phis else "",
                "a_f_mean": round(float(np.mean(cand)), 3) if cand else "",
                "elapsed_s": round(time.time() - started, 1)}
