@@ -250,9 +250,40 @@ if _budgets:
         print(f"  [警告] 各 run 的训练预算不一致：{sorted(_budgets)}——等预算被破坏，"
               f"方法间的比较不可用", flush=True)
 
-values["R1"] = cfg.get("runtime.n_runs")
-values["R2"] = cfg.get("runtime.eval_rollouts")
-values["R3"] = int(cfg.get("runtime.n_runs")) * int(cfg.get("runtime.eval_rollouts"))
+# R1 必须是**实际跑了几个 run**，不是 configs 里推荐几个。二者不一致时按配置填，
+# 等于在论文里报告没有做过的重复实验。
+_seed_counts = {}
+for _d in sorted((ROOT / "result").glob("*_run*")):
+    if (_d / "checkpoint_best.pt").exists():
+        _seed_counts.setdefault(_d.name.rsplit("_run", 1)[0], 0)
+        _seed_counts[_d.name.rsplit("_run", 1)[0]] += 1
+if _seed_counts:
+    _actual = min(_seed_counts.values())
+    values["R1"] = _actual
+    _cfg_runs = int(cfg.get("runtime.n_runs", 0))
+    if _actual < _cfg_runs:
+        print(f"  [注意] configs 推荐 {_cfg_runs} 次独立 run，实际每个方法只有 "
+              f"{_actual} 次；R1 按实际填 {_actual}，论文须相应说明未测量 run 间方差",
+              flush=True)
+else:
+    values["R1"] = cfg.get("runtime.n_runs")
+# R2 也必须反映实际：确定性方法（贪心求解，逐次 rollout 逐位相同）只跑 1 次，
+# 只有随机基线跑多次。直接从 eval_results.csv 数每个算例上的行数最稳妥。
+_rollouts = {}
+for _r in evals:
+    if _r["tier"] == "main":
+        _rollouts.setdefault((_r["variant"], _r["instance_id"]), 0)
+        _rollouts[(_r["variant"], _r["instance_id"])] += 1
+if _rollouts:
+    _det = min(_rollouts.values())
+    _sto = max(_rollouts.values())
+    values["R2"] = _det if _det == _sto else f"{_det}（确定性方法）/ {_sto}（随机基线）"
+else:
+    values["R2"] = cfg.get("runtime.eval_rollouts")
+# R3 由实际值相乘，不能再回头读 configs——否则 R1 按实际填、R3 按推荐填，
+# 同一张表里两个数自相矛盾
+_r2_det = _det if _rollouts else int(cfg.get("runtime.eval_rollouts"))
+values["R3"] = int(values["R1"] or 0) * int(_r2_det)
 values["O1"] = 8
 values["O2"] = "1e-6"
 values["B2"] = 20
