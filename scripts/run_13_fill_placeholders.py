@@ -60,6 +60,8 @@ SOURCES = {
     "P-DRL": "stats_summary.csv: FSHGRL vs 最强学习基线 的 mean_diff 与 p_holm",
     "P-DRLWIN": "eval_results.csv: FSHGRL 领先最强学习基线的算例数 / 15",
     "P-PARTIAL": "stats_summary.csv: 只满足显著性或只满足效应量的对比数",
+    "AF-MAIN": "eval_results.csv: FSHGRL 的 a_f_mean 均值",
+    "AF-NOBC": "eval_results.csv: FSHGRL-NOBC 的 a_f_mean 均值",
     "P-TIE": "pruning_stats.csv: main 档 p_singleton 均值",
     "C-DDT600": "case_results.csv: case3d DDT=600 三个规模的 eta",
     "C-DDT900": "case_results.csv: case3d DDT=900 三个规模的 eta",
@@ -170,6 +172,16 @@ for _r in _st:
     if _sig != _eff:
         _partial += 1
 values["P-PARTIAL"] = f"{_partial}/{len(_st)}" if _st else None
+
+# |A_f| 是策略相关量，不是剪枝强度；正文据此提醒不要跨变体比较
+_af = defaultdict(list)
+for _r in evals:
+    if _r["tier"] == "main" and _r.get("a_f_mean"):
+        _af[_r["variant"]].append(float(_r["a_f_mean"]))
+if _af.get("FSHGRL"):
+    values["AF-MAIN"] = round(float(np.mean(_af["FSHGRL"])), 2)
+if _af.get("FSHGRL-NOBC"):
+    values["AF-NOBC"] = round(float(np.mean(_af["FSHGRL-NOBC"])), 2)
 values["P-TIE"] = num(pruning, "p_singleton")
 
 # ---- 案例研究：每个 DDT 档按订单规模列出 eta（正文按 "0.28, 0.38, 0.33" 的形式引用）

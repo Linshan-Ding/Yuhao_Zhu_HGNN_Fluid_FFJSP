@@ -6,11 +6,11 @@
 """
 import csv
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 
-from _bootstrap import ROOT, done, step
+from _bootstrap import EXCLUDED_RUN_PREFIXES, ROOT, done, step, training_budget
 
 from analysis.stats import (bca_ci, benjamini_hochberg, friedman_nemenyi, holm_bonferroni,
                             mixed_effects_estimate, paired_compare, variance_decomposition)
@@ -24,6 +24,17 @@ FRIED_COLUMNS = ["method", "mean_rank", "critical_difference", "friedman_stat",
 CI_COLUMNS = ["variant", "instance_id", "eta_mean", "ci_lo", "ci_hi", "n_runs"]
 
 t0 = time.time()
+
+# run_11 是聚合步骤，天然幂等：重跑一次应当得到同一份文件，而不是把行数翻倍。
+# append_rows 是追加语义（对 eval_results.csv 是对的，对派生产物不是），
+# 因此这里先清掉本脚本自己的产物。此前重跑会让 stats_summary.csv 行数翻倍，
+# 而 run_13 从中挑"最强规则"、统计"只满足单条判据的对比数"，都会被污染。
+for _stale in ("stats_summary.csv", "eval_ci.csv", "variance_decomposition.csv",
+               "friedman_nemenyi.csv", "preregistered_verdict.csv", "budget_check.csv"):
+    _f = ROOT / "result" / _stale
+    if _f.exists():
+        _f.unlink()
+
 path = ROOT / "result" / "eval_results.csv"
 if not path.exists():
     raise SystemExit("[FAIL] 缺少 result/eval_results.csv，请先运行 run_05")
@@ -128,14 +139,35 @@ step("训练预算口径的稳健性检查（等 epoch vs 等交互步数）")
 # 那它就是预算口径的产物而不是方法的性质，必须查出来。
 budget_rows = []
 logs = {}
+# 等预算的那一批 run 是"跑完的那些"，它们的 epoch 数彼此相同。configs 里的推荐
+# 预算不能用作判据——本轮就是有意跑在推荐值以下的。因此取各 run epoch 数的众数
+# 作为本轮实际预算，把还在训练、epoch 数零散偏低的 run 排除掉。
+_epochs = {}
 for d in sorted((ROOT / "result").glob("*_run*")):
     f = d / "log.csv"
-    if not f.exists():
+    if not f.exists() or d.name.startswith(EXCLUDED_RUN_PREFIXES):
+        continue
+    rr = list(csv.DictReader(f.open(encoding="utf-8")))
+    if rr:
+        _epochs[d.name] = int(rr[-1]["iter"]) + 1
+_BUDGET = Counter(_epochs.values()).most_common(1)[0][0] if _epochs else 0
+for d in sorted((ROOT / "result").glob("*_run*")):
+    f = d / "log.csv"
+    # 与 checkpoints() 用同一套排除规则：冒烟 run 只有 3 个 epoch，若混进来会把
+    # "共同步数上限"压到它的量级，使步数对齐的比较退化并触发假警报
+    if not f.exists() or d.name.startswith(EXCLUDED_RUN_PREFIXES):
         continue
     rows = list(csv.DictReader(f.open(encoding="utf-8")))
-    if rows:
+    # 训练尚未跑满预算的 run 会把"共同步数上限"压低，使步数对齐的比较退化。
+    # 只纳入已达预算的 run，并把被排除的列出来，避免"悄悄少了一个方法"。
+    if rows and int(rows[-1]["iter"]) + 1 >= _BUDGET > 0:
         logs[d.name] = [(int(x["iter"]), int(x["steps"]),
                          float(x["eta_val"]) if x["eta_val"] else None) for x in rows]
+    elif rows:
+        print(f"  [跳过] {d.name}：只跑到 {int(rows[-1]['iter']) + 1}/{_BUDGET} epoch，"
+              f"尚未达预算", flush=True)
+print(f"  本轮实际等预算 = {_BUDGET} epoch（取各 run 的众数），"
+      f"纳入 {len(logs)} 个已达预算的 run", flush=True)
 if logs:
     cap = min(r[-1][1] for r in logs.values())
     for name, rows in sorted(logs.items()):
@@ -154,9 +186,9 @@ if logs:
     if not same:
         print("  [警告] 结论对预算口径敏感——等 epoch 与等交互步数给出不同排序，"
               "必须在论文中同时报告两种口径", flush=True)
-    append_rows(ROOT / "result" / "budget_check.csv", budget_rows,
-                ["run", "epochs", "steps", "steps_per_epoch",
-                 "best_eta_val_equal_epoch", "best_eta_val_equal_steps", "step_cap"])
+append_rows(ROOT / "result" / "budget_check.csv", budget_rows,
+            ["run", "epochs", "steps", "steps_per_epoch",
+             "best_eta_val_equal_epoch", "best_eta_val_equal_steps", "step_cap"])
 
 step("预注册判据裁决（docs/experiment-spec.md §8）")
 # 判据在跑实验之前就写死在 spec 里，这里只做机械核对，不做任何事后调整。
