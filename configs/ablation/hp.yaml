@@ -1,0 +1,3 @@
+# FSHGRL-HP：同基数最小负载启发式剪枝 —— 第二个对照
+variant: {name: FSHGRL-HP}
+action_space: {pruning_mode: heuristic_load}

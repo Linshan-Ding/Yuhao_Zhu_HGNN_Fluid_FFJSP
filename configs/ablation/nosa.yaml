@@ -1,0 +1,3 @@
+# FSHGRL-NoSA：动作级自注意力换成均值池化
+variant: {name: FSHGRL-NoSA}
+network: {action_attention: false}

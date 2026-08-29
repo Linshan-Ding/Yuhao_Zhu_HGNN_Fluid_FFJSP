@@ -1,0 +1,3 @@
+# FSHGRL-RP：同基数随机剪枝 —— 分离"宏观引导"与"单纯缩小动作空间"的关键对照
+variant: {name: FSHGRL-RP}
+action_space: {pruning_mode: random}

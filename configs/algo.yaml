@@ -1,0 +1,40 @@
+# 算法：PPO + 行为策略修正 + 网络结构。对应稿件 §4.7–4.8 与 Table 6。
+
+ppo:
+  total_epochs: 1000
+  lr: 3.0e-4
+  gamma: 1.0
+  gae_lambda: 0.95
+  update_epochs: 3             # K_ppo
+  clip_eps: 0.2                # epsilon_clip
+  entropy_coeff: 0.01          # c_3
+  policy_coeff: 1.0            # c_1
+  value_coeff: 0.5             # c_2
+  max_grad_norm: 0.5
+  target_kl: 0.03
+  minibatch_size: 512
+  rollout_episodes: 2          # 每个 epoch 采集的完整 episode 数
+
+exploration:
+  # epsilon-greedy 混合行为策略，稿件 Eq. (54)
+  behaviour_correction: true   # true = 存 log b_k 并用修正比率（默认）
+                               # false = 存 log pi_old（未修正对照，消融用）
+  epsilon0: 1.0
+  epsilon_min: 0.001
+  anneal_epochs: 1000          # K_tot
+
+network:
+  embed_dim: 16                # d
+  gat_layers: 2                # L
+  gat_heads: 1
+  actor_hidden: [128, 128, 128]
+  critic_hidden: [128, 128, 128]
+  action_attention: true       # 动作级自注意力，稿件 Eq. (39)
+  action_attention_heads: 1
+  dropout: 0.0
+
+runtime:
+  rollout_device: cpu          # 离散事件环境在 CPU 上推进
+  update_device: auto          # auto -> cuda if available else cpu
+  n_runs: 5                    # 每个方法的独立 run 次数（无随机种子）
+  eval_rollouts: 10            # 每个 checkpoint 在每个算例上的评测 rollout 数

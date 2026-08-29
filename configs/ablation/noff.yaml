@@ -1,0 +1,2 @@
+# FSHGRL-NoFF：去掉节点特征中的流体分量，保留流体剪枝（隔离"流体作为状态"的贡献）
+variant: {name: FSHGRL-NoFF, fluid_node_features: false}
