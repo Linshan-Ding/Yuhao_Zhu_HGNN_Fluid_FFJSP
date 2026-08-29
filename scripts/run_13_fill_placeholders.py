@@ -54,6 +54,9 @@ SOURCES = {
     "S7": "exact_results.csv: FSHGRL 达到 eta_off 的百分比",
     "S8": "exact_results.csv: 最优规则达到 eta_off 的百分比",
     "S9": "stats_summary.csv: FSHGRL vs FSHGRL-NONOOP 的 mean_diff",
+    "P-RND": "stats_summary.csv: FSHGRL vs Random 的 mean_diff 与 p_holm",
+    "P-BEST": "stats_summary.csv: FSHGRL vs 最强规则 的 mean_diff 与 p_holm",
+    "P-RRC": "stats_summary.csv: FSHGRL vs RRC 的 mean_diff 与 p_holm",
     "P-TIE": "pruning_stats.csv: main 档 p_singleton 均值",
     "C-DDT600": "case_results.csv: case3d DDT=600 三个规模的 eta",
     "C-DDT900": "case_results.csv: case3d DDT=900 三个规模的 eta",
@@ -107,11 +110,31 @@ values["S2"], values["S3"] = values["A1"], values["A2"]
 values["S4"] = num(pruning, "retention_crit")
 values["S5"] = num(pruning, "delta_eta")
 
-# S9：主动空闲的贡献（主方法 vs NoNoOp），由统计表读，不另算
+# 与规则的对比全部从统计表读，不另算，避免同一个量两处对不上
 _st = load("stats_summary.csv")
+_RULES = {"MOR", "FIFO", "MWKR", "SPT", "EDD", "RANDOM", "RRC", "SPT-IDLE"}
+
+
+def _fmt(row):
+    return (f"{float(row['mean_diff']):+.4f}（Holm 校正 p = {float(row['p_holm']):.2g}，"
+            f"Cliff δ = {float(row['cliff_delta']):+.2f}）")
+
+
+_best_rule, _best_diff = None, None
 for _r in _st:
-    if _r["comparison"].upper().endswith("FSHGRL-NONOOP"):
+    _v = _r["comparison"].upper().replace("FSHGRL VS. ", "")
+    if _v.endswith("FSHGRL-NONOOP"):
         values["S9"] = f"{float(_r['mean_diff']):+.4f}"
+    if _v == "RANDOM":
+        values["P-RND"] = _fmt(_r)
+    if _v == "RRC":
+        values["P-RRC"] = _fmt(_r)
+    # 最强规则 = 与 FSHGRL 差距最小的那条规则（mean_diff 最小）
+    if _v in _RULES and (_best_diff is None or float(_r["mean_diff"]) < _best_diff):
+        _best_rule, _best_diff = _r, float(_r["mean_diff"])
+if _best_rule is not None:
+    values["P-BEST"] = (_best_rule["comparison"].replace("FSHGRL vs. ", "")
+                        + " 的 " + _fmt(_best_rule))
 values["P-TIE"] = num(pruning, "p_singleton")
 
 # ---- 案例研究：每个 DDT 档按订单规模列出 eta（正文按 "0.28, 0.38, 0.33" 的形式引用）
