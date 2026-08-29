@@ -84,14 +84,21 @@ class FluidRelaxation:
 
     # ---------------------------------------------------------------- 触发键
     def trigger_key(self, workload: Dict[int, float], slack: Dict[int, float],
-                    idle_machines: Sequence[int]) -> tuple:
-        """chi(t)，稿件 Eq. (26)：活跃类型集 + 取整负载 + 离散化松弛期 + 空闲机器集。"""
+                    idle_machines: Sequence[int] | None = None) -> tuple:
+        """chi(t)，稿件 Eq. (26)：活跃类型集 + 取整负载 + 离散化松弛期。
+
+        **不含空闲机器集**。LP 的机器容量约束 sum_task u[m, task] <= 1 是对全部出现在
+        合格对中的机器施加的，与"此刻哪些机器空闲"无关——`_solve_impl` 根本不接收该
+        参数，解对它恒不变。把它放进缓存键，只会让每次派工都使缓存失效：实测原实现
+        zeta = 0.997（命中率 0.3%），LP 几乎每个决策点重解一次，占 rollout 用时的一半，
+        而稿件 §4.9 的摊销成本论证正建立在 zeta 较小之上。参数保留只为兼容旧调用。
+        """
         bucket = max(self.slack_bucket, 1e-9)
+        tasks = sorted(workload)
         return (
-            tuple(sorted(workload)),
-            tuple(int(np.ceil(workload[t])) for t in sorted(workload)),
-            tuple(int(np.floor(slack.get(t, 0.0) / bucket)) for t in sorted(workload)),
-            tuple(sorted(int(m) for m in idle_machines)),
+            tuple(tasks),
+            tuple(int(np.ceil(workload[t])) for t in tasks),
+            tuple(int(np.floor(slack.get(t, 0.0) / bucket)) for t in tasks),
         )
 
     # ---------------------------------------------------------------- 主入口

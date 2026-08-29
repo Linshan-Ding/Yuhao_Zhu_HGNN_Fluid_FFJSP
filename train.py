@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 from agent.baselines.rules import select as rule_select
 from agent.buffer import RolloutBuffer
-from agent.networks import ACT_DIM, ActorCritic, obs_to_tensors
+from agent.networks import ActorCritic, obs_to_tensors
 from agent.ppo import PPOAgent
 from configs.config import ROOT, load_config
 from data.dataset import read_index
@@ -35,10 +35,13 @@ def behaviour_clone(net, cfg, rng, param_table, device, steps: int, expert: str)
     其性能远低于一条好规则；先把策略克隆到规则水平，PPO 只需在此之上改进。
     这条规则在论文中如实报告为方法的一部分，不是隐藏的预训练。
 
-    关键细节：交叉熵在**派工动作**上归一化，主动空闲那一维被屏蔽掉。规则是
-    non-delay 的、永远不会选 no-op，若把它一并纳入 softmax 分母，热启动就会
-    连同"永不空闲"这一限制一起克隆过来 —— 而摆脱这一限制恰恰是引入 no-op 的
-    目的。屏蔽后热启动只传递规则的派工偏好，不传递它的动作类限制。
+    交叉熵在**完整动作集**（含 no-op）上归一化。曾经试过把 no-op 屏蔽掉，理由是
+    "别把规则永不空闲的限制一起克隆过来"，实测是错的：屏蔽后 no-op 那一维拿不到
+    任何梯度，其 logit 停留在随机初值上，贪心策略于是随机空转 —— BC 结束时
+    eta_val = 0.06，而专家 SPT 约为 0.6。热启动的意义正是**性能下界**，
+    "规则 + 随机空转"根本不构成下界。因此把 no-op 纳入分母、由专家标签把它压低，
+    起点即 non-delay 的规则水平；主动空闲这一自由度改由后续 PPO 的 epsilon-贪婪
+    探索（epsilon_0 = 0.3，no-op 被采样的概率不低于 epsilon/|A_f|）与熵正则去发现。
     """
     if steps <= 0:
         return float("nan")
@@ -53,12 +56,8 @@ def behaviour_clone(net, cfg, rng, param_table, device, steps: int, expert: str)
             expert_idx = rule_select(expert, env, actions, rng)
             n_dispatch = sum(1 for a in actions if not is_noop(a))
             if n_dispatch > 1:                         # 单个派工候选时没有可学的信息
-                obs_np = env.observation(actions, sol)
-                obs = obs_to_tensors(obs_np, device)
+                obs = obs_to_tensors(env.observation(actions, sol), device)
                 logits, _ = net(obs, env.problem.n_stage)
-                noop_mask = torch.as_tensor(obs_np["act_feat"][:, ACT_DIM - 1] > 0.5,
-                                            device=device)
-                logits = logits.masked_fill(noop_mask, torch.finfo(logits.dtype).min)
                 loss = F.cross_entropy(logits.unsqueeze(0),
                                        torch.tensor([expert_idx], device=device))
                 optimizer.zero_grad()
@@ -133,6 +132,7 @@ def main() -> None:
         epsilon = agent.epsilon(epoch)
         buffer = RolloutBuffer()
         etas, rewards, phis, cand, bound = [], [], [], [], 0.0
+        n_solve = n_hit = 0                      # 流体 LP 求解/缓存命中，用于摊销成本 zeta
         t0 = time.time()
         for _ in range(rollout_episodes):
             env = SchedulingEnv(sample_training_instance(rng, param_table), cfg)
@@ -157,6 +157,8 @@ def main() -> None:
             etas.append(env.eta)
             rewards.append(ep_reward)
             phis.extend(env.stats.phi_star)
+            n_solve += env.fluid.stats.solve_count
+            n_hit += env.fluid.stats.cache_hit_count
 
         stats = agent.update(buffer)
         elapsed = time.time() - t0
@@ -173,6 +175,8 @@ def main() -> None:
                "reward": round(float(np.mean(rewards)), 5),
                "ratio_bound": round(bound, 3), "epsilon": round(epsilon, 5),
                "sps": round(len(buffer) / max(elapsed, 1e-9), 2),
+               "fluid_solve_count": n_solve, "fluid_cache_hit": n_hit,
+               "zeta": round(n_solve / max(n_solve + n_hit, 1), 4),
                "phi_star_mean": round(float(np.mean(phis)), 4) if phis else "",
                "a_f_mean": round(float(np.mean(cand)), 3) if cand else "",
                "elapsed_s": round(time.time() - started, 1)}

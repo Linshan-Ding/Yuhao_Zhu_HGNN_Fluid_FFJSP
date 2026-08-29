@@ -1,7 +1,10 @@
 # 算法：PPO + 行为策略修正 + 网络结构。对应稿件 §4.7–4.8 与 Table 6。
 
 ppo:
-  total_epochs: 1000
+  total_epochs: 250            # 实测约 78 s/epoch（ρ=1.6，8 episode/epoch）。
+                               # 1000 epoch 对应单 run 约 21 h、完整 run 矩阵数百小时，
+                               # 不是可复现的预算；250 epoch 下 BC 起点已达规则水平，
+                               # PPO 只需在其上改进
   lr: 3.0e-4
   gamma: 1.0
   gae_lambda: 0.95
@@ -22,7 +25,7 @@ exploration:
   epsilon0: 0.3                # 起始探索率。取 1.0 会让 b_k 恒等于均匀分布，
                                # 此时 PPO 的裁剪区间等价于"强制策略保持均匀"，是持续的反向拉力
   epsilon_min: 0.001
-  anneal_epochs: 350           # K_tot：退火只占总训练量的 35%，留出收敛期
+  anneal_epochs: 90            # K_tot：退火只占总训练量的 35%，留出收敛期
 
 network:
   embed_dim: 16                # d

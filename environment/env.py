@@ -64,6 +64,7 @@ class SchedulingEnv:
         self.slack_floor = float(cfg.get("fluid.slack_floor", 1.0))
         self.max_steps = int(cfg.get("episode.max_decision_steps", 200000))
         self.use_fluid_features = bool(cfg.get("variant.fluid_node_features", True))
+        self.fluid_resolve_every = max(int(cfg.get("fluid.resolve_every", 1)), 1)
         self.allow_noop = bool(cfg.get("action_space.allow_noop", False))
         self.max_consecutive_noop = int(cfg.get("action_space.max_consecutive_noop", 3))
         self._rng = np.random.default_rng()
@@ -87,6 +88,8 @@ class SchedulingEnv:
         self._fluid: FluidSolution | None = None
         self.machine_busy_time = np.zeros(p.n_machine, dtype=np.float64)
         self._consecutive_noop = 0
+        self._fluid_age = 0                       # 距上次重解流体松弛的决策步数
+        self._fluid_tasks: tuple = ()             # 上次求解时的活跃工序类型集
         # 无量纲化尺度：时间量除以交期跨度，加工时间除以最大工时
         self._time_scale = max(float(np.median(inst.due_dates - inst.arrival_times)), 1.0)
         self._proc_scale = max(float(inst.proc_times.max()), 1.0)
@@ -206,10 +209,22 @@ class SchedulingEnv:
             return FluidSolution(status="idle")
         slack_hat = {t: effective_slack(slack[t], self.problem.downstream_residual(t),
                                         self.slack_floor) for t in workload}
-        key = self.fluid.trigger_key(workload, slack_hat, self._idle_machines())
-        return self.fluid.solve(workload=workload, slack_hat=slack_hat,
-                                rates=self.problem.rates, eligible=self.problem.eligible,
-                                stage_pairs=self.problem.stage_pairs, key=key)
+        # 摊销：流体松弛是**宏观**引导，单次派工不改变总体产能画像。在活跃工序类型集
+        # 不变的前提下，最多每 resolve_every 个决策点重解一次（稿件 §4.9）。类型集变化
+        # 时必须重解——否则新出现的类型在旧解里份额为 0，其动作会被整体剪掉。
+        tasks = tuple(sorted(workload))
+        if (self.fluid_resolve_every > 1 and self._fluid is not None
+                and self._fluid.status == "optimal" and tasks == self._fluid_tasks
+                and self._fluid_age < self.fluid_resolve_every - 1):
+            self._fluid_age += 1
+            return self._fluid
+        key = self.fluid.trigger_key(workload, slack_hat)
+        sol = self.fluid.solve(workload=workload, slack_hat=slack_hat,
+                               rates=self.problem.rates, eligible=self.problem.eligible,
+                               stage_pairs=self.problem.stage_pairs, key=key)
+        self._fluid_age = 0
+        self._fluid_tasks = tasks
+        return sol
 
     def candidate_actions(self) -> Tuple[List[Tuple[int, int, int]], FluidSolution]:
         """A_f：带紧急度安全网的剪枝动作集（稿件 Eq. 43），并返回本次流体解。"""
