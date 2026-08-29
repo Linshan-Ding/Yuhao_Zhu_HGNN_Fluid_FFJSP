@@ -17,7 +17,8 @@ import torch
 class Transition:
     obs: dict
     action_index: int
-    logp_behaviour: float          # log b_k(a_t | omega_t)
+    logp_behaviour: float          # log b_k(a_t | omega_t)，用于重要性比率
+    logp_target: float             # log pi_theta_old(a_t | omega_t)，用于 KL 早停判据
     reward: float
     value: float
     done: bool

@@ -7,8 +7,15 @@ param_table:
   product_count: 5
   proc_time_range: [25, 450]          # p_rjm ~ rand[a, b]，秒
   order_count_range: [20, 200]        # S
-  interarrival_range: [1, 200]        # Δt ~ rand[a, b]，秒
-  ddt_range: [300, 2500]              # 交期宽松度
+  interarrival_range: [1, 200]        # Δt ~ rand[a, b]，秒（仅旧参数表兼容路径使用）
+  rho_range: [0.8, 1.8]               # 训练算例按系统负荷分层抽样，再反推到达间隔。
+                                      # 对 Δt 均匀抽样会使 rho ∝ 1/Δt 极度右偏，
+                                      # 大部分算力落在评测不覆盖、且无梯度的工况上
+  ddt_range: [400, 1100]              # 交期宽松度：收窄到评测带附近，
+                                      # DDT>1500 时所有方法 eta 均饱和为 1，无区分度
+  ddt_spread: [0.7, 1.4]              # 逐单交期乘性扰动 due_i = a_i + DDT * U[lo, hi]。
+                                      # 常数 DDT 会让 EDD ≡ FIFO ≡ 环境候选集排序键，
+                                      # 订单维度在决策上不携带信息
 
 design:
   small:                               # 可精确求解，校准真实 optimality gap
@@ -28,7 +35,11 @@ design:
 
   main:                                # 主对比 / 消融 / 统计检验主战场
     order_counts: [50, 100, 150]
-    ddt_levels: [500, 600, 900, 1200, 1600]
+    ddt_levels: [500, 600, 900, 1200, 1600]   # 由 tools/scan_ddt.py 标定后替换
+    target_rho_sys: 1.2                # 由目标负荷反推到达率。参数表区间中点对应
+                                       # rho_sys≈0.47，实测该负荷下 96% 的决策点
+                                       # 只有一张订单可选、100% 的多候选时点只能选
+                                       # 机器 —— "工序-机器-订单"三元组决策从未被触发
 
   arrival:                             # 到达强度 × 到达过程（跨饱和点）
     order_count: 100

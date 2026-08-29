@@ -10,20 +10,67 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
+from agent.baselines.rules import select as rule_select
 from agent.buffer import RolloutBuffer
-from agent.networks import ActorCritic
+from agent.networks import ACT_DIM, ActorCritic, obs_to_tensors
 from agent.ppo import PPOAgent
 from configs.config import ROOT, load_config
 from data.dataset import read_index
 from data.generator import load_instance_csv, sample_training_instance
-from environment.env import SchedulingEnv
+from environment.env import SchedulingEnv, is_noop
 from result.logger import CsvLogger, VisdomLogger
 
 LOG_COLUMNS = ["iter", "steps", "eta_val", "eta_train", "reward", "policy_loss", "value_loss",
                "entropy", "approx_kl", "clip_frac", "ratio_max", "ratio_bound", "epsilon",
                "sps", "fluid_solve_count", "fluid_cache_hit", "zeta", "phi_star_mean",
                "a_f_mean", "elapsed_s"]
+
+
+def behaviour_clone(net, cfg, rng, param_table, device, steps: int, expert: str) -> float:
+    """用最强调度规则做行为克隆热启动（稿件 §4.8.3）。
+
+    动机是可证的下界而不是调参技巧：PPO 从随机初始化出发时，早期策略近似均匀，
+    其性能远低于一条好规则；先把策略克隆到规则水平，PPO 只需在此之上改进。
+    这条规则在论文中如实报告为方法的一部分，不是隐藏的预训练。
+
+    关键细节：交叉熵在**派工动作**上归一化，主动空闲那一维被屏蔽掉。规则是
+    non-delay 的、永远不会选 no-op，若把它一并纳入 softmax 分母，热启动就会
+    连同"永不空闲"这一限制一起克隆过来 —— 而摆脱这一限制恰恰是引入 no-op 的
+    目的。屏蔽后热启动只传递规则的派工偏好，不传递它的动作类限制。
+    """
+    if steps <= 0:
+        return float("nan")
+    optimizer = torch.optim.Adam(net.parameters(), lr=float(cfg.get("ppo.lr")))
+    collected, losses = 0, []
+    while collected < steps:
+        env = SchedulingEnv(sample_training_instance(rng, param_table), cfg)
+        while not env.done and collected < steps:
+            actions, sol = env.candidate_actions()
+            if not actions:
+                break
+            expert_idx = rule_select(expert, env, actions, rng)
+            n_dispatch = sum(1 for a in actions if not is_noop(a))
+            if n_dispatch > 1:                         # 单个派工候选时没有可学的信息
+                obs_np = env.observation(actions, sol)
+                obs = obs_to_tensors(obs_np, device)
+                logits, _ = net(obs, env.problem.n_stage)
+                noop_mask = torch.as_tensor(obs_np["act_feat"][:, ACT_DIM - 1] > 0.5,
+                                            device=device)
+                logits = logits.masked_fill(noop_mask, torch.finfo(logits.dtype).min)
+                loss = F.cross_entropy(logits.unsqueeze(0),
+                                       torch.tensor([expert_idx], device=device))
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(net.parameters(),
+                                               float(cfg.get("ppo.max_grad_norm", 0.5)))
+                optimizer.step()
+                losses.append(float(loss.item()))
+            collected += 1
+            if env.step(actions[expert_idx])[1]:
+                break
+    return float(np.mean(losses)) if losses else float("nan")
 
 
 def evaluate(net, cfg, instances, device, n_rollout: int = 1) -> float:
@@ -72,6 +119,15 @@ def main() -> None:
     rng = np.random.default_rng()
     param_table = cfg.get("param_table")
 
+    bc_steps = int(cfg.get("training.bc_warmup_steps", 0))
+    if bc_steps > 0:
+        expert = str(cfg.get("training.bc_expert", "SPT"))
+        t_bc = time.time()
+        bc_loss = behaviour_clone(net, cfg, rng, param_table, device, bc_steps, expert)
+        eta_bc = evaluate(net, cfg, val_instances, device)
+        print(f"[{args.run_name}] BC 热启动完成：expert={expert} steps={bc_steps} "
+              f"loss={bc_loss:.4f} eta_val={eta_bc:.4f} ({time.time() - t_bc:.0f}s)", flush=True)
+
     best_eta, total_steps, started = -1.0, 0, time.time()
     for epoch in range(total_epochs):
         epsilon = agent.epsilon(epoch)
@@ -88,7 +144,8 @@ def main() -> None:
                 obs = env.observation(actions, sol)
                 idx, logp, value, info = agent.act(obs, env.problem.n_stage, epsilon)
                 reward, done, _ = env.step(actions[idx])
-                buffer.add(obs=obs, action_index=idx, logp_behaviour=logp, reward=reward,
+                buffer.add(obs=obs, action_index=idx, logp_behaviour=logp,
+                           logp_target=info["logp_target"], reward=reward,
                            value=value, done=done, n_candidates=info["n_candidates"],
                            n_stage=env.problem.n_stage)
                 ep_reward += reward

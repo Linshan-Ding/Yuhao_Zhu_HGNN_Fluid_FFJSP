@@ -130,7 +130,8 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
                    order_count: int, proc_time_range: Sequence[float],
                    ddt: float, mean_interarrival: float,
                    arrival_process: str = "poisson",
-                   eligibility_prob: float = 1.0) -> Instance:
+                   eligibility_prob: float = 1.0,
+                   ddt_spread: Sequence[float] = (1.0, 1.0)) -> Instance:
     machines_per_stage = tuple(int(m) for m in machines_per_stage)
     machine_count = int(sum(machines_per_stage))
     lo_p, hi_p = float(proc_time_range[0]), float(proc_time_range[1])
@@ -150,7 +151,12 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
 
     order_product = rng.integers(0, product_count, size=order_count)
     arrivals = sample_arrivals(rng, order_count, mean_interarrival, arrival_process)
-    due = arrivals + float(ddt)
+    # 逐单独立抽交期宽松度。若所有订单共用同一常数 DDT，则 due - arrival 恒定，
+    # EDD 与 FIFO 完全等价、且与环境构造候选集时的排序键重合 —— 订单维度
+    # 在决策上不携带任何信息。乘性扰动是让 EDD 与 FIFO 分离的最小改动。
+    lo_d, hi_d = float(ddt_spread[0]), float(ddt_spread[1])
+    slack = float(ddt) * (rng.uniform(lo_d, hi_d, size=order_count) if hi_d > lo_d else lo_d)
+    due = arrivals + slack
 
     inst = Instance(
         instance_id=instance_id, tier=tier,
@@ -158,28 +164,47 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
         machines_per_stage=machines_per_stage, proc_times=proc,
         order_product=order_product, arrival_times=arrivals, due_dates=due,
         meta={"DDT": float(ddt), "mean_interarrival": float(mean_interarrival),
-              "arrival_process": arrival_process},
+              "arrival_process": arrival_process,
+              "ddt_spread_lo": lo_d, "ddt_spread_hi": hi_d},
     )
     inst.meta.update(load_metrics(inst))
     return inst
 
 
 def sample_training_instance(rng: np.random.Generator, param_table: Dict) -> Instance:
-    """训练算例：每个周期按参数表现场随机构造，不预生成、不落盘。"""
+    """训练算例：每个周期按参数表现场随机构造，不预生成、不落盘。
+
+    到达强度按**系统负荷 rho_sys 均匀抽样**再反推到达间隔，而不是对到达间隔均匀
+    抽样。后者因 rho ∝ 1/gap 而极度右偏：实测 82% 的训练算力落在评测从不覆盖的
+    工况上，且 31% 的训练算例随机策略即 eta=1.0（零梯度）、44% 落在 eta<0.2
+    （同样无区分度）。按 rho 分层可把算力集中到有梯度的带内。
+    """
     lo_s, hi_s = param_table["order_count_range"]
-    lo_dt, hi_dt = param_table["interarrival_range"]
     lo_ddt, hi_ddt = param_table["ddt_range"]
     stage_count = int(param_table["stage_count"])
+    machines_per_stage = int(param_table["machines_per_stage"])
+    proc_range = param_table["proc_time_range"]
+
+    rho_range = param_table.get("rho_range")
+    if rho_range is not None:
+        rho = float(rng.uniform(float(rho_range[0]), float(rho_range[1])))
+        mean_p = (float(proc_range[0]) + float(proc_range[1])) / 2.0
+        gap = (stage_count * mean_p) / (rho * stage_count * machines_per_stage)
+    else:                                   # 兼容旧参数表
+        lo_dt, hi_dt = param_table["interarrival_range"]
+        gap = float(rng.integers(int(lo_dt), int(hi_dt) + 1))
+
     return build_instance(
         rng,
         instance_id="train_random", tier="train",
         product_count=int(param_table["product_count"]),
         stage_count=stage_count,
-        machines_per_stage=[int(param_table["machines_per_stage"])] * stage_count,
+        machines_per_stage=[machines_per_stage] * stage_count,
         order_count=int(rng.integers(lo_s, hi_s + 1)),
-        proc_time_range=param_table["proc_time_range"],
+        proc_time_range=proc_range,
         ddt=float(rng.integers(int(lo_ddt), int(hi_ddt) + 1)),
-        mean_interarrival=float(rng.integers(int(lo_dt), int(hi_dt) + 1)),
+        mean_interarrival=gap,
+        ddt_spread=param_table.get("ddt_spread", (1.0, 1.0)),
         arrival_process="poisson",
     )
 
