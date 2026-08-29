@@ -29,6 +29,7 @@ SOURCES = {
     "A6": "eval_results.csv: FSHGRL 的 decision_time_ms 均值（秒）",
     "B1": "log.csv: 各方法的 steps 上限（等交互预算）",
     "B2": "固定值：超参随机搜索试验次数",
+    "B3": "log.csv: 各方法实际训练的 epoch 数（等预算，取各 run 的最大 iter）",
     "H2": "configs/env.yaml: fluid.slack_floor",
     "H3": "configs/env.yaml: fluid.slack_bucket_s",
     "H4": "configs/env.yaml: reward.potential_weight",
@@ -168,6 +169,20 @@ cfg = load_config()
 values["H2"] = cfg.get("fluid.slack_floor")
 values["H3"] = cfg.get("fluid.slack_bucket_s")
 values["H4"] = cfg.get("reward.potential_weight")
+# 等预算：取全部 run 的 iter 上限；若各方法不一致则报错，等预算被破坏必须暴露出来
+_budgets = set()
+for _d in sorted((ROOT / "result").glob("*_run*")):
+    _log = _d / "log.csv"
+    if _log.exists():
+        _rows = list(csv.DictReader(_log.open(encoding="utf-8")))
+        if _rows:
+            _budgets.add(int(_rows[-1]["iter"]) + 1)
+if _budgets:
+    values["B3"] = max(_budgets)
+    if len(_budgets) > 1:
+        print(f"  [警告] 各 run 的训练预算不一致：{sorted(_budgets)}——等预算被破坏，"
+              f"方法间的比较不可用", flush=True)
+
 values["R1"] = cfg.get("runtime.n_runs")
 values["R2"] = cfg.get("runtime.eval_rollouts")
 values["R3"] = int(cfg.get("runtime.n_runs")) * int(cfg.get("runtime.eval_rollouts"))

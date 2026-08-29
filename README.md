@@ -275,7 +275,12 @@ OMP_NUM_THREADS=1 python train.py --config ablation/nobc.yaml --run-name nobc_ru
 
 `checkpoint_best.pt` 每次验证（每 10 个 epoch）刷新一次，`checkpoint_last.pt` 每个
 epoch 都刷新，因此**训练可以随时中断**，用当前的 best checkpoint 先评测出一版结果，
-之后再续跑。想缩短单 run，改 `configs/algo.yaml` 的 `ppo.total_epochs`，
+之后再续跑。
+
+**若算力不足以按推荐预算跑完整个 run 矩阵，请采用等预算协议**：选一个所有方法都跑得
+完的 epoch 数（例如 60），用 `--epochs` 传给每一个 run，主方法与全部消融、全部基线
+一视同仁。等预算是可比性的前提——给主方法更多 epoch 再和基线比，是最容易被审稿人
+一击命中的地方。届时论文里必须写明实际预算，不能说成推荐预算。想缩短单 run，改 `configs/algo.yaml` 的 `ppo.total_epochs`，
 并把 `exploration.anneal_epochs` 同步改成它的约 35%（否则退火跑不完，
 ε 会停在高位，策略被持续拉向均匀分布）。
 
