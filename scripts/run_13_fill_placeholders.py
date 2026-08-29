@@ -53,6 +53,7 @@ SOURCES = {
     "S6": "pruning_stats.csv: 相对不剪枝的耗时节省",
     "S7": "exact_results.csv: FSHGRL 达到 eta_off 的百分比",
     "S8": "exact_results.csv: 最优规则达到 eta_off 的百分比",
+    "S9": "stats_summary.csv: FSHGRL vs FSHGRL-NONOOP 的 mean_diff",
     "P-TIE": "pruning_stats.csv: main 档 p_singleton 均值",
     "C-DDT600": "case_results.csv: case3d DDT=600 三个规模的 eta",
     "C-DDT900": "case_results.csv: case3d DDT=900 三个规模的 eta",
@@ -105,6 +106,12 @@ values["A2"] = num(pruning, "retention_all")
 values["S2"], values["S3"] = values["A1"], values["A2"]
 values["S4"] = num(pruning, "retention_crit")
 values["S5"] = num(pruning, "delta_eta")
+
+# S9：主动空闲的贡献（主方法 vs NoNoOp），由统计表读，不另算
+_st = load("stats_summary.csv")
+for _r in _st:
+    if _r["comparison"].upper().endswith("FSHGRL-NONOOP"):
+        values["S9"] = f"{float(_r['mean_diff']):+.4f}"
 values["P-TIE"] = num(pruning, "p_singleton")
 
 # ---- 案例研究：每个 DDT 档按订单规模列出 eta（正文按 "0.28, 0.38, 0.33" 的形式引用）
