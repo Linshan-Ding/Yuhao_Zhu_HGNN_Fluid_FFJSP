@@ -122,5 +122,59 @@ append_rows(ROOT / "result" / "friedman_nemenyi.csv",
             FRIED_COLUMNS)
 print(f"  Friedman p={fn['friedman_p']:.2e}  CD={fn['critical_difference']:.3f}", flush=True)
 
+step("预注册判据裁决（docs/experiment-spec.md §8）")
+# 判据在跑实验之前就写死在 spec 里，这里只做机械核对，不做任何事后调整。
+RULES = {"MOR", "FIFO", "MWKR", "SPT", "EDD", "Random", "RRC"}
+lookup = {r.comparison.replace("FSHGRL vs. ", ""): (r, h)
+          for (r, *_), h in zip(results, holm)}
+
+verdict_rows = []
+
+
+def judge(tag, variant, need_delta=True):
+    if variant not in lookup:
+        verdict_rows.append((tag, variant, "无数据", ""))
+        return
+    res, p_h = lookup[variant]
+    ok = (p_h < 0.05 and res.mean_diff > 0) and (not need_delta or res.cliff_delta >= 0.33)
+    verdict_rows.append((tag, variant, "成立" if ok else "不成立",
+                         f"diff={res.mean_diff:+.4f} p_holm={p_h:.2e} delta={res.cliff_delta:+.3f}"))
+
+
+present_rules = [v for v in by_variant if v in RULES]
+if present_rules:
+    best_rule = max(present_rules, key=lambda v: float(np.nanmean(instance_means(v))))
+    print(f"  最强规则（由数据选出，非人工指定）= {best_rule} "
+          f"eta={float(np.nanmean(instance_means(best_rule))):.4f}", flush=True)
+    judge("主判据", best_rule)
+else:
+    verdict_rows.append(("主判据", "最强规则", "无数据", "eval_results.csv 中没有规则基线行"))
+
+judge("C3  引导 vs 缩减", "FSHGRL-RP")
+judge("C-OBJ 目标对齐", "FSHGRL-MAXMIN", need_delta=False)
+judge("C-NOOP 主动空闲", "FSHGRL-NONOOP", need_delta=False)
+judge("C-BC  热启动", "FSHGRL-NOBC", need_delta=False)
+
+noop_used = [float(r["noop_rate"]) for r in records
+             if r["variant"] == "FSHGRL" and r.get("noop_rate") not in (None, "")]
+if noop_used:
+    rate = 100 * float(np.mean(noop_used))
+    verdict_rows.append(("C-NOOP 使用率", "FSHGRL", "成立" if rate > 2 else "不成立",
+                         f"no-op 使用率={rate:.2f}%（门槛 >2%）"))
+
+print()
+for tag, variant, ok, detail in verdict_rows:
+    print(f"  [{ok:^4}] {tag:<16} {variant:<18} {detail}", flush=True)
+failed = [v for v in verdict_rows if v[2] == "不成立"]
+if failed:
+    print("\n  以下判据不成立，按 §8.3 收窄论断到成立的区间，不要追加机制：", flush=True)
+    for tag, variant, _, detail in failed:
+        print(f"    - {tag} ({variant}): {detail}", flush=True)
+append_rows(ROOT / "result" / "preregistered_verdict.csv",
+            [{"criterion": t, "variant": v, "verdict": o, "detail": d}
+             for t, v, o, d in verdict_rows],
+            ["criterion", "variant", "verdict", "detail"])
+
 done(t0, ROOT / "result" / "stats_summary.csv", ROOT / "result" / "eval_ci.csv",
-     ROOT / "result" / "variance_decomposition.csv", ROOT / "result" / "friedman_nemenyi.csv")
+     ROOT / "result" / "variance_decomposition.csv", ROOT / "result" / "friedman_nemenyi.csv",
+     ROOT / "result" / "preregistered_verdict.csv")

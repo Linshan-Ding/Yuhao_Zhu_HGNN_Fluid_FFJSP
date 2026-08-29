@@ -11,7 +11,13 @@ from typing import List, Tuple
 
 import numpy as np
 
-RULES = ["MOR", "FIFO", "MWKR", "SPT", "EDD", "Random", "RRC"]
+RULES = ["MOR", "FIFO", "MWKR", "SPT", "EDD", "Random", "RRC", "SPT-Idle"]
+
+# SPT-Idle 的等待阈值：所有派工候选的临界比都低于它时选择等待。
+# 取值由扫描确定（验证档，三次重复）：1.0 -> 0.5100（等价于不等待）、
+# 1.5 -> 0.5225、2.0 -> 0.4850；纯随机等待 p=0.25/0.50 分别为 0.4933/0.4967，
+# 均劣于不等待。即"会等待"本身不是免费的增益。
+IDLE_THRESHOLD = 1.5
 
 
 def _remaining_ops(env, order: int) -> int:
@@ -22,15 +28,33 @@ def _remaining_work(env, order: int) -> float:
     return env.problem.residual_from(int(order), int(env.stage[order]))
 
 
+def _critical_ratio(env, action) -> float:
+    """剩余松弛期 / 剩余路径最小加工时间。<1 表示该订单已不可能按时交付。"""
+    _, _, order = int(action[0]), int(action[1]), int(action[2])
+    slack = float(env.inst.due_dates[order]) - env.now
+    need = max(env.problem.residual_from(order, int(env.stage[order])), 1e-9)
+    return slack / need
+
+
 def select(rule: str, env, actions: List[Tuple[int, int, int]],
            rng: np.random.Generator) -> int:
     """在候选动作里按规则挑一个，返回下标。"""
     if not actions:
         raise ValueError("empty action set")
-    # non-delay 规则不表达主动空闲：在派工动作的子集上决策，再映回原下标
+    # non-delay 规则不表达主动空闲：在派工动作的子集上决策，再映回原下标。
+    # 唯一的例外是 SPT-Idle —— 它是"把同一自由度也交给规则"的对照基线：
+    # 若本文方法相对规则的增益仅仅来自动作集变大而非来自学到的策略，
+    # 这条基线就应当拿到同样的增益。它必须先于下面的过滤处理。
     live = [i for i, a in enumerate(actions) if int(a[0]) >= 0]
     if not live:                                       # 只剩 no-op（理论上不会发生）
         return 0
+    if rule == "SPT-Idle":
+        noop = [i for i, a in enumerate(actions) if int(a[0]) < 0]
+        if noop and live:
+            worst = max(_critical_ratio(env, actions[i]) for i in live)
+            if worst < IDLE_THRESHOLD:                 # 手上的活都已经救不回来，等下一件
+                return noop[0]
+        return live[select("SPT", env, [actions[i] for i in live], rng)]
     if len(live) < len(actions):
         sub = [actions[i] for i in live]
         return live[select(rule, env, sub, rng)]
