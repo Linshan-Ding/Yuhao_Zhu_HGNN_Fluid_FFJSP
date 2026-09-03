@@ -228,7 +228,9 @@ MATH_ENVS = r"(?:equation|align|gather|multline|eqnarray|algorithmic|tabular|tab
 # Macros whose argument is structural text (captions, placeholders, notes), not running prose.
 STRUCTURAL_MACROS = {"caption": 1, "figplace": 4, "draftnote": 1, "label": 1, "includegraphics": 1,
                      "input": 1, "bibliography": 1, "cite": 1, "citep": 1, "citet": 1,
-                     "ref": 1, "eqref": 1, "texttt": 1, "url": 1}
+                     "ref": 1, "eqref": 1, "texttt": 1, "url": 1,
+                     # this manuscript's own placeholder macros (figure/table specifications, not prose)
+                     "PHFIG": 3, "PHTAB": 2, "PHTABs": 2}
 
 
 def strip_macro(t: str, name: str, nargs: int) -> str:
@@ -295,7 +297,10 @@ SUFFIX = r"(?:aware|driven|guided|enhanced|adaptive|based|oriented)"
 COMMON_ACRONYMS = {"PPO", "GNN", "GAT", "GCN", "DRL", "RL", "VRP", "TSP", "JSSP", "FJSP", "CVRP", "MDP",
                    "MLP", "CNN", "RNN", "LSTM", "LLM", "GPU", "CPU", "SOTA", "MIP", "MILP", "CP", "GA",
                    "SA", "PSO", "TS", "LKH", "HV", "IGD", "OOD", "API", "CI", "SGD", "KL", "GAE",
-                   "AM", "POMO", "OR", "AI", "ML", "DL", "NN", "SGD", "FIFO", "SPT", "MWKR", "LoRA"}
+                   "AM", "POMO", "OR", "AI", "ML", "DL", "NN", "SGD", "FIFO", "SPT", "MWKR", "LoRA",
+                   # standard scheduling-problem and dispatching-rule acronyms of this field, plus the
+                   # names the cited baseline papers gave their own methods (none is coined here)
+                   "FFSP", "HFSP", "DFFSP", "DFJSP", "MOR", "EDD", "RRC", "DRLG", "HSDDQN"}
 SUMMARY_TAIL = r"^(this|the proposed|our)\s+(design|approach|mechanism|strategy|scheme|framework|module)\s+(ensures|guarantees|enables|allows|makes)"
 
 # ---- word lists: Chinese -------------------------------------------------
