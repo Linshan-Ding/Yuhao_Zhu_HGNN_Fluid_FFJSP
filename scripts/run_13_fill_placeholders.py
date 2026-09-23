@@ -14,16 +14,25 @@ from pathlib import Path
 
 import numpy as np
 
-from _bootstrap import ROOT, done, step
+from _bootstrap import EXCLUDED_RUN_PREFIXES, ROOT, done, step
 
 OUT = ROOT / "result" / "paper_values.tex"
 RESULT = ROOT / "result"
+
+
+def method_runs():
+    """全部方法 run 目录，排除冒烟/探针 run（与 run_11 同一规则）。
+
+    不排除的话，result/ 里一个 2 epoch 的 smoke_run1 会让 R1 取成 1、B3 报预算不一致。
+    """
+    return [d for d in sorted(RESULT.glob("*_run*"))
+            if d.is_dir() and not d.name.startswith(EXCLUDED_RUN_PREFIXES)]
 
 # 占位符 -> 来源说明（缺失时报给用户看）
 SOURCES = {
     "A1": "pruning_stats.csv: prune_ratio 均值",
     "A2": "pruning_stats.csv: retention_all 均值",
-    "A3": "exact_results.csv: rel_gap 均值",
+    "A3": "exact_results.csv: rel_gap 均值（相对证得的离线最优 eta_off）",
     "A4": "eval_results.csv: FSHGRL 相对最优规则的提升",
     "A5": "eval_results.csv: FSHGRL 相对最优学习基线的提升",
     "A6": "eval_results.csv: FSHGRL 的 decision_time_ms 均值（秒）",
@@ -50,22 +59,22 @@ SOURCES = {
     "S4": "pruning_stats.csv: retention_crit 均值",
     "S5": "pruning_stats.csv: delta_eta 均值",
     "S6": "pruning_stats.csv: 相对不剪枝的耗时节省",
-    "S7": "exact_results.csv: FSHGRL 达到 eta_off 的百分比",
+    "S7": "exact_results.csv: FSHGRL（全部 run 均值）达到 eta_off 的百分比",
     "S8": "exact_results.csv: 最优规则达到 eta_off 的百分比",
     "S9": "stats_summary.csv: FSHGRL vs FSHGRL-NONOOP 的 mean_diff",
     "P-RND": "stats_summary.csv: FSHGRL vs Random 的 mean_diff 与 p_holm",
     "P-BEST": "stats_summary.csv: FSHGRL vs 最强规则 的 mean_diff 与 p_holm",
     "P-RRC": "stats_summary.csv: FSHGRL vs RRC 的 mean_diff 与 p_holm",
     "P-DRL": "stats_summary.csv: FSHGRL vs 最强学习基线 的 mean_diff 与 p_holm",
-    "P-DRLWIN": "eval_results.csv: FSHGRL 领先最强学习基线的算例数 / 15",
+    "P-DRLWIN": "eval_results.csv: FSHGRL 领先最强学习基线的算例数（正文已写 of the 15）",
     "P-PARTIAL": "stats_summary.csv: 只满足显著性或只满足效应量的对比数",
     "AF-MAIN": "eval_results.csv: FSHGRL 的 a_f_mean 均值",
     "AF-NOBC": "eval_results.csv: FSHGRL-NOBC 的 a_f_mean 均值",
     "P-TIE": "pruning_stats.csv: main 档 p_singleton 均值",
-    "C-DDT600": "case_results.csv: case3d DDT=600 三个规模的 eta",
-    "C-DDT900": "case_results.csv: case3d DDT=900 三个规模的 eta",
-    "C-DDT1200": "case_results.csv: case3d DDT=1200 三个规模的 eta",
-    "P-MILPCHK": "exact_results.csv: replay_match 计数",
+    "C-DDT600": "case3d_results.csv: case3d DDT=600 三个规模的 eta_best",
+    "C-DDT900": "case3d_results.csv: case3d DDT=900 三个规模的 eta_best",
+    "C-DDT1200": "case3d_results.csv: case3d DDT=1200 三个规模的 eta_best",
+    "P-MILPCHK": "exact_results.csv: replay_match 计数（CP-SAT 最优排程驱动离散事件环境回放）",
 }
 
 
@@ -125,9 +134,12 @@ from agent.baselines.rules import RULES as _RULE_LIST      # noqa: E402
 _RULES = {r.upper() for r in _RULE_LIST}   # 单一真源，避免与 rules.py 漂移
 
 
-def _fmt(row):
-    return (f"{float(row['mean_diff']):+.4f}（Holm 校正 p = {float(row['p_holm']):.2g}，"
-            f"Cliff δ = {float(row['cliff_delta']):+.2f}）")
+def _fmt(row, who=""):
+    """宏会原样进入英文正文（例如 "Against the Random baseline the margin is \\PH{P-RND}"），
+    所以只写英文与 LaTeX；who 是对手名，放进括号里。"""
+    lead = f"{who}, " if who else ""
+    return (f"{float(row['mean_diff']):+.4f} ({lead}Holm-adjusted $p={float(row['p_holm']):.2g}$, "
+            f"Cliff's $\\delta={float(row['cliff_delta']):+.2f}$)")
 
 
 _best_rule, _best_diff = None, None
@@ -143,8 +155,7 @@ for _r in _st:
     if _v in _RULES and (_best_diff is None or float(_r["mean_diff"]) < _best_diff):
         _best_rule, _best_diff = _r, float(_r["mean_diff"])
 if _best_rule is not None:
-    values["P-BEST"] = (_best_rule["comparison"].replace("FSHGRL vs. ", "")
-                        + " 的 " + _fmt(_best_rule))
+    values["P-BEST"] = _fmt(_best_rule, _best_rule["comparison"].replace("FSHGRL vs. ", ""))
 
 # 最强学习基线：与 FSHGRL 差距最小的那个 DRL 基线
 _DRL = {"DRLG", "AHP-DQN", "HSDDQN"}
@@ -154,8 +165,7 @@ for _r in _st:
     if _v in _DRL and (_bd is None or float(_r["mean_diff"]) < _bd):
         _best_drl, _bd = _r, float(_r["mean_diff"])
 if _best_drl is not None:
-    values["P-DRL"] = (_best_drl["comparison"].replace("FSHGRL vs. ", "")
-                       + " 的 " + _fmt(_best_drl))
+    values["P-DRL"] = _fmt(_best_drl, _best_drl["comparison"].replace("FSHGRL vs. ", ""))
     _tag = _best_drl["comparison"].replace("FSHGRL vs. ", "")
     _ours = {r["instance_id"]: float(r["eta"]) for r in evals
              if r["variant"] == "FSHGRL" and r["tier"] == "main"}
@@ -163,7 +173,8 @@ if _best_drl is not None:
              if r["variant"] == _tag and r["tier"] == "main"}
     _both = set(_ours) & set(_them)
     if _both:
-        values["P-DRLWIN"] = f"{sum(1 for i in _both if _ours[i] > _them[i])}/{len(_both)}"
+        # 正文写作 "ahead on \\PH{P-DRLWIN} of the 15 test instances"，这里只填个数
+        values["P-DRLWIN"] = sum(1 for i in _both if _ours[i] > _them[i])
 
 # 只满足显著性或只满足效应量（而非两者）的对比数——预注册判据要求两者兼备
 _partial = 0
@@ -198,13 +209,13 @@ for ddt in (600, 900, 1200):
 # ---- 精确解
 if exact:
     values["A3"] = num(exact, "rel_gap")
-    off = num(exact, "eta_off_cpsat")
+    off = num(exact, "eta_off")
     ours = num(exact, "eta_fshgrl")
     pdr = num(exact, "eta_best_pdr")
     values["S7"] = 100.0 * ours / off if off else None
     values["S8"] = 100.0 * pdr / off if off else None
     matched = sum(1 for r in exact if r.get("replay_match") == "1")
-    values["P-MILPCHK"] = f"{matched}/{len(exact)} 个算例回放一致"
+    values["P-MILPCHK"] = f"{matched}/{len(exact)}"          # 宏进英文正文，不写中文
 
 # ---- 主评测
 if evals:
@@ -254,7 +265,7 @@ values["H3"] = cfg.get("fluid.slack_bucket_s")
 values["H4"] = cfg.get("reward.potential_weight")
 # 等预算：取全部 run 的 iter 上限；若各方法不一致则报错，等预算被破坏必须暴露出来
 _budgets = set()
-for _d in sorted((ROOT / "result").glob("*_run*")):
+for _d in method_runs():
     _log = _d / "log.csv"
     if _log.exists():
         _rows = list(csv.DictReader(_log.open(encoding="utf-8")))
@@ -269,7 +280,7 @@ if _budgets:
 # R1 必须是**实际跑了几个 run**，不是 configs 里推荐几个。二者不一致时按配置填，
 # 等于在论文里报告没有做过的重复实验。
 _seed_counts = {}
-for _d in sorted((ROOT / "result").glob("*_run*")):
+for _d in method_runs():
     if (_d / "checkpoint_best.pt").exists():
         _seed_counts.setdefault(_d.name.rsplit("_run", 1)[0], 0)
         _seed_counts[_d.name.rsplit("_run", 1)[0]] += 1
@@ -293,7 +304,7 @@ for _r in evals:
 if _rollouts:
     _det = min(_rollouts.values())
     _sto = max(_rollouts.values())
-    values["R2"] = _det if _det == _sto else f"{_det}（确定性方法）/ {_sto}（随机基线）"
+    values["R2"] = _det if _det == _sto else f"{_det} (deterministic) / {_sto} (Random, RRC)"
 else:
     values["R2"] = cfg.get("runtime.eval_rollouts")
 # R3 由实际值相乘，不能再回头读 configs——否则 R1 按实际填、R3 按推荐填，
@@ -308,15 +319,15 @@ from agent.networks import ActorCritic  # noqa: E402
 values["H5"] = sum(p.numel() for p in ActorCritic(cfg).parameters())
 
 budgets = []
-for log in RESULT.glob("*_run*/log.csv"):
+for log in (d / "log.csv" for d in method_runs() if (d / "log.csv").exists()):
     with log.open(encoding="utf-8") as handle:
         records = list(csv.DictReader(handle))
     if records and _isfloat(records[-1].get("steps", "")):
         budgets.append(int(float(records[-1]["steps"])))
 values["B1"] = max(budgets) if budgets else None
 
-commits = sorted({(RESULT / d.name / "commit.txt").read_text(encoding="utf-8").strip()[:12]
-                  for d in RESULT.glob("*_run*") if (d / "commit.txt").exists()})
+commits = sorted({(d / "commit.txt").read_text(encoding="utf-8").strip()[:12]
+                  for d in method_runs() if (d / "commit.txt").exists()})
 values["R4"] = commits[0] if commits else None
 
 # ---- 相对不剪枝的耗时节省
@@ -327,17 +338,24 @@ if pruning:
         values["S6"] = 100.0 * (1.0 - a_f / a_feas)
 
 step("写出 result/paper_values.tex")
+# 按 id 查表，而不是为每个占位符定义 \\PHA1 这样的命令：LaTeX 的命令名只能由字母组成，
+# \\PHA1 会被读成 \\PHA 后跟字符 1，而几乎每个 id 都带数字。
 lines = ["% 由 scripts/run_13_fill_placeholders.py 自动生成，请勿手改。",
-         "% 用法：在论文导言区 \\input{paper_values.tex}，再把 \\PH{X} 换成 \\PHX。", ""]
+         "% 用法：在论文导言区、\\PH 的定义之后加一行 \\input{paper_values.tex}，正文不用改。",
+         "% 有数据的 \\PH{id} 显示数值，缺数据的仍显示 [PH:id]。",
+         "\\makeatletter",
+         "\\newcommand{\\PHset}[2]{\\@namedef{PHval@#1}{#2}}",
+         "\\renewcommand{\\PH}[1]{\\@ifundefined{PHval@#1}"
+         "{{\\color{revblue}\\textbf{[PH:#1]}}}{\\@nameuse{PHval@#1}}}",
+         "\\makeatother", ""]
 for key in sorted(SOURCES):
     value = values.get(key)
-    macro = "\\PH" + key.replace("-", "")
     if value is None:
         missing.append(key)
-        lines.append(f"% 缺失：{macro}  <- {SOURCES[key]}")
+        lines.append(f"% 缺失：{key}  <- {SOURCES[key]}")
         continue
     text = f"{value:.4g}" if isinstance(value, float) else str(value)
-    lines.append(f"\\newcommand{{{macro}}}{{{text}}}")
+    lines.append(f"\\PHset{{{key}}}{{{text}}}")
 OUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 for key in sorted(SOURCES):

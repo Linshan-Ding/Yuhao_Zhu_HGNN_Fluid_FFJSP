@@ -26,6 +26,11 @@ OOD_COLUMNS = ["condition", "method", "eta", "eta_matched", "retention"]
 SHIFT_COLUMNS = ["shift_axis", "train_cond", "test_cond", "eta", "retention"]
 
 t0 = time.time()
+for _out in (ROOT / "result" / "arrival_results.csv", ROOT / "result" / "ood_results.csv",
+             ROOT / "result" / "shift_matrix.csv"):
+    if _out.exists():                     # 同 run_05：先清掉自身旧产物，误重跑不会追加重复行
+        _out.unlink()
+        print(f"[INFO] 已清空旧的 {_out.name}，结果将重新生成", flush=True)
 cfg = load_config()
 rng = np.random.default_rng()
 ckpts = checkpoints("fshgrl_run*")
