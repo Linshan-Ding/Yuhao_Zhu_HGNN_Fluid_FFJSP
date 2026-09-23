@@ -1,12 +1,166 @@
 # FSHGRL — 高频插单动态柔性流水车间调度
 
-本仓库是论文 *Fluid-Guided Sparse Heterogeneous Graph Reinforcement Learning for Real-Time
-Scheduling in Dynamic Flexible Flow Shops with High-Frequency Order Insertion* 的实验工程。
+本仓库是论文 *Bounding On-Time Delivery, Learning When to Wait: Fluid-Guided Reinforcement
+Learning for Flexible Flow Shops under High-Frequency Order Insertion* 的实验工程。
 
 **本 README 不是项目简介，而是复现手册**：把 §3–§8 的命令整段复制进终端顺序执行，
 即可产出论文所需的**全部**实验数据。最后一步 `run_13` 会把结果写成
 `result/paper_values.tex`，并在任何一个论文占位符缺数据时**报错列出缺口**——
 论文里开天窗的表格会在这里被拦下。
+
+---
+
+## 0. 进度与下一步：接着跑完全部实验
+
+`master` 上 "Add final experimental results" 提交时，训练与前半程评测已全部完成，剩下
+`run_07`、`run_09`、`run_10` 三个实验脚本与 `run_11`–`run_13` 三个汇总脚本。`run_07`
+此前因 Gurobi 授权到期报错；现在全部求解器都免授权（流体 LP 与 MILP 用 SciPy 自带的
+HiGHS，精确解与在线重优化用 OR-Tools CP-SAT，见 §2），代码里已没有任何 Gurobi 调用，
+装没装 `gurobipy`、授权是否有效都不影响运行。
+
+| 脚本 | 状态 | 产物 | 说明 |
+|---|---|---|---|
+| `run_01` 算例 | ✅ 已完成 | `data/instances/` | 评测算例本身就是复现基准，不要重建 |
+| `run_02`–`run_04` 训练 | ✅ 已完成 | 15 个方法 × 5 run × 250 epoch | 重跑会逐个跳过已有 checkpoint 的 run |
+| `run_05` 主评测 | ✅ 已完成 | `eval_results.csv`（1515 行） | **不要重跑**：开头会清空该文件再重算数小时 |
+| `run_06` 剪枝分析 | ✅ 已完成 | `pruning_stats.csv`、`pruning_sensitivity.csv` | 不要重跑：同样先清空再重算，前瞻 oracle 含随机 rollout，数会变 |
+| `run_07` 精确解 | ⏳ **待运行** | `exact_results.csv` | 见 0.2 |
+| `run_08` 到达 / OOD | ✅ 已完成 | `arrival_results.csv`、`ood_results.csv`、`shift_matrix.csv` | 不要重跑（理由同 `run_06`） |
+| `run_09` 奖励 / 探索 | ⏳ **待运行** | `reward_exploration.csv` | 要新训 9 个 run，见 0.3 |
+| `run_10` 案例研究 | ⚠️ **暂缓** | `case3d_results.csv` | 现有 case3d 算例不可用，先定算例再跑，见 0.4 |
+| `run_11`、`run_12` 统计与绘图 | ⏳ **待运行** | `stats_summary.csv` 等、`result/figures/` | 只依赖已完成的结果，现在就能跑，见 0.5 |
+| `run_13` 回填 | ⏳ **最后运行** | `paper_values.tex` | 等上面全部完成，见 0.5 |
+
+`run_07`、`run_09`、`run_11`（及其后的 `run_12`）互不依赖，可以在不同终端同时开跑；
+`run_10` 要等 case3d 算例重建之后；`run_13` 必须最后跑。`result/` 里旧版 `run_09` 留下的 `rw_betaf0p0`（196/300
+epoch，中断）不在新清单里，新脚本不会读它，可以手动删掉；`smoke_run1` 与
+`smoke_eval.csv` 是冒烟产物，全部汇总脚本都已排除。
+
+### 0.1 先合并本分支、更新依赖
+
+```
+git fetch origin
+git checkout master
+git merge origin/claude/latex-paper-restructure-nfwghr
+pip install -r requirements.txt
+```
+
+`requirements.txt` 把 `ortools` 的下限提到 9.8（新代码用它的 PEP 8 接口名）。合并后建议
+先跑一次冒烟自检 `python scripts/run_00_smoke.py`（约 5 分钟），其中第 5 步会用新的精确
+求解器解两个小算例并回放进仿真器。
+
+### 0.2 `run_07`：精确解、在线重优化与最优性间隙（Table T-NEW-5）
+
+```
+python scripts/run_07_exact_optimality.py --jobs 4
+```
+
+24 个 small 档算例，每个依次做：CP-SAT 离线最优 → HiGHS 求解稿件 Eqs. (1)–(11) 的 MILP
+（每个算例限时 3600 s，与论文一致）→ 把 CP-SAT 最优排程代入 MILP 约束矩阵逐行核对 →
+两份排程分别驱动离散事件环境回放 → 在线滚动重优化 → FSHGRL 5 个 run、8 条规则、三个
+学习基线 15 个 run 的评测。`--jobs 4` 表示 4 个算例并行，按空闲核数调整。
+
+- **耗时**：CP-SAT 每个算例都在 1 s 内证得最优；在线重优化每个算例 1–80 s；主要开销是
+  MILP。在 4 核容器里以 1200 s 限时试跑了 16 个算例：S=12 的 6 个用 2–43 s 证得最优，
+  S=16–25 的 10 个里 7 个用 4–523 s 证得最优、3 个到时限仍未证得（CP-SAT 的最优值都落在
+  它们的可行解与上界之间）。证得最优的 13 个与 CP-SAT 逐个相等。最坏情况是 24 个算例都
+  跑满 3600 s，即 `--jobs 4` 下约 6 小时。
+- **可以随时中断**：每算完一个算例就写一行，重跑只补缺失的算例。要从头重算先删
+  `result/exact_results.csv`。只想先看结果可加 `--milp-time-limit 600`，但论文写的是
+  3600 s，最终数据请用默认值。
+- **跑完看最后几行**：`[P-MILPCHK]` 回放一致数与 `[证书]` 数应为 24/24，`CONFLICT` 应为 0。
+  MILP 在时限内没证得最优的算例，`eta_off` 取 CP-SAT 证得的最优值（`eta_off_source`
+  列写 `cpsat`），同时核对它落在 MILP 的可行解与对偶上界之间。
+
+### 0.3 `run_09`：奖励与探索消融（Table T-NEW-9）
+
+表里 13 行中，与主配置相同的 4 行（beta_f=0、beta_Psi=0.1、kappa_d=1、修正比率）直接
+复用 `fshgrl_run1`–`5`，不重训；另外 9 个配置各训练 1 个 run，预算与主方法相同
+（250 epoch，单个 run 在你的机器上约 8 小时，按 `fshgrl_run1/log.csv` 的 `elapsed_s` 估）。
+一个 run 只有 `log.csv` 记满 250 行才算完成，中断的会从头重训。
+
+最省事的做法是一条命令顺序训完再汇总（约 9 × 8 小时）：
+
+```
+python scripts/run_09_reward_exploration.py
+```
+
+并行更快：每个终端训练一组，组数按空闲核数定。bash：
+
+```
+OMP_NUM_THREADS=1 python scripts/run_09_reward_exploration.py --only rw_betaf0p05 rw_betaf0p1 rw_betaf0p2 &
+OMP_NUM_THREADS=1 python scripts/run_09_reward_exploration.py --only rw_betaf0p5 rw_betapsi0 rw_kappad0 &
+OMP_NUM_THREADS=1 python scripts/run_09_reward_exploration.py --only rw_ratiodiff rw_uncorrected rw_onpolicy &
+wait
+python scripts/run_09_reward_exploration.py --collect
+```
+
+PowerShell（PyCharm 内置终端）不支持行尾 `&`，开三个终端标签页，各执行一行：
+
+```
+$env:OMP_NUM_THREADS=1; python scripts/run_09_reward_exploration.py --only rw_betaf0p05 rw_betaf0p1 rw_betaf0p2
+$env:OMP_NUM_THREADS=1; python scripts/run_09_reward_exploration.py --only rw_betaf0p5 rw_betapsi0 rw_kappad0
+$env:OMP_NUM_THREADS=1; python scripts/run_09_reward_exploration.py --only rw_ratiodiff rw_uncorrected rw_onpolicy
+```
+
+三组都结束后执行 `python scripts/run_09_reward_exploration.py --collect` 汇总。汇总时每个
+run 的 `checkpoint_best.pt` 在 15 个测试算例上贪心评测（复用行直接读 `eval_results.csv`），
+置信区间跨算例；缺 run 时会列出缺哪几个并以非零码退出。
+
+### 0.4 `run_10`：3D 打印案例研究（暂缓，先重建算例）
+
+**现在跑会得到一张几乎全零的表，先不要跑。** 核对 `data/instances/case3d/` 时发现两处问题：
+
+1. 算例在交期上不可行。订单走完 6 道工序的最短可能时间（每道取最快机器）平均为
+   1200–1800，而交期宽松度只有 DDT×U[0.7,1.4]：DDT=600 的三个算例 100% 的订单到达时就
+   已不可能按时完成，DDT=900 为 90%–100%，DDT=1200 为 61%–78%。实测 SPT 在 DDT=600 三个
+   算例上 η=0，任何方法（包括离线最优）都只能是 0。
+2. 算例没有用论文给的数据。论文表 `tab:3d_printing_case_data` 列出了每类订单每道工序
+   可选机器与加工时间（分钟，打印机按产品专用），而 `data/dataset.py::make_case3d` 用的是
+   `rand[30,600]` 的随机工时、每阶段 [2,2,3,3,2,2] 台机器、80% 合格率，与该表对不上。
+   按论文表算，三类订单的最短路径为 387、469、667 分钟，DDT=600–1200 分钟才是有区分度的
+   设置。
+
+需要先决定按论文表重建 case3d 算例（还要定到达率，现代码取 DDT/6），还是改论文的情景
+描述；定了之后重建算例，再运行：
+
+```
+python scripts/run_10_case_study.py
+```
+
+FSHGRL 的 5 个 run 各做一次贪心 rollout，`eta_best`/`eta_avg` 分别是 5 个 run 的最大值与
+均值，置信区间跨 run；规则与三个学习基线同 `run_05` 的口径。
+
+### 0.5 汇总与回填
+
+```
+python scripts/run_11_aggregate_stats.py
+python scripts/run_12_make_figures.py
+python scripts/run_13_fill_placeholders.py
+```
+
+`run_11`、`run_12` 现在就能跑；`run_13` 要等 0.2–0.4 全部完成（`C-DDT600/900/1200` 三个
+占位符来自 `run_10`），打印
+`[闭环] 论文全部占位符均已有数据来源。` 才算结束，随后按 §10 把数值填回论文。
+
+**回填前先读 `result/preregistered_verdict.csv`，不要只填数。** 用 `master` 上的全部结果
+（15 个方法 × 5 run × 250 epoch）试跑 `run_11`，预注册判据的裁决是五条对比判据全部不成立，
+只有"no-op 使用率 > 2%"（实测 53%）成立：
+
+| 判据 | 对手 | FSHGRL 减对手 | Holm p | Cliff δ |
+|---|---|---|---|---|
+| 主判据 | SPT-Idle（数据选出的最强规则） | +0.0788 | 0.25 | +0.23 |
+| C3 引导 vs 缩减 | FSHGRL-RP | −0.0062 | 1.00 | −0.06 |
+| C-OBJ 目标对齐 | FSHGRL-MaxMin | −0.0084 | 1.00 | −0.07 |
+| C-NOOP 主动空闲 | FSHGRL-NoNoOp | +0.0993 | 0.14 | +0.31 |
+| C-BC 热启动 | FSHGRL-NoBC | −0.0388 | 0.09 | −0.17 |
+
+成立的门槛是差值为正且 Holm p < 0.05，主判据与 C3 还要求 δ ≥ 0.33（见 `run_11` 的
+`judge`）。11 个消融变体里有 9 个的均值高于 FSHGRL（0.6884）；`run_11` 还报告等 epoch 与
+等交互步数两种预算口径下方法排序不一致。所以摘要、引言贡献、
+§5.10 与结论里依赖这些判据的论断要按 `docs/experiment-spec.md` §8.3 收窄，而不只是填数。
+另外 `run_13` 会把 `R1` 填成 5、`B3` 填成 250，论文里按"每个方法 1 个 run、预算低于推荐值、
+epsilon 退火在 0.10 处截断"写的几句（§5.3 训练协议、§5.12 局限）届时不再成立，需一并改写。
 
 ---
 
@@ -37,9 +191,17 @@ Scheduling in Dynamic Flexible Flow Shops with High-Frequency Order Insertion* �
 
 ## 2. 环境配置
 
-Python 3.11+。**不需要 Gurobi 授权**：流体 LP 走 SciPy 的 HiGHS，精确解走 OR-Tools
-CP-SAT；检测到 Gurobi 授权时会自动改用 Gurobi 并额外求解 MILP 版本（两个求解器一致
-本身就是对公式化的一次独立检查）。
+Python 3.11+。**不需要任何商业求解器授权**：
+
+- 流体 LP 只用 SciPy 自带的 HiGHS（`linprog(method="highs")`）。LP 退化时最优解不唯一，
+  剪枝读的正是解的支撑集，所以训练与评测必须用同一个求解器；旧版在 max-min 模式下会先试
+  Gurobi、授权失效才回退 HiGHS，同一份代码在两台机器上可能剪出不同的动作集，现已删除。
+- 精确解由两个求解器独立给出：OR-Tools CP-SAT，以及用 SciPy 的 `milp`（HiGHS 分支定界）
+  直接求解稿件 Eqs. (1)–(11) 的 MILP。CP-SAT 在一个保序的整数时间尺度上求解：工时为整数时，
+  左对齐排程的每个时刻都形如"某订单到达时刻 + 整数"，按到达时刻小数部分的名次编码后，
+  到达、前后序、同机不重叠与交期四类比较全部保持，CP-SAT 的最优值因此就是连续时间模型
+  的最优值。旧版把到达向上取整、交期向下取整，实测在 `small_S20_DDT600_c1` 上把 eta_off
+  从 0.60 低估成 0.55。
 
 ```
 pip install -r requirements.txt
@@ -56,7 +218,7 @@ pip install -r requirements.txt
 | 基线训练（3 方法 × 5 run） | `run_04` | 约 60–90 小时 |
 | 主评测 | `run_05` | 约 4–6 小时 |
 | 剪枝分析（含前瞻 oracle） | `run_06` | 约 6–10 小时 |
-| 精确解 + 回放校验 | `run_07` | 约 10 分钟 |
+| 精确解 + 回放 + 在线重优化 | `run_07` | 约 2–6 小时（`--jobs 4`，主要是 MILP，见 §8） |
 | 到达强度 + OOD | `run_08` | 约 2–4 小时 |
 | 奖励/探索消融 | `run_09` | 约 20–30 小时 |
 | 案例研究 | `run_10` | 约 2–3 小时 |
@@ -222,11 +384,15 @@ python scripts/run_10_case_study.py
 
 评测脚本自动发现 `result/` 下的 checkpoint，不需要手填任何路径。
 
-- `run_06` 除剪枝率外还测 **oracle 动作保留率**：小档用精确 oracle，主档用一步前瞻
-  oracle（公共随机数、并报 rollout 标准误——前瞻 oracle 自身是估计量，只报点值会误导）。
-  它同时输出 `P(|A_f|=1)`，即候选集退化为单元素的比例。
-- `run_07` 在小档求精确解，并把解**回放进离散事件仿真器**核对完工时间，
-  这是"MILP 与仿真器描述同一个问题"的直接证据。
+- `run_06` 除剪枝率外还测 **oracle 动作保留率**：oracle 是一步前瞻（公共随机数、并报
+  rollout 标准误——前瞻 oracle 自身是估计量，只报点值会误导）。它同时输出
+  `P(|A_f|=1)`，即候选集退化为单元素的比例。
+- `run_07` 在小档用 CP-SAT 与 HiGHS MILP 两个求解器求离线最优并交叉核对，把 CP-SAT 的
+  最优排程代入字面 MILP 的约束矩阵逐行检查，再让两份排程分别**驱动离散事件环境逐道
+  工序回放**，环境自己记下的按时完工数必须与求解器一致——这是"MILP 与仿真器描述同一个
+  问题"的直接证据。它还给出在线滚动重优化：每个到达时刻只对已知订单精确重排、不看未来，
+  精确但短视，既不是在线策略的上界也不是下界。详见 §0.2。
+- `run_09` 的 13 行里 4 行复用主方法的 5 个 run，另 9 个配置各训练 1 个 run，详见 §0.3。
 - `run_08` 的三种到达过程按构造共享同一平均到达率，差异只反映突发性；
   OOD 档**不重训**——之所以可行，是因为图规模由 $|\mathcal{O}|\times|\mathcal{M}|$
   固定、剪枝后动作空间的界与订单数无关。
@@ -255,7 +421,9 @@ Holm/BH 校正（量级与多重比较），外加方差分解 ICC 与 Friedman/
 python scripts/run_all.py
 ```
 
-任一步失败即停；修好后重跑会自动跳过已完成的步骤。
+任一步失败即停。重跑时并不会跳过全部已完成步骤：`run_01`–`run_04` 跳过已有的算例与
+checkpoint，`run_07`、`run_09` 只补缺失部分，`run_05`、`run_06`、`run_08`、`run_10`
+会清空自身产物后重算。已有部分结果时按 §0 单独运行剩下的脚本。
 
 ### 时间预算（4 核 CPU 实测，供排期用）
 
@@ -267,7 +435,10 @@ python scripts/run_all.py
 | `run_03` 消融训练 | 同上 | 11 变体 × 5 run | 长 |
 | `run_04` 学习基线 | 同上 | 3 × 5 run | 长 |
 | `run_05` 主评测 | ~9 s/算例·方法 | 21 方法 × 15 算例 | ~45 min |
-| `run_07` 精确解 | ~0.1 s/算例 | 16 | < 1 min |
+| `run_07` CP-SAT 离线最优 | < 1 s/算例 | 24 | < 1 min |
+| `run_07` HiGHS MILP | 2 s – 3600 s（时限）/算例 | 24 | 最坏 24 h 单进程，`--jobs 4` 约 6 h |
+| `run_07` 在线重优化 | 1–80 s/算例 | 24 | ~10 min |
+| `run_09` 训练 | 同 `run_02` | 9 run | 长 |
 | `run_11`–`run_13` | — | — | 数分钟 |
 
 训练是唯一的长项。**每个 run 用一个进程、`OMP_NUM_THREADS=1`，并行跑满核数**：网络很
@@ -343,24 +514,27 @@ visdom 面板单独建一个配置：Script path 下拉切换为 **Module name**
 | `result/eval_ci.csv` | `run_11`（§8） | 上述三张表的 95% CI 列 |
 | `result/pruning_stats.csv` | `run_06`（§7） | 剪枝量化表 T-NEW-4；占位符 `A1`、`A2`、`S2`–`S6`、`P-TIE` |
 | `result/pruning_sensitivity.csv` | `run_06`（§7） | 图 F-NEW-2 |
-| `result/exact_results.csv` | `run_07`（§7） | 最优性间隙表 T-NEW-5；占位符 `A3`、`S7`、`S8`、`P-MILPCHK` |
+| `result/exact_results.csv` | `run_07`（§0.2、§7） | 最优性间隙表 T-NEW-5：`eta_off_milp`/`eta_off_cpsat` 两列 → 表中 MILP / CP-SAT 列，`cpsat_time_s`、`milp_time_s` → 求解时间，`eta_online` → Online re-opt. 列；占位符 `A3`、`S7`、`S8`、`P-MILPCHK` |
 | `result/arrival_results.csv` | `run_08`（§7） | 到达强度表 T-NEW-8(a)；占位符 `L3`、`L4` |
 | `result/ood_results.csv` | `run_08`（§7） | OOD 表 T-NEW-8(b) |
 | `result/shift_matrix.csv` | `run_08`（§7） | 图 F-NEW-4 |
-| `result/reward_exploration.csv` | `run_09`（§7） | 奖励/探索消融表 T-NEW-9；占位符 `H4` |
-| `result/case3d_results.csv` | `run_10`（§7） | 案例研究表 |
+| `result/reward_exploration.csv` | `run_09`（§0.3、§7） | 奖励/探索消融表 T-NEW-9（每行一个配置，`runs` 列注明是否复用主方法的 run）；占位符 `H4` |
+| `result/case3d_results.csv` | `run_10`（§0.4、§7） | 案例研究表；占位符 `C-DDT600`、`C-DDT900`、`C-DDT1200` |
 | `result/stats_summary.csv` | `run_11`（§8） | Wilcoxon/效应量表；占位符 `S1` |
 | `result/variance_decomposition.csv` | `run_11`（§8） | Wilcoxon 表脚注的 ICC |
 | `result/friedman_nemenyi.csv` | `run_11`（§8） | 图 F-NEW-5 |
 | `result/figures/*.pdf` | `run_12`（§8） | 图 F-NEW-2 / F-NEW-4 / F-NEW-5 与两张面板图 |
-| `result/paper_values.tex` | `run_13`（§8） | **全部 35 个 `\PH{}` 占位符** |
+| `result/paper_values.tex` | `run_13`（§8） | **全部 46 个 `\PH{}` 占位符** |
 
 ### 怎么把数据填回论文
 
 1. 跑完 §4–§8，确认 `run_13` 打印 `[闭环] 论文全部占位符均已有数据来源。`
-2. 把 `result/paper_values.tex` 复制到论文目录，在导言区加 `\input{paper_values.tex}`。
-3. 论文里的 `\PH{A1}` 换成 `\PHA1`（连字符 id 去掉连字符，如 `\PH{P-TIE}` → `\PHPTIE`）。
-4. 表格里的蓝色 `\dc` 单元格按 §10 对照表找到对应 CSV，逐列填入。
+2. 把 `result/paper_values.tex` 复制到论文目录，在 `main.tex` 里 `\PH` 的定义之后加一行
+   `\input{paper_values.tex}`。正文里的 `\PH{id}` 不用改：有数据的显示数值，缺数据的仍显示
+   `[PH:id]`，所以 `run_13` 还没闭环时也可以先编译看效果。（旧说明让把 `\PH{A1}` 改成
+   `\PHA1`，但 LaTeX 命令名只能由字母组成，`\PHA1` 会被读成 `\PHA` 后跟字符 1，现已改为
+   按 id 查表。）
+3. 表格里的蓝色 `\dc` 单元格按 §10 对照表找到对应 CSV，逐列填入。
    表头、单位与脚注都已写好，只需要填数值。
 
 ---
@@ -372,7 +546,7 @@ configs/     参数中枢：instance / env / algo + ablation/*.yaml；代码无�
 data/        算例生成（训练随机构造 + 评测逐个物化）与六档固定算例
 environment/ 问题定义、交期感知流体松弛、离散事件环境（含剪枝与安全网）
 agent/       异构图编码器、actor-critic、行为策略修正的 PPO、规则与学习基线
-exact/       CP-SAT / Gurobi 精确求解与解回放校验
+exact/       精确求解（CP-SAT 离线最优与在线重优化、HiGHS MILP）、MILP 证书与离散事件回放校验
 analysis/    奖励恒等式校验、剪枝与 oracle 保留率、统计检验
 result/      日志与全部实验 CSV、图、paper_values.tex
 scripts/     零参数入口层：README 里的命令全部指向这里

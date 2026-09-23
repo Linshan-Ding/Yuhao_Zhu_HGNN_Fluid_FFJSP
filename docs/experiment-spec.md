@@ -14,7 +14,7 @@
 **默认范式**：构造式 DRL（PPO / Actor–Critic + 异构图注意力编码器 + 动作级自注意力）。
 不触发模块替换协议——`agent/` 保留 PPO 结构，但按稿件 §4.8.2 引入**行为策略修正**（存 `log b_k` 而非 `log π_old`）。
 
-**环境不可张量化**：本问题是**离散事件仿真**（随机到达、机器完工事件、订单丢弃），且 `step` 内需调用 Gurobi 求解流体 LP。按 codegen 技能"环境并行判定表"，此形态属于**值得引入多进程**一类。当前实现为单进程 + LP 缓存；worker 并行留作可选项，判定与实测加速比记录在 README §2。
+**环境不可张量化**：本问题是**离散事件仿真**（随机到达、机器完工事件、订单丢弃），且 `step` 内需调用 LP 求解器（SciPy 自带的 HiGHS）求解流体 LP。按 codegen 技能"环境并行判定表"，此形态属于**值得引入多进程**一类。当前实现为单进程 + LP 缓存；worker 并行留作可选项，判定与实测加速比记录在 README §2。
 
 ---
 
@@ -92,12 +92,12 @@ $\epsilon_f = 10^{-5}$，$\theta_{\text{crit}}$ 见 `configs/env.yaml`。
 | `result/eval_results.csv` | `instance_id,tier,method,variant,run_id,eta,nu,decision_time_ms,steps,feasible` | `run_05` |
 | `result/pruning_stats.csv` | `instance_id,A_feas_mean,A_feas_max,A_f_mean,A_f_max,prune_ratio,p_singleton,fallback_rate,retention_all,retention_crit,retention_se,delta_eta,t_lp_ms,t_enc_ms,t_pol_ms,zeta,support_size` | `run_06` |
 | `result/pruning_sensitivity.csv` | `eps_f,prune_ratio,retention_all,retention_crit,eta,decision_time_ms` | `run_06` |
-| `result/exact_results.csv` | `instance_id,S,eta_off_gurobi,eta_off_cpsat,solver_time_s,eta_online_exact,eta_fshgrl,eta_best_pdr,eta_best_drl,abs_gap,rel_gap,replay_match` | `run_07` |
+| `result/exact_results.csv` | `instance_id,S,DDT,eta_off,eta_off_source,eta_off_cpsat,cpsat_status,cpsat_time_s,eta_off_milp,milp_status,milp_upper,milp_time_s,cert_cpsat_in_milp,replay_match,replay_match_milp,eta_online,online_solves,online_all_optimal,online_time_s,replay_match_online,eta_fshgrl,eta_fshgrl_sd,n_fshgrl_runs,eta_best_pdr,best_pdr,eta_best_drl,best_drl,abs_gap,rel_gap` | `run_07` |
 | `result/arrival_results.csv` | `E_dt,rho_sys,iota,arrival_process,eta,nu,phi_star_mean,decision_time_ms` | `run_08` |
 | `result/ood_results.csv` | `condition,method,eta,eta_matched,retention` | `run_08` |
 | `result/shift_matrix.csv` | `shift_axis,train_cond,test_cond,eta,retention` | `run_08` |
-| `result/reward_exploration.csv` | `panel,config,eta,eta_ci_lo,eta_ci_hi,nu,steps_to_90pct,ratio_max,ratio_bound,approx_kl` | `run_09` |
-| `result/case3d_results.csv` | `case,DDT,S,eta_best,eta_avg,ci_lo,ci_hi,decision_time_s,eta_best_rule,eta_avg_rule,eta_best_drl,imp_pct,gap_pct` | `run_10` |
+| `result/reward_exploration.csv` | `panel,config,runs,eta,eta_ci_lo,eta_ci_hi,nu,steps_to_90pct,ratio_max,ratio_bound,approx_kl` | `run_09` |
+| `result/case3d_results.csv` | `case,DDT,S,infeasible_share,eta_best,eta_avg,ci_lo,ci_hi,n_runs,decision_time_s,eta_best_rule,best_rule,eta_avg_rule,eta_best_drl,best_drl,imp_pct,gap_pct` | `run_10` |
 | `result/stats_summary.csv` | `comparison,R_plus,R_minus,p_raw,p_holm,p_bh,r_rb,cliff_delta,A12,lmm_est,lmm_ci_lo,lmm_ci_hi` | `run_11` |
 | `result/variance_decomposition.csv` | `source,var_component,icc` | `run_11` |
 | `result/friedman_nemenyi.csv` | `method,mean_rank,cd,friedman_stat,friedman_df,friedman_p` | `run_11` |
