@@ -53,6 +53,11 @@ class SchedulingEnv:
         self.fluid = FluidRelaxation(cfg)
 
         self.kappa_d = float(cfg.get("reward.discard_weight", 1.0))
+        # count：到达不变的计数型奖励（主方法）；ratio_difference：稿件 Eq. (pathological)
+        # 的比率差奖励，只作 Table T-NEW-9 的对照，用来实测它的病态
+        self.reward_mode = str(cfg.get("reward.mode", "count"))
+        if self.reward_mode not in ("count", "ratio_difference"):
+            raise ValueError(f"unknown reward.mode: {self.reward_mode}")
         self.beta_f = float(cfg.get("reward.fluid_align_weight", 0.0))
         self.beta_psi = float(cfg.get("reward.potential_weight", 0.0))
         self.gamma = float(cfg.get("reward.gamma", 1.0))
@@ -95,6 +100,7 @@ class SchedulingEnv:
         self._proc_scale = max(float(inst.proc_times.max()), 1.0)
         self._advance_to_decision()
         self._last_potential = self._potential()
+        self._last_ratio = self._running_ratio()
 
     # ------------------------------------------------------------------ 事件推进
     def _activate_arrivals(self) -> None:
@@ -297,6 +303,22 @@ class SchedulingEnv:
         return nxt is not None and nxt > self.now + 1e-9
 
     # ------------------------------------------------------------------ 奖励
+    def _running_ratio(self) -> float:
+        """eta~_t = N_c(t) / max(N_a(t), 1)：分母是已到达订单数，随到达变化。"""
+        return self.n_completed / max(int(np.count_nonzero(self.status != NOT_ARRIVED)), 1)
+
+    def _base_reward(self, d_c: int, d_d: int) -> float:
+        """计数型奖励（稿件 Eq. 46）；ratio_difference 模式下换成 r_t = eta~_t - eta~_{t-1}。
+
+        后者在只有到达、没有完工的时刻为负（已有订单完工时），且与本步动作无关——
+        这正是稿件 Eq. (pathological) 所说的外生惩罚，对照实验要测的就是它。
+        """
+        if self.reward_mode == "ratio_difference":
+            ratio = self._running_ratio()
+            reward, self._last_ratio = ratio - self._last_ratio, ratio
+            return reward
+        return (d_c - self.kappa_d * d_d) / max(self.problem.n_order, 1)
+
     def _potential(self) -> float:
         """Psi(omega) = min{Phi*, 1}，势函数塑形用（稿件 Eq. 50）。"""
         if self.beta_psi <= 0:
@@ -327,7 +349,7 @@ class SchedulingEnv:
         # 到达不变的计数型奖励（稿件 Eq. 46）：只对完工/丢弃事件可测，与到达无关
         d_c = self.n_completed - before_c
         d_d = self.n_discarded - before_d
-        reward = (d_c - self.kappa_d * d_d) / max(self.problem.n_order, 1)
+        reward = self._base_reward(d_c, d_d)
 
         info = {"base_reward": reward, "d_completed": d_c, "d_discarded": d_d}
 
@@ -364,7 +386,7 @@ class SchedulingEnv:
 
         d_c = self.n_completed - before_c
         d_d = self.n_discarded - before_d
-        reward = (d_c - self.kappa_d * d_d) / max(self.problem.n_order, 1)
+        reward = self._base_reward(d_c, d_d)
         info = {"base_reward": reward, "d_completed": d_c, "d_discarded": d_d, "noop": True}
 
         if self.beta_psi > 0:
