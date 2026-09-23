@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 from agent.baselines.drl_baselines import BASELINES
-from agent.baselines.rules import RULES, select as rule_select
+from agent.baselines.rules import RULES, STOCHASTIC_RULES, select as rule_select
 from agent.networks import ActorCritic
 from agent.ppo import PPOAgent
 from configs.config import ROOT, load_config
@@ -78,7 +78,7 @@ def make_chooser(method: str, cfg, checkpoint: Path | None, rng):
 # 随机策略：同一算例上多次 rollout 才有意义。其余方法在固定算例上贪心求解，
 # 逐次 rollout 的结果逐位相同——重复 10 次不是 10 个样本，只是把同一个数抄十遍，
 # 既浪费算力，又会让"每单元 R3 次运行"这句话在统计上具有误导性。
-STOCHASTIC = {"Random", "RRC"}
+STOCHASTIC = set(STOCHASTIC_RULES)
 
 
 def evaluate(method: str, tiers: List[str], cfg, checkpoint: Path | None,
