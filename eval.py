@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 from agent.baselines.drl_baselines import BASELINES
-from agent.baselines.rules import RULES, select as rule_select
+from agent.baselines.rules import RULES, STOCHASTIC_RULES, select as rule_select
 from agent.networks import ActorCritic
 from agent.ppo import PPOAgent
 from configs.config import ROOT, load_config
@@ -27,7 +27,8 @@ from result.logger import append_rows
 
 EVAL_COLUMNS = ["instance_id", "tier", "S", "DDT", "method", "variant", "run_id",
                 "eta", "nu", "decision_time_ms", "steps", "a_f_mean", "a_feas_mean",
-                "p_singleton", "phi_star_mean", "noop_rate", "noop_offer_rate", "feasible"]
+                "p_singleton", "phi_star_mean", "noop_rate", "noop_offer_rate", "feasible",
+                "held_share"]
 
 
 def _run_episode(env: SchedulingEnv, chooser) -> dict:
@@ -53,6 +54,8 @@ def _run_episode(env: SchedulingEnv, chooser) -> dict:
         "noop_rate": round(env.stats.noop_used / max(env.stats.noop_offered, 1), 4),
         "noop_offer_rate": round(env.stats.noop_offered / max(steps, 1), 4),
         "feasible": 1,
+        # 保留产能：有活可干却被主动闲置的机器时间份额（规则恒为 0，SPT-Idle 除外）
+        "held_share": round(env.held_share, 4),
     }
 
 
@@ -78,7 +81,7 @@ def make_chooser(method: str, cfg, checkpoint: Path | None, rng):
 # 随机策略：同一算例上多次 rollout 才有意义。其余方法在固定算例上贪心求解，
 # 逐次 rollout 的结果逐位相同——重复 10 次不是 10 个样本，只是把同一个数抄十遍，
 # 既浪费算力，又会让"每单元 R3 次运行"这句话在统计上具有误导性。
-STOCHASTIC = {"Random", "RRC"}
+STOCHASTIC = set(STOCHASTIC_RULES)
 
 
 def evaluate(method: str, tiers: List[str], cfg, checkpoint: Path | None,

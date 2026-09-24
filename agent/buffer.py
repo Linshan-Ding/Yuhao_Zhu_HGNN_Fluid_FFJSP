@@ -24,6 +24,11 @@ class Transition:
     done: bool
     n_candidates: int
     n_stage: int
+    # CoH（Commit-or-Hold）的监督标签，episode 结束后由 train.py 回填；-1 = 无标签
+    order: int = -1                # 本步派出的订单（no-op 为 -1）
+    hold_id: int = -1              # 本步若为 no-op，其等待记录的编号
+    commit_label: int = -1         # 派出的订单是否按时完成
+    hold_label: int = -1           # 等待是否等来了按时完成的新订单
 
 
 @dataclass

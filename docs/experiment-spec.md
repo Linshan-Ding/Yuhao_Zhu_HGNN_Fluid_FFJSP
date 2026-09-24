@@ -3,6 +3,7 @@
 | 版本 | 日期 | 变更 |
 |---|---|---|
 | v1.0 | 2026-08-28 | 由 opt-paper-codegen 单独使用模式（分支 C，阶段 E）生成。契约来源为重构后的稿件 `cas-sc-template.tex`（分支 `claude/latex-paper-restructure-nfwghr`）及其占位符清单，而非自由格式方案。 |
+| v1.2 | 2026-09-24 | 原稿已录用；新增 §9：新论文（Commit-or-Hold）试点的预注册判定规则，在试点开跑前固定。 |
 | v1.1 | 2026-08-29 | 算法优化轮。诊断发现三层结构性问题并据此修订规格，详见下方 §7 变更记录与 §8 预注册判定规则。**本版之前产出的全部实验数据作废。** |
 
 > 本文件是代码仓库的任务书。**论文里每一个 `\PH{}` 与每一张表的 `\dc` 单元格，都必须能在 §6C 映射表里找到产出它的脚本与 CSV 列**；反之每一列落盘都必须有论文去向。映射表无天窗 ⇔ 工程无天窗。
@@ -14,7 +15,7 @@
 **默认范式**：构造式 DRL（PPO / Actor–Critic + 异构图注意力编码器 + 动作级自注意力）。
 不触发模块替换协议——`agent/` 保留 PPO 结构，但按稿件 §4.8.2 引入**行为策略修正**（存 `log b_k` 而非 `log π_old`）。
 
-**环境不可张量化**：本问题是**离散事件仿真**（随机到达、机器完工事件、订单丢弃），且 `step` 内需调用 Gurobi 求解流体 LP。按 codegen 技能"环境并行判定表"，此形态属于**值得引入多进程**一类。当前实现为单进程 + LP 缓存；worker 并行留作可选项，判定与实测加速比记录在 README §2。
+**环境不可张量化**：本问题是**离散事件仿真**（随机到达、机器完工事件、订单丢弃），且 `step` 内需调用 LP 求解器（SciPy 自带的 HiGHS）求解流体 LP。按 codegen 技能"环境并行判定表"，此形态属于**值得引入多进程**一类。当前实现为单进程 + LP 缓存；worker 并行留作可选项，判定与实测加速比记录在 README §2。
 
 ---
 
@@ -92,12 +93,12 @@ $\epsilon_f = 10^{-5}$，$\theta_{\text{crit}}$ 见 `configs/env.yaml`。
 | `result/eval_results.csv` | `instance_id,tier,method,variant,run_id,eta,nu,decision_time_ms,steps,feasible` | `run_05` |
 | `result/pruning_stats.csv` | `instance_id,A_feas_mean,A_feas_max,A_f_mean,A_f_max,prune_ratio,p_singleton,fallback_rate,retention_all,retention_crit,retention_se,delta_eta,t_lp_ms,t_enc_ms,t_pol_ms,zeta,support_size` | `run_06` |
 | `result/pruning_sensitivity.csv` | `eps_f,prune_ratio,retention_all,retention_crit,eta,decision_time_ms` | `run_06` |
-| `result/exact_results.csv` | `instance_id,S,eta_off_gurobi,eta_off_cpsat,solver_time_s,eta_online_exact,eta_fshgrl,eta_best_pdr,eta_best_drl,abs_gap,rel_gap,replay_match` | `run_07` |
+| `result/exact_results.csv` | `instance_id,S,DDT,eta_off,eta_off_source,eta_off_cpsat,cpsat_status,cpsat_time_s,eta_off_milp,milp_status,milp_upper,milp_time_s,cert_cpsat_in_milp,replay_match,replay_match_milp,eta_online,online_solves,online_all_optimal,online_time_s,replay_match_online,eta_fshgrl,eta_fshgrl_sd,n_fshgrl_runs,eta_best_pdr,best_pdr,eta_best_drl,best_drl,abs_gap,rel_gap` | `run_07` |
 | `result/arrival_results.csv` | `E_dt,rho_sys,iota,arrival_process,eta,nu,phi_star_mean,decision_time_ms` | `run_08` |
 | `result/ood_results.csv` | `condition,method,eta,eta_matched,retention` | `run_08` |
 | `result/shift_matrix.csv` | `shift_axis,train_cond,test_cond,eta,retention` | `run_08` |
-| `result/reward_exploration.csv` | `panel,config,eta,eta_ci_lo,eta_ci_hi,nu,steps_to_90pct,ratio_max,ratio_bound,approx_kl` | `run_09` |
-| `result/case3d_results.csv` | `case,DDT,S,eta_best,eta_avg,ci_lo,ci_hi,decision_time_s,eta_best_rule,eta_avg_rule,eta_best_drl,imp_pct,gap_pct` | `run_10` |
+| `result/reward_exploration.csv` | `panel,config,runs,eta,eta_ci_lo,eta_ci_hi,nu,steps_to_90pct,ratio_max,ratio_bound,approx_kl` | `run_09` |
+| `result/case3d_results.csv` | `case,DDT,S,infeasible_share,eta_best,eta_avg,ci_lo,ci_hi,n_runs,decision_time_s,eta_best_rule,best_rule,eta_avg_rule,eta_best_drl,best_drl,imp_pct,gap_pct` | `run_10` |
 | `result/stats_summary.csv` | `comparison,R_plus,R_minus,p_raw,p_holm,p_bh,r_rb,cliff_delta,A12,lmm_est,lmm_ci_lo,lmm_ci_hi` | `run_11` |
 | `result/variance_decomposition.csv` | `source,var_component,icc` | `run_11` |
 | `result/friedman_nemenyi.csv` | `method,mean_rank,cd,friedman_stat,friedman_df,friedman_p` | `run_11` |
@@ -408,3 +409,54 @@ C3 问的是"流体引导的**内容**是否有价值，而不只是缩小了动
   旧算例设计下 MOR/FIFO/EDD 的 η 逐算例完全相同。这两条是算例设计与实现缺陷
   如何伪装成"方法有效/无效"的直接证据，属于本文方法论贡献的一部分。
 - ζ 的实测值（约 0.6，而非稿件原先默认的"很小"），以及 LP 占 rollout 用时的比例。
+
+---
+
+## 9. 新论文预注册：Commit-or-Hold（CoH）试点
+
+原稿《Fluid-Guided Sparse Heterogeneous Graph RL for Real-Time Scheduling in DFFSP-HFOI》已录用，
+§1–§8 对应的实验全部完成。本节起服务新论文：**超负荷柔性流水车间里非延迟调度的代价，以及
+学会保留产能的策略**。研究问题、证据与方法设计见 README §0 与新论文稿；
+本节只写**在试点开跑前固定**的判定规则，`scripts/_pilot_report.py` 按此机械核对。
+
+### 9.1 试点设计
+
+- 配置（`configs/coh/`）：P0 最小骨干（无流体、MLP 编码、无动作自注意力、无 BC、无势函数
+  塑形、保留 no-op、候选按"可救优先"暴露）；P1 = P0 + 承诺评估器 p̂(o|s)；P2 = P1 + 显式等待
+  门控 + 等待前景评估器 ĥ(s)；P3 = 第一波胜者 + 纯 on-policy（`exploration.epsilon0 = 0`）。
+- 每配置 3 个独立 run；预算 = 主方法的 `ppo.total_epochs`（250 epoch）；训练算例分布与主方法
+  相同（`param_table`）。
+- 评测：main 档 15 算例，`checkpoint_best` 贪心 1 次；八条规则在**同一环境设置**（可救优先
+  暴露、无流体）下重评，写 `result/pilot_rules.csv`。
+- 试点 run（`coh_p*_run*`）只用于选配置，**不进最终矩阵**；最终矩阵另起 5 个 run。
+
+### 9.2 指标
+
+- T(P)：紧档（DDT ∈ {700, 900, 1100}，9 算例）逐算例 3-run 均值的算例均值；
+- L(P)：宽档（DDT ∈ {1400, 1800}，6 算例）同上；
+- V(P)：各 run 末 10 次验证 η 极差的均值（训练稳定性）；
+- W(P, Q)：紧档逐算例 3-run 均值 P > Q 的算例数。
+
+### 9.3 采纳规则（先于任何试点结果写定）
+
+| 比较 | 采纳当且仅当 |
+|---|---|
+| P1 vs P0（承诺评估器） | [T 提高 ≥ 0.02 且 W ≥ 7/9] 或 [V 减半且 T ≥ T(P0) − 0.01]；且 L ≥ L(P0) − 0.03 |
+| P2 vs P1（等待门控） | 同一规则，对照为 P1 |
+| P3 vs 第一波胜者（纯 on-policy） | T ≥ T(胜者) − 0.01 且 L ≥ L(胜者) − 0.03（平局取简） |
+
+- 宽档比对照低 > 0.03 一票否决，论文里改报"紧档增益、宽档代价"。
+- P0 池化 η < 0.70（NoAll 的水平）时，加跑 P0 + 动作自注意力 3 run 作为骨干候选，规则同上。
+- 未采纳的组件在论文中如实报告"无增益"，不改规则事后补救；方法创新相应退为分析贡献
+  （非延迟的代价 + 迁移 + 可解释）。
+
+### 9.4 最终矩阵（试点后执行，框架先定）
+
+- 工况网格：ρ ∈ {0.8, 1.2, 1.6, 2.0} × DDT ∈ {700, 1100, 1800} × S ∈ {50, 100, 150}；训练分布
+  随机化 ρ ∈ [0.8, 2.2]、DDT ∈ [400, 2000]；small 档与 ood 档沿用。
+- 对比：8 条规则（SPT-Idle 阈值按工况在验证档调优）；同网络去等待（= 非延迟的代价）；三个
+  学习基线（修复实现后、给等待、等交互步数）；small 档 CP-SAT 离线最优与滚动精确重优化。
+- 消融：去 critic 三处、去 ĥ、去 c(s)、单体 softmax（no-op 作为一行候选）、EDD 暴露。
+- 判据：主判据 = CoH vs 最强非延迟策略，逐算例配对 Wilcoxon + Holm，Cliff δ ≥ 0.33；紧档与
+  宽档分别报告；每格 5 run。
+- 已录用的 FSHGRL 不作对比方法，只引用其仿真器与问题模型。

@@ -40,6 +40,8 @@ class PPOAgent:
         self.eps0 = float(e["epsilon0"])
         self.eps_min = float(e["epsilon_min"])
         self.anneal = max(int(e["anneal_epochs"]), 1)
+        # CoH 辅助监督（承诺评估器 / 等待前景评估器）的权重；两个头都关着时没有任何作用
+        self.critic_coeff = float(cfg.get("coh.critic_coeff", 0.5))
 
     def epsilon(self, epoch: int) -> float:
         """eps_k = max(eps0 (1 - k/K_tot), eps_min)，稿件 Eq. (53)。"""
@@ -55,8 +57,8 @@ class PPOAgent:
         因此修正是精确的而非近似的。
         """
         obs = obs_to_tensors(obs_np, self.device)
-        logits, value = self.net(obs, n_stage)
-        probs = torch.softmax(logits, dim=-1)
+        log_probs, value, aux = self.net.log_policy(obs, n_stage)
+        probs = log_probs.exp()
         n = probs.shape[0]
 
         if greedy or epsilon <= 0.0:
@@ -65,7 +67,7 @@ class PPOAgent:
             behaviour = (1.0 - epsilon) * probs + epsilon / n
 
         if greedy:
-            idx = int(torch.argmax(probs).item())
+            idx = self._greedy_index(obs, probs, aux)
         else:
             idx = int(torch.multinomial(behaviour, 1).item())
 
@@ -74,6 +76,19 @@ class PPOAgent:
         ratio_bound = (n / epsilon) if epsilon > 0 else float("inf")
         return idx, logp, float(value.item()), {"n_candidates": n, "ratio_bound": ratio_bound,
                                                 "logp_target": logp_target}
+
+    @staticmethod
+    def _greedy_index(obs: dict, probs: torch.Tensor, aux: dict) -> int:
+        """贪心读出。单体 softmax 取整体 argmax；带等待门控的策略先判"等不等"再在派工行里
+        取 argmax——门控是一个二元决策，把 P(hold) 与被 softmax 摊薄的单行派工概率直接比大小
+        会系统性偏向等待。"""
+        gate_logit = aux.get("gate_logit") if aux else None
+        if gate_logit is None:
+            return int(torch.argmax(probs).item())
+        noop = obs["act_feat"][:, -1] > 0.5
+        if float(gate_logit) > 0.0:
+            return int(torch.nonzero(noop)[0].item())
+        return int(torch.argmax(probs.masked_fill(noop, -1.0)).item())
 
     def update(self, buffer: RolloutBuffer) -> Dict[str, float]:
         if len(buffer) == 0:
@@ -89,32 +104,48 @@ class PPOAgent:
                                           dtype=torch.float32, device=self.device)
 
         stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0,
-                 "approx_kl": 0.0, "clip_frac": 0.0, "ratio_max": 0.0, "n_updates": 0.0}
+                 "approx_kl": 0.0, "clip_frac": 0.0, "ratio_max": 0.0, "n_updates": 0.0,
+                 "commit_bce": 0.0, "commit_brier": 0.0, "hold_bce": 0.0}
+        aux_count = {"commit": 0, "hold": 0}
+        # 只数网络真正会用到的标签，P0 这类没有辅助头的配置记 0
+        stats["n_labels"] = float(
+            (sum(1 for t in buffer.data if t.commit_label >= 0)
+             if getattr(self.net, "commit_critic", False) else 0)
+            + (sum(1 for t in buffer.data if t.hold_label >= 0)
+               if getattr(self.net, "hold_critic", False) else 0))
         n = len(buffer)
         for _ in range(self.epochs):
             order = np.random.permutation(n)
             for start in range(0, n, self.minibatch):
                 batch = order[start:start + self.minibatch]
                 logps, values, entropies = [], [], []
+                commit_terms, hold_terms = [], []
                 for i in batch:
                     tr = buffer.data[i]
                     obs = obs_to_tensors(tr.obs, self.device)
-                    logits, value = self.net(obs, tr.n_stage)
-                    logp_all = torch.log_softmax(logits, dim=-1)
+                    logp_all, value, aux = self.net.log_policy(obs, tr.n_stage)
                     probs = logp_all.exp()
                     logps.append(logp_all[tr.action_index])
                     values.append(value)
                     entropies.append(-(probs * logp_all).sum())
+                    # CoH 辅助监督：只有拿到标签的转移进损失
+                    if aux["commit_logit"] is not None and tr.commit_label >= 0:
+                        commit_terms.append((aux["commit_logit"][tr.action_index],
+                                             float(tr.commit_label)))
+                    if aux["hold_logit"] is not None and tr.hold_label >= 0:
+                        hold_terms.append((aux["hold_logit"], float(tr.hold_label)))
                 logp_new = torch.stack(logps)
                 value_new = torch.stack(values)
                 entropy = torch.stack(entropies).mean()
+                aux_loss, aux_stats = self._aux_losses(commit_terms, hold_terms)
 
                 ratio = torch.exp(logp_new - logp_old[batch])
                 surr1 = ratio * adv[batch]
                 surr2 = torch.clamp(ratio, 1 - self.clip, 1 + self.clip) * adv[batch]
                 policy_loss = -torch.min(surr1, surr2).mean()
                 value_loss = F.mse_loss(value_new, ret[batch])
-                loss = self.c1 * policy_loss + self.c2 * value_loss - self.c3 * entropy
+                loss = (self.c1 * policy_loss + self.c2 * value_loss - self.c3 * entropy
+                        + self.critic_coeff * aux_loss)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -130,10 +161,37 @@ class PPOAgent:
                     stats["clip_frac"] += float(((ratio - 1).abs() > self.clip).float().mean().item())
                     stats["ratio_max"] = max(stats["ratio_max"], float(ratio.max().item()))
                     stats["n_updates"] += 1.0
+                    for key, cnt in (("commit_bce", "commit"), ("commit_brier", "commit"),
+                                     ("hold_bce", "hold")):
+                        if aux_stats.get(key) is not None:
+                            stats[key] += aux_stats[key]
+                    aux_count["commit"] += int(aux_stats.get("commit_bce") is not None)
+                    aux_count["hold"] += int(aux_stats.get("hold_bce") is not None)
             if stats["n_updates"] and stats["approx_kl"] / stats["n_updates"] > self.target_kl:
                 break                                   # 早停，防止越出信任域
 
         k = max(stats.pop("n_updates"), 1.0)
         for key in ("policy_loss", "value_loss", "entropy", "approx_kl", "clip_frac"):
             stats[key] /= k
+        for key, cnt in (("commit_bce", "commit"), ("commit_brier", "commit"), ("hold_bce", "hold")):
+            stats[key] = stats[key] / aux_count[cnt] if aux_count[cnt] else float("nan")
         return stats
+
+    def _aux_losses(self, commit_terms, hold_terms):
+        """CoH 的两个 BCE 辅助损失；没有标签的 minibatch 返回 0 与空统计。"""
+        loss = torch.zeros((), device=self.device)
+        out = {}
+        if commit_terms:
+            logit = torch.stack([t for t, _ in commit_terms])
+            y = torch.tensor([y for _, y in commit_terms], dtype=torch.float32, device=self.device)
+            bce = F.binary_cross_entropy_with_logits(logit, y)
+            loss = loss + bce
+            out["commit_bce"] = float(bce.item())
+            out["commit_brier"] = float(((torch.sigmoid(logit) - y) ** 2).mean().item())
+        if hold_terms:
+            logit = torch.stack([t for t, _ in hold_terms])
+            y = torch.tensor([y for _, y in hold_terms], dtype=torch.float32, device=self.device)
+            bce = F.binary_cross_entropy_with_logits(logit, y)
+            loss = loss + bce
+            out["hold_bce"] = float(bce.item())
+        return loss, out

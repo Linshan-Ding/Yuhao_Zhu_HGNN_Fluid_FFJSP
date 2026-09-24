@@ -43,6 +43,7 @@ class StepStats:
     t_obs: float = 0.0
     noop_offered: int = 0
     noop_used: int = 0
+    held_time: float = 0.0        # 有活可干却被主动闲置的机器时间（"保留产能"，CoH 试点指标）
 
 
 class SchedulingEnv:
@@ -53,6 +54,11 @@ class SchedulingEnv:
         self.fluid = FluidRelaxation(cfg)
 
         self.kappa_d = float(cfg.get("reward.discard_weight", 1.0))
+        # count：到达不变的计数型奖励（主方法）；ratio_difference：稿件 Eq. (pathological)
+        # 的比率差奖励，只作 Table T-NEW-9 的对照，用来实测它的病态
+        self.reward_mode = str(cfg.get("reward.mode", "count"))
+        if self.reward_mode not in ("count", "ratio_difference"):
+            raise ValueError(f"unknown reward.mode: {self.reward_mode}")
         self.beta_f = float(cfg.get("reward.fluid_align_weight", 0.0))
         self.beta_psi = float(cfg.get("reward.potential_weight", 0.0))
         self.gamma = float(cfg.get("reward.gamma", 1.0))
@@ -67,6 +73,14 @@ class SchedulingEnv:
         self.fluid_resolve_every = max(int(cfg.get("fluid.resolve_every", 1)), 1)
         self.allow_noop = bool(cfg.get("action_space.allow_noop", False))
         self.max_consecutive_noop = int(cfg.get("action_space.max_consecutive_noop", 3))
+        # top-K 槽的暴露顺序：edd = 按交期（旧行为）；hopeful_first = 先暴露临界比 >= 阈值的
+        # "可救"订单再按交期。超负荷 + 紧交期时最紧急的 K 个往往都已救不回来，会把可救的藏在槽外
+        self.exposure = str(cfg.get("action_space.exposure", "edd"))
+        if self.exposure not in ("edd", "hopeful_first"):
+            raise ValueError(f"unknown action_space.exposure: {self.exposure}")
+        self.exposure_threshold = float(cfg.get("action_space.exposure_threshold", 1.5))
+        # 等待前景评估器的事后标签跟踪（CoH 创新 2），关着时不产生任何记录
+        self.track_holds = bool(cfg.get("coh.hold_critic", False))
         self._rng = np.random.default_rng()
 
         self.reset()
@@ -88,6 +102,10 @@ class SchedulingEnv:
         self._fluid: FluidSolution | None = None
         self.machine_busy_time = np.zeros(p.n_machine, dtype=np.float64)
         self._consecutive_noop = 0
+        self.order_outcome = np.full(p.n_order, -1, dtype=np.int8)  # 1 按时 / 0 超期或丢弃 / -1 未定
+        self._holds: List[dict] = []                                 # 等待前景标签的跟踪记录
+        self._exposed_orders: set = set()                            # 上一决策点暴露的订单
+        self._feasible_machines: set = set()                         # 上一决策点有活可干的空闲机器
         self._fluid_age = 0                       # 距上次重解流体松弛的决策步数
         self._fluid_tasks: tuple = ()             # 上次求解时的活跃工序类型集
         # 无量纲化尺度：时间量除以交期跨度，加工时间除以最大工时
@@ -95,6 +113,7 @@ class SchedulingEnv:
         self._proc_scale = max(float(inst.proc_times.max()), 1.0)
         self._advance_to_decision()
         self._last_potential = self._potential()
+        self._last_ratio = self._running_ratio()
 
     # ------------------------------------------------------------------ 事件推进
     def _activate_arrivals(self) -> None:
@@ -114,8 +133,10 @@ class SchedulingEnv:
                 self.status[order] = COMPLETED
                 if self.now <= self.inst.due_dates[order] + 1e-9:
                     self.n_completed += 1
+                    self.order_outcome[order] = 1
                 else:                                   # 超期完工按未达成计，并计入丢弃
                     self.n_discarded += 1
+                    self.order_outcome[order] = 0
             else:
                 self.status[order] = WAITING
 
@@ -124,6 +145,7 @@ class SchedulingEnv:
             if self.problem.is_hopeless(int(order), int(self.stage[order]), self.now):
                 self.status[order] = DISCARDED
                 self.n_discarded += 1
+                self.order_outcome[order] = 0
 
     def _next_event_time(self) -> float | None:
         candidates = []
@@ -160,9 +182,21 @@ class SchedulingEnv:
             task = self.problem.task_of(int(order), int(self.stage[order]))
             grouped.setdefault(task, []).append(int(order))
         # 每工序类型按有效松弛期升序 -> 紧急度排序的 top-K 槽（稿件 §4.5.1）
-        for task, orders in grouped.items():
-            orders.sort(key=lambda s: float(self.inst.due_dates[s]) - self.now)
+        if self.exposure == "hopeful_first":
+            theta = self.exposure_threshold
+            for task, orders in grouped.items():
+                orders.sort(key=lambda s: (self._critical_ratio(s) < theta,
+                                           float(self.inst.due_dates[s]) - self.now))
+        else:
+            for task, orders in grouped.items():
+                orders.sort(key=lambda s: float(self.inst.due_dates[s]) - self.now)
         return grouped
+
+    def _critical_ratio(self, order: int) -> float:
+        """剩余松弛期 / 剩余路径最小加工时间；<1 即已不可能按时交付。"""
+        slack = float(self.inst.due_dates[order]) - self.now
+        need = max(self.problem.residual_from(int(order), int(self.stage[order])), 1e-9)
+        return slack / need
 
     def _idle_machines(self) -> np.ndarray:
         return np.nonzero((self.machine_busy_with < 0) &
@@ -273,6 +307,8 @@ class SchedulingEnv:
             self.stats.phi_star.append(sol.phi_star)
             self.stats.support.append(sol.support_size)
         self._fluid = sol
+        self._feasible_machines = {int(a[1]) for a in feasible}
+        self._exposed_orders = {int(a[2]) for a in pruned}
         # |A_f| 的统计只计派工动作，不含 no-op —— 保持与 Prop 2 中剪枝率定义一致
         if self._noop_available():
             self.stats.noop_offered += 1
@@ -297,6 +333,22 @@ class SchedulingEnv:
         return nxt is not None and nxt > self.now + 1e-9
 
     # ------------------------------------------------------------------ 奖励
+    def _running_ratio(self) -> float:
+        """eta~_t = N_c(t) / max(N_a(t), 1)：分母是已到达订单数，随到达变化。"""
+        return self.n_completed / max(int(np.count_nonzero(self.status != NOT_ARRIVED)), 1)
+
+    def _base_reward(self, d_c: int, d_d: int) -> float:
+        """计数型奖励（稿件 Eq. 46）；ratio_difference 模式下换成 r_t = eta~_t - eta~_{t-1}。
+
+        后者在只有到达、没有完工的时刻为负（已有订单完工时），且与本步动作无关——
+        这正是稿件 Eq. (pathological) 所说的外生惩罚，对照实验要测的就是它。
+        """
+        if self.reward_mode == "ratio_difference":
+            ratio = self._running_ratio()
+            reward, self._last_ratio = ratio - self._last_ratio, ratio
+            return reward
+        return (d_c - self.kappa_d * d_d) / max(self.problem.n_order, 1)
+
     def _potential(self) -> float:
         """Psi(omega) = min{Phi*, 1}，势函数塑形用（稿件 Eq. 50）。"""
         if self.beta_psi <= 0:
@@ -313,6 +365,12 @@ class SchedulingEnv:
             raise ValueError(f"order {order} is not waiting (status={self.status[order]})")
         if self.problem.rates[task, machine] <= 0:
             raise ValueError(f"machine {machine} cannot process task {task}")
+        if self.track_holds:
+            # 被保留的机器第一次再派工时结算等待前景：给了等待时尚未暴露的订单才算"等来了"
+            for hold in self._holds:
+                if hold["order"] is None and machine in hold["machines"]:
+                    hold["order"] = order
+                    hold["new"] = order not in hold["exposed"]
 
         before_c, before_d = self.n_completed, self.n_discarded
         proc = float(self.inst.proc_times[task, machine])
@@ -327,9 +385,10 @@ class SchedulingEnv:
         # 到达不变的计数型奖励（稿件 Eq. 46）：只对完工/丢弃事件可测，与到达无关
         d_c = self.n_completed - before_c
         d_d = self.n_discarded - before_d
-        reward = (d_c - self.kappa_d * d_d) / max(self.problem.n_order, 1)
+        reward = self._base_reward(d_c, d_d)
 
-        info = {"base_reward": reward, "d_completed": d_c, "d_discarded": d_d}
+        info = {"base_reward": reward, "d_completed": d_c, "d_discarded": d_d,
+                "order": order, "hold_id": -1}
 
         if self.beta_psi > 0:                            # 势函数塑形，策略不变
             psi_next = self._potential()
@@ -355,17 +414,26 @@ class SchedulingEnv:
         self.stats.noop_used += 1
         self.step_count += 1
 
+        machines = self._feasible_machines or {int(a[1]) for a in self._feasible_actions()}
+        hold_id = -1
+        if self.track_holds:
+            hold_id = len(self._holds)
+            self._holds.append({"machines": set(machines), "exposed": set(self._exposed_orders),
+                                "order": None, "new": False})
+
         nxt = self._next_event_time()
         if nxt is None or nxt <= self.now + 1e-9:        # 防死锁条件已排除，稳妥起见再兜一层
             self.done = True
         else:
+            self.stats.held_time += len(machines) * (nxt - self.now)
             self.now = nxt
             self._advance_to_decision()
 
         d_c = self.n_completed - before_c
         d_d = self.n_discarded - before_d
-        reward = (d_c - self.kappa_d * d_d) / max(self.problem.n_order, 1)
-        info = {"base_reward": reward, "d_completed": d_c, "d_discarded": d_d, "noop": True}
+        reward = self._base_reward(d_c, d_d)
+        info = {"base_reward": reward, "d_completed": d_c, "d_discarded": d_d, "noop": True,
+                "order": -1, "hold_id": hold_id}
 
         if self.beta_psi > 0:
             psi_next = self._potential()
@@ -463,17 +531,66 @@ class SchedulingEnv:
             self.nu,                                    # 丢弃率
         ], dtype=np.float32)
 
+        gate = self._gate_features(actions, grouped, wait_gap, nxt)
+
         self.stats.t_obs += _time.perf_counter() - t0
         return {
             "op": op, "ma": ma, "proc_rate": p.rates,
             "adj": (p.rates > 0),
             "act_feat": act,
+            "gate_feat": gate,
             # no-op 用下标 (0,0) 占位；其节点特征在 networks.py 中按标志位屏蔽
             "act_index": np.asarray([(max(int(a[0]), 0), max(int(a[1]), 0)) for a in actions],
                                     dtype=np.int64),
             "eta_t": np.float32(self.eta),
             "global_feat": global_feat,
         }
+
+    def _gate_features(self, actions, grouped, wait_gap: float, nxt) -> np.ndarray:
+        """等待门控 c(s) 的无量纲工况特征（CoH 创新 2）。旧网络不读这一项。
+
+        八个量都落在 [0, 1] 附近：到下一事件的时间、有活可干的空闲机器占比、派工候选数、
+        等待期间预期到达数、瓶颈积压、等待队列里可救订单的占比、候选中最大临界比、
+        候选中最短工时。
+        """
+        p = self.problem
+        dispatch = [a for a in actions if not is_noop(a)]
+        idle = set(int(m) for m in self._idle_machines())
+        with_work = {int(a[1]) for a in dispatch} & idle
+        gap_raw = max(float(nxt) - self.now, 0.0) if nxt is not None else 0.0
+        window = self._time_scale
+        recent = int(np.count_nonzero((self.inst.arrival_times > self.now - window)
+                                      & (self.inst.arrival_times <= self.now + 1e-9)))
+        expected_arrivals = min(recent / window * gap_raw, 10.0) / 10.0
+        backlog = 0.0
+        for m in range(p.n_machine):
+            load = sum(len(orders) * float(self.inst.proc_times[task, m])
+                       for task, orders in grouped.items() if p.rates[task, m] > 0)
+            backlog = max(backlog, load)
+        backlog = min(backlog / self._proc_scale, 20.0) / 20.0
+        waiting = [s for orders in grouped.values() for s in orders]
+        viable = float(np.mean([self._critical_ratio(s) >= self.exposure_threshold
+                                for s in waiting])) if waiting else 0.0
+        max_cr = min(max((self._critical_ratio(int(a[2])) for a in dispatch), default=0.0), 10.0) / 10.0
+        min_proc = min((float(self.inst.proc_times[int(a[0]), int(a[1])]) for a in dispatch),
+                       default=0.0) / self._proc_scale
+        return np.asarray([wait_gap / 10.0, len(with_work) / max(p.n_machine, 1),
+                           min(len(dispatch) / max(p.n_machine, 1), 5.0) / 5.0, expected_arrivals,
+                           backlog, viable, max_cr, min_proc], dtype=np.float32)
+
+    def hold_labels(self) -> Dict[int, int]:
+        """等待前景标签（CoH 创新 2）：被保留的机器下一次派工给了等待时尚未暴露的订单且该订单
+        按时完成 -> 1；给了已暴露订单，或新订单未按时 -> 0；尚未再派工或结果未定 -> -1（不进损失）。
+        """
+        out: Dict[int, int] = {}
+        for i, hold in enumerate(self._holds):
+            if hold["order"] is None:
+                out[i] = -1
+            elif not hold["new"]:
+                out[i] = 0
+            else:
+                out[i] = int(self.order_outcome[hold["order"]])
+        return out
 
     # ------------------------------------------------------------------ 指标
     @property
@@ -483,3 +600,8 @@ class SchedulingEnv:
     @property
     def nu(self) -> float:
         return self.n_discarded / max(self.problem.n_order, 1)
+
+    @property
+    def held_share(self) -> float:
+        """有活可干却被主动闲置的机器时间占到当前时刻总机器时间的份额（保留产能）。"""
+        return self.stats.held_time / max(self.problem.n_machine * self.now, 1e-9)

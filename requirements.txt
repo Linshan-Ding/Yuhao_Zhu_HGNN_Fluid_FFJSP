@@ -4,6 +4,6 @@ pandas>=2.0
 PyYAML>=6.0
 torch>=2.0
 matplotlib>=3.7
-ortools>=9.7          # CP-SAT 精确求解（免授权）
+ortools>=9.8          # CP-SAT：离线精确解与在线重优化（免授权；9.8 起提供 PEP 8 接口名）
 visdom>=0.2           # 可选：训练实时曲线；服务未启动时自动降级
-# gurobipy>=11.0      # 可选：有授权时自动启用，用于流体 LP 与 MILP 版精确解
+# 不需要任何商业求解器：流体 LP 与 MILP（稿件 Eqs. 1-11）都由 SciPy 自带的 HiGHS 求解

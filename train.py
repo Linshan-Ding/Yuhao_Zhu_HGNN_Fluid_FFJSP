@@ -25,7 +25,8 @@ from result.logger import CsvLogger, VisdomLogger
 LOG_COLUMNS = ["iter", "steps", "eta_val", "eta_train", "reward", "policy_loss", "value_loss",
                "entropy", "approx_kl", "clip_frac", "ratio_max", "ratio_bound", "epsilon",
                "sps", "fluid_solve_count", "fluid_cache_hit", "zeta", "phi_star_mean",
-               "a_f_mean", "elapsed_s"]
+               "a_f_mean", "commit_bce", "commit_brier", "hold_bce", "n_labels", "held_share",
+               "elapsed_s"]
 
 
 def behaviour_clone(net, cfg, rng, param_table, device, steps: int, expert: str) -> float:
@@ -132,28 +133,39 @@ def main() -> None:
         epsilon = agent.epsilon(epoch)
         buffer = RolloutBuffer()
         etas, rewards, phis, cand, bound = [], [], [], [], 0.0
+        held = []                                # 每条 episode 的保留产能份额
         n_solve = n_hit = 0                      # 流体 LP 求解/缓存命中，用于摊销成本 zeta
         t0 = time.time()
         for _ in range(rollout_episodes):
             env = SchedulingEnv(sample_training_instance(rng, param_table), cfg)
             ep_reward = 0.0
+            ep_start = len(buffer)
             while not env.done:
                 actions, sol = env.candidate_actions()
                 if not actions:
                     break
                 obs = env.observation(actions, sol)
                 idx, logp, value, info = agent.act(obs, env.problem.n_stage, epsilon)
-                reward, done, _ = env.step(actions[idx])
+                reward, done, step_info = env.step(actions[idx])
                 buffer.add(obs=obs, action_index=idx, logp_behaviour=logp,
                            logp_target=info["logp_target"], reward=reward,
                            value=value, done=done, n_candidates=info["n_candidates"],
-                           n_stage=env.problem.n_stage)
+                           n_stage=env.problem.n_stage,
+                           order=step_info.get("order", -1), hold_id=step_info.get("hold_id", -1))
                 ep_reward += reward
                 bound = max(bound, info["ratio_bound"])
                 cand.append(info["n_candidates"])
                 total_steps += 1
                 if done:
                     break
+            # CoH 标签回填：订单结果与等待前景在 episode 结束时全部已知（关着时都是 -1，不进损失）
+            holds = env.hold_labels()
+            for tr in buffer.data[ep_start:]:
+                if tr.order >= 0:
+                    tr.commit_label = int(env.order_outcome[tr.order])
+                if tr.hold_id >= 0:
+                    tr.hold_label = holds.get(tr.hold_id, -1)
+            held.append(env.held_share)
             etas.append(env.eta)
             rewards.append(ep_reward)
             phis.extend(env.stats.phi_star)
@@ -179,6 +191,7 @@ def main() -> None:
                "zeta": round(n_solve / max(n_solve + n_hit, 1), 4),
                "phi_star_mean": round(float(np.mean(phis)), 4) if phis else "",
                "a_f_mean": round(float(np.mean(cand)), 3) if cand else "",
+               "held_share": round(float(np.mean(held)), 4) if held else "",
                "elapsed_s": round(time.time() - started, 1)}
         row.update({k: round(v, 6) for k, v in stats.items()})
         logger.log(row)

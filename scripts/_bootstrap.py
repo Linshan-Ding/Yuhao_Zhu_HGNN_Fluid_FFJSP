@@ -51,7 +51,9 @@ def run_py(entry, *args):
 # 冒烟/探针类 run 只跑几个 epoch，用来验证链路是否跑得通，绝不能进评测：
 # 它们会作为一个"方法"混进对比表与 Friedman 检验，还会多占一次多重比较校正的名额，
 # 把真正的比较的 p 值推高。run 目录名以这些前缀开头的一律排除。
-EXCLUDED_RUN_PREFIXES = ("smoke", "probe", "ph0", "debug", "tmp", "test")
+# coh_：新论文（Commit-or-Hold）的试点 run，由 scripts/_pilot_report.py 单独评测，
+# 不进主方法的评测与统计（它们用不同的环境设置，混进来比较就不公平）
+EXCLUDED_RUN_PREFIXES = ("smoke", "probe", "ph0", "debug", "tmp", "test", "coh_")
 
 
 def checkpoints(pattern="*_run*"):

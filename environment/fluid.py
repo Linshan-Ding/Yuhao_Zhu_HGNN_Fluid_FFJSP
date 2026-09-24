@@ -5,8 +5,12 @@
   F2  增加阶段间流平衡约束；
   F3  返回 Phi*（可行性证书，供势函数塑形）与基本解支撑集大小（Prop 1(d) 的实证）。
 
-求解器：优先 Gurobi（若已授权），否则回退到 SciPy 的 HiGHS —— 二者对本 LP 等价，
-后者无需授权，保证复现者开箱即用。
+求解器：SciPy 自带的 HiGHS（`linprog(method="highs")`），免授权、无额外依赖。
+全部模式（throughput / due_date_aware / workload_only）走同一个调用，求解器与
+版本由 requirements.txt 的 SciPy 唯一确定。LP 的最优值唯一，但退化时最优解可以
+不唯一（剪枝读的是解的支撑集），所以训练与评测必须用同一个求解器——此前 max-min
+模式会先试 Gurobi，授权失效时才回退 HiGHS，同一份代码在不同机器上可能给出不同的
+剪枝集，现已删除该分支。
 """
 from __future__ import annotations
 
@@ -16,22 +20,6 @@ from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
 from scipy.optimize import linprog
-
-_GUROBI = None
-_GUROBI_TRIED = False
-
-
-def _try_gurobi():
-    global _GUROBI, _GUROBI_TRIED
-    if not _GUROBI_TRIED:
-        _GUROBI_TRIED = True
-        try:
-            import gurobipy as gp  # noqa: F401
-            gp.Model("probe").dispose()
-            _GUROBI = gp
-        except Exception:
-            _GUROBI = None
-    return _GUROBI
 
 
 @dataclass
@@ -198,13 +186,6 @@ class FluidRelaxation:
         b_ub = np.asarray(rhs, dtype=float)
         bounds = [(0.0, 1.0)] * n_u + [(0.0, None)]
 
-        gp = _try_gurobi()
-        if gp is not None:
-            sol = self._solve_gurobi(gp, c, a_ub, b_ub, bounds, pairs, phi_col)
-            if sol is not None:
-                self._finalize(sol, pairs, tasks, rates)
-                return sol
-
         res = linprog(c, A_ub=a_ub, b_ub=b_ub, bounds=bounds, method="highs",
                       options={"time_limit": self.time_limit} if self.time_limit > 0 else None)
         if not res.success or res.x is None:
@@ -306,30 +287,6 @@ class FluidRelaxation:
         )
         self._finalize(sol, pairs, tasks, rates)
         return sol
-
-    @staticmethod
-    def _solve_gurobi(gp, c, a_ub, b_ub, bounds, pairs, phi_col):
-        try:
-            model = gp.Model("fluid_lp")
-            model.Params.OutputFlag = 0
-            xs = [model.addVar(lb=lo, ub=(gp.GRB.INFINITY if hi is None else hi))
-                  for lo, hi in bounds]
-            model.update()
-            for row, rhs in zip(a_ub, b_ub):
-                nz = np.nonzero(row)[0]
-                if nz.size:
-                    model.addConstr(gp.quicksum(float(row[i]) * xs[i] for i in nz) <= float(rhs))
-            model.setObjective(gp.quicksum(float(c[i]) * xs[i] for i in np.nonzero(c)[0]),
-                               gp.GRB.MINIMIZE)
-            model.optimize()
-            if int(getattr(model, "SolCount", 0)) <= 0:
-                return None
-            values = [float(v.X) for v in xs]
-            return FluidSolution(
-                alloc={p: max(values[i], 0.0) for i, p in enumerate(pairs)},
-                phi_star=max(values[phi_col], 0.0), solver="gurobi", status="optimal")
-        except Exception:
-            return None
 
     @staticmethod
     def _finalize(sol: FluidSolution, pairs, tasks, rates) -> None:

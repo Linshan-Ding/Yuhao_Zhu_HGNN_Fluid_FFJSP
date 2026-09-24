@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from _bootstrap import ROOT, done, step
+from _bootstrap import EXCLUDED_RUN_PREFIXES, ROOT, done, step
 
 import matplotlib
 matplotlib.use("Agg")
@@ -123,7 +123,7 @@ step("训练曲线面板：主方法 + 基线（等交互预算）")
 curves = {}
 for run_dir in sorted((ROOT / "result").glob("*_run*")):
     log = run_dir / "log.csv"
-    if not log.exists():
+    if not log.exists() or run_dir.name.startswith(EXCLUDED_RUN_PREFIXES):   # 冒烟 run 不进图
         continue
     with log.open(encoding="utf-8") as handle:
         records = [r for r in csv.DictReader(handle) if r.get("eta_val") not in ("", None)]

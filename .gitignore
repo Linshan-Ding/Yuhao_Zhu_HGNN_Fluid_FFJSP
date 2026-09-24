@@ -4,6 +4,8 @@
 # Keep all experiment results
 !result/
 !result/**
+# ...but never the bytecode cache that result/logger.py leaves behind
+result/__pycache__/
 
 .venv/
 .idea/
