@@ -1,0 +1,10 @@
+# CoH 试点 P3（第二波）：第一波胜者 + 纯 on-policy（关掉 epsilon-greedy 行为混合）。
+# 默认按 P2 写；若第一波的胜者是 P1 或 P0，把下面 coh 段改成胜者的取值再跑。
+variant: {name: CoH-P3, encoder: mlp, fluid_node_features: false}
+fluid: {mode: "off", enabled: false}
+action_space: {pruning_mode: none, exposure: hopeful_first, exposure_threshold: 1.5}
+network: {action_attention: false}
+training: {bc_warmup_steps: 0}
+reward: {potential_weight: 0.0}
+coh: {commit_critic: true, gate: true, hold_critic: true, critic_coeff: 0.5}
+exploration: {epsilon0: 0.0}
