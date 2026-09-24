@@ -1,0 +1,3 @@
+# CoH-NoCritic：去掉承诺评估器（actor 特征、门控输入与辅助损失一并去掉）。
+variant: {name: CoH-NoCritic}
+coh: {commit_critic: false}

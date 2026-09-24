@@ -1,8 +1,0 @@
-# CoH 试点 P2：P1 + 显式等待门控与等待前景评估器（创新 2）。
-variant: {name: CoH-P2, encoder: mlp, fluid_node_features: false}
-fluid: {mode: "off", enabled: false}
-action_space: {pruning_mode: none, exposure: hopeful_first, exposure_threshold: 1.5}
-network: {action_attention: false}
-training: {bc_warmup_steps: 0}
-reward: {potential_weight: 0.0}
-coh: {commit_critic: true, gate: true, hold_critic: true, critic_coeff: 0.5}

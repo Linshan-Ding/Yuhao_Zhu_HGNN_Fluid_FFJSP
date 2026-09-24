@@ -1,5 +1,0 @@
-# 奖励对照（Table T-NEW-9 面板 b 末行）：把计数型基础奖励换成比率差
-#   r_t = eta~_t - eta~_{t-1}，eta~_t = N_c(t) / max(N_a(t), 1)（稿件 Eq. pathological）。
-# 只换基础奖励这一项，其余设置（含势函数塑形 beta_Psi）同主配置。
-variant: {name: FSHGRL-RatioDiff}
-reward: {mode: ratio_difference}

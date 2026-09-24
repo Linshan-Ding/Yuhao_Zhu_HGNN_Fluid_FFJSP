@@ -1,0 +1,2 @@
+# 主方法 Commit-or-Hold：全部开关取 algo.yaml 的默认值，这里只给名字。
+variant: {name: CoH}

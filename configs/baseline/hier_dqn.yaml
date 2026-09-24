@@ -1,0 +1,3 @@
+# 分层 Double DQN（HSDDQN 风格）：上层在规则 + 保留产能上选，下层在所选规则的前 3 个候选内选。
+variant: {name: Hier-DQN}
+training: {method: hdqn}

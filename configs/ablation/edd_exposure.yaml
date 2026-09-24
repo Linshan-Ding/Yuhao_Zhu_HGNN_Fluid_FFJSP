@@ -1,0 +1,3 @@
+# CoH-EDD：候选槽只按交期暴露（不把可救订单排在前面）。规则评测时用同一暴露方式才可比。
+variant: {name: CoH-EDD}
+action_space: {exposure: edd}

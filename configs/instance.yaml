@@ -1,78 +1,46 @@
-# 算例参数表（训练随机构造的分布）与算例设计表（评测算例，逐单元固定落盘）
-# 与 docs/experiment-spec.md §6A 一一对应。改参数只改这里，不改代码。
+# 算例参数表（训练随机构造的分布）与评测档设计表。每档带固定种子，重建结果逐位相同。
+# 与 docs/experiment-spec.md §3 一一对应。改参数只改这里，不改代码。
 
 param_table:
   machines_per_stage: 5
   stage_count: 5
   product_count: 5
-  proc_time_range: [25, 450]          # p_rjm ~ rand[a, b]，秒
+  proc_time_range: [25, 450]          # p_rjm ~ rand[a, b]，整数（CP-SAT 用整数时间网格）
   order_count_range: [20, 200]        # S
-  interarrival_range: [1, 200]        # Δt ~ rand[a, b]，秒（仅旧参数表兼容路径使用）
-  rho_range: [0.8, 1.8]               # 训练算例按系统负荷分层抽样，再反推到达间隔。
-                                      # 对 Δt 均匀抽样会使 rho ∝ 1/Δt 极度右偏，
-                                      # 大部分算力落在评测不覆盖、且无梯度的工况上
-  ddt_range: [400, 1100]              # 交期宽松度：收窄到评测带附近，
-                                      # DDT>1500 时所有方法 eta 均饱和为 1，无区分度
-  ddt_spread: [0.7, 1.4]              # 逐单交期乘性扰动 due_i = a_i + DDT * U[lo, hi]。
-                                      # 常数 DDT 会让 EDD ≡ FIFO ≡ 环境候选集排序键，
-                                      # 订单维度在决策上不携带信息
+  rho_range: [0.8, 2.2]               # 按系统负荷均匀抽样，再反推到达间隔
+  ddt_range: [400, 2000]              # 交期宽松度：覆盖评测网格 700-1800 并留余量
+  ddt_spread: [0.7, 1.4]              # 逐单交期乘性扰动 due_i = a_i + DDT * U[lo, hi]
 
 design:
-  small:                               # 可精确求解，校准真实 optimality gap
-    order_counts: [12, 16, 20, 25]     # 20 与 25 落在训练区间 [20,200] 之内，
-                                       # 该两档上的最优性间隙是分布内的量；
-                                       # 12、16 保留以显示间隙随规模的趋势。
-                                       # CP-SAT 实测 S=20 用 0.4s、S=25 用 10s（均 OPTIMAL）
-    # 结构（阶段数/每阶段机器数/产品数/工时范围）一律继承 param_table，不在此覆盖：
-    # 与训练分布不同构的算例上量到的"最优性间隙"混杂了结构外推误差，不是间隙本身。
-    ddt_levels: [500, 600, 700]        # 经扫描确定，eta_off 落在 0.50-0.92
-    target_rho_sys: 2.5                # 订单数很少时需更高到达强度才有竞争，
-                                       # 否则 25 台机器面对 12 张订单，eta_off 恒为 1
-    instances_per_cell: 2
-
-  main:                                # 主对比 / 消融 / 统计检验主战场
+  grid:                                # 主评测：负荷 x 交期紧度 x 规模
+    rho_levels: [0.8, 1.2, 1.6, 2.0]
+    ddt_levels: [700, 1100, 1800]
     order_counts: [50, 100, 150]
-    ddt_levels: [700, 900, 1100, 1400, 1800]  # 经扫描标定（ρ_sys=1.6，逐单交期扰动下）。
-                                       # 最强规则 η / 规则间极差（跨 S 平均）：
-                                       #   700→0.40/0.32   900→0.46/0.34  1100→0.53/0.33
-                                       #  1400→0.80/0.26  1800→0.96/0.17
-                                       #  2400→1.00/0.00（完全饱和，剔除）
-                                       # 五档由紧到松贯穿 SPT 0.40→0.96，均未饱和
-    target_rho_sys: 1.6                # 由目标负荷反推到达率。参数表区间中点对应
-                                       # rho_sys≈0.47，实测该负荷下 96% 的决策点
-                                       # 只有一张订单可选、100% 的多候选时点只能选
-                                       # 机器 —— "工序-机器-订单"三元组决策从未被触发。
-                                       # 取 1.6 经负荷扫描确定（多候选时点的维度激活率）：
-                                       #   rho=1.2  订单 33% 工序 32% 机器 85%  eta_SPT 0.62
-                                       #   rho=1.6  订单 54% 工序 51% 机器 70%  eta_SPT 0.53
-                                       #   rho=2.0  订单 68% 工序 66% 机器 57%  eta_SPT 0.40
-                                       # 1.6 是三个维度同时活跃、且 eta 未饱和的平衡点
-
-  arrival:                             # 到达强度 × 到达过程（跨饱和点）
-    order_count: 100
-    ddt: 900
-    mean_interarrival: [200, 100, 50, 25, 12.5]
-    processes: [deterministic, poisson, mmpp]
-
-  ood:                                 # 分布外：只推规模/结构因子，不动到达分布
-    conditions:
-      - {name: "S300",       order_count: 300}
-      - {name: "S500",       order_count: 500}
-      - {name: "M3perstage", machines_per_stage: 3}
-      - {name: "M8perstage", machines_per_stage: 8}
-      - {name: "R8J7",       product_count: 8, stage_count: 7}
-    ddt: 900
-    order_count_default: 150
+    seed: 20260901
 
   val:                                 # 选 best checkpoint，不进论文评测
-    count: 5
+    rho_levels: [1.0, 1.6, 2.0]
+    ddt_levels: [900, 1500]
     order_count: 80
-    ddt: 900
+    seed: 20260902
 
-  case3d:                              # 构造的 3D 打印情景（6 阶段工艺链）
-    order_counts: [50, 100, 150]
-    ddt_levels: [600, 900, 1200]
-    stage_names: [slicing, preparation, printing, postprocess, secondary, inspection]
-    machines_per_stage: [2, 2, 3, 3, 2, 2]
-    product_count: 3                   # 高分子夹具 / 医疗导板 / 点阵支架
-    proc_time_range: [30, 600]
+  small:                               # 精确参照：CP-SAT 离线最优与滚动重优化
+    order_counts: [12, 16, 20, 25]
+    ddt_levels: [500, 600, 700]
+    instances_per_cell: 2
+    target_rho_sys: 2.5                # 订单数很少时需更高到达强度才有竞争
+    seed: 20260903
+
+  ood:                                 # 未见的规模、结构与到达过程，不重训
+    ddt: 900
+    target_rho_sys: 1.6
+    order_count_default: 150
+    seed: 20260904
+    conditions:
+      - {name: "S300",          order_count: 300}
+      - {name: "S500",          order_count: 500}
+      - {name: "M3perstage",    machines_per_stage: 3}
+      - {name: "M8perstage",    machines_per_stage: 8}
+      - {name: "R8J7",          product_count: 8, stage_count: 7}
+      - {name: "mmpp",          arrival_process: mmpp}
+      - {name: "deterministic", arrival_process: deterministic}

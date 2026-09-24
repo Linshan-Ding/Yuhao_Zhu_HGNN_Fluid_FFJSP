@@ -1,8 +1,0 @@
-# CoH 试点 P1：骨干 + 承诺评估器（创新 1）。p̂ 进 actor 特征并作辅助损失。
-variant: {name: CoH-P1, encoder: mlp, fluid_node_features: false}
-fluid: {mode: "off", enabled: false}
-action_space: {pruning_mode: none, exposure: hopeful_first, exposure_threshold: 1.5}
-network: {action_attention: false}
-training: {bc_warmup_steps: 0}
-reward: {potential_weight: 0.0}
-coh: {commit_critic: true, gate: false, hold_critic: false, critic_coeff: 0.5}

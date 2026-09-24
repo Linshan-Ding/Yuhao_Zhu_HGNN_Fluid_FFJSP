@@ -1,0 +1,3 @@
+# 三元组 Double DQN（AHP-DQN 风格）：逐候选 Q 值 + 三个优先级代理特征，no-op 是普通候选。
+variant: {name: Triplet-DQN}
+training: {method: dqn}

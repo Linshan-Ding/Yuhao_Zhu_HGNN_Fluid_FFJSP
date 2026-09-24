@@ -1,4 +1,4 @@
-"""统计分析（稿件 §5.9）：自助置信区间、效应量、多重比较校正、方差分解、Friedman/Nemenyi。
+"""统计分析：自助置信区间、效应量、多重比较校正、精确配对检验、分层置换检验、方差分解、Friedman/Nemenyi。
 
 只依赖 numpy/scipy —— 混合效应模型用矩估计实现，避免为一列数字引入 statsmodels 依赖。
 """
@@ -12,14 +12,15 @@ from scipy import stats as sps
 
 
 # ------------------------------------------------------------------ 置信区间
-def bca_ci(x: Sequence[float], alpha: float = 0.05, n_boot: int = 10000) -> Tuple[float, float]:
-    """偏差校正加速（BCa）自助置信区间。对有界量（如达成率）比正态区间更合适。"""
+def bca_ci(x: Sequence[float], alpha: float = 0.05, n_boot: int = 10000,
+           seed: int = 20260924) -> Tuple[float, float]:
+    """偏差校正加速（BCa）自助置信区间。对有界量（如达成率）比正态区间更合适。固定种子，可复现。"""
     x = np.asarray(x, dtype=float)
     x = x[np.isfinite(x)]
     n = x.size
     if n < 2:
         return (float("nan"), float("nan"))
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
     theta = x.mean()
     boots = rng.choice(x, size=(n_boot, n), replace=True).mean(axis=1)
 
@@ -180,3 +181,61 @@ def friedman_nemenyi(matrix: np.ndarray, names: Sequence[str],
     return {"friedman_stat": float(stat), "friedman_p": float(p), "friedman_df": k - 1,
             "mean_ranks": {names[j]: float(mean_ranks[j]) for j in range(k)},
             "critical_difference": float(cd), "n_instances": n_inst, "n_methods": k}
+
+
+# ------------------------------------------------------------------ 精确配对检验与分层检验
+def exact_signflip_wilcoxon(d: Sequence[float]) -> float:
+    """精确双侧 Wilcoxon 符号秩检验（枚举全部 2^n 种符号翻转，n <= 20；更大的 n 用 scipy）。
+
+    零差先剔除；并列取平均秩。与 scipy 的精确法在无并列时一致，且不依赖 scipy 版本。
+    """
+    d = np.asarray(d, float)
+    d = d[d != 0]
+    n = d.size
+    if n == 0:
+        return 1.0
+    if n > 20:
+        return float(sps.wilcoxon(d, zero_method="wilcox").pvalue)
+    ranks = sps.rankdata(np.abs(d))
+    observed = abs(float((ranks * np.sign(d)).sum()))
+    signs = np.array(np.meshgrid(*([[1.0, -1.0]] * n), indexing="ij")).reshape(n, -1)
+    stats_all = np.abs((ranks[:, None] * signs).sum(0))
+    return float(np.mean(stats_all >= observed - 1e-12))
+
+
+def band_permutation_test(d: Sequence[float], in_band: Sequence[bool], n_perm: int = 20000,
+                          seed: int = 20260924) -> Tuple[float, float]:
+    """分档异质性：配对差在两档间均值之差的置换检验（按分档标签置换；组合数不大时精确枚举）。
+
+    返回 (观测差 = 档内均值 − 档外均值, 双侧 p)。
+    """
+    from itertools import combinations
+    d = np.asarray(d, float)
+    mask = np.asarray(in_band, bool)
+    n, k = d.size, int(mask.sum())
+    if k == 0 or k == n:
+        return float("nan"), float("nan")
+    observed = float(d[mask].mean() - d[~mask].mean())
+    from math import comb
+    if comb(n, k) <= 200000:
+        stats_all = []
+        for idx in combinations(range(n), k):
+            m = np.zeros(n, bool)
+            m[list(idx)] = True
+            stats_all.append(d[m].mean() - d[~m].mean())
+        stats_all = np.asarray(stats_all)
+    else:
+        rng = np.random.default_rng(seed)
+        stats_all = np.empty(n_perm)
+        for i in range(n_perm):
+            m = np.zeros(n, bool)
+            m[rng.choice(n, k, replace=False)] = True
+            stats_all[i] = d[m].mean() - d[~m].mean()
+    p = float(np.mean(np.abs(stats_all) >= abs(observed) - 1e-12))
+    return observed, p
+
+
+def intersection_union(p_values: Sequence[float]) -> float:
+    """交–并检验："同时优于全部对手"的 p 值 = 各单项检验 p 的最大值（无需再校正）。"""
+    p = [float(v) for v in p_values if np.isfinite(v)]
+    return max(p) if p else float("nan")
