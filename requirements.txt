@@ -1,9 +1,7 @@
+# 全部免授权：CP-SAT 来自 ortools，其余为 PyTorch/SciPy 生态。GPU 可选（主进程更新用）。
 numpy>=1.24
 scipy>=1.11
-pandas>=2.0
 PyYAML>=6.0
-torch>=2.0
+torch>=2.1
 matplotlib>=3.7
-ortools>=9.8          # CP-SAT：离线精确解与在线重优化（免授权；9.8 起提供 PEP 8 接口名）
-visdom>=0.2           # 可选：训练实时曲线；服务未启动时自动降级
-# 不需要任何商业求解器：流体 LP 与 MILP（稿件 Eqs. 1-11）都由 SciPy 自带的 HiGHS 求解
+ortools>=9.8

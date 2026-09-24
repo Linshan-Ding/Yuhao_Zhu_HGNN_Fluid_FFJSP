@@ -1,462 +1,131 @@
-# 实验设计规格（Experiment Spec）— FSHGRL / DFFSP-HFOI
+# 实验设计规格（Experiment Spec）— Commit-or-Hold / 超负荷柔性流水车间的非延迟代价
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
-| v1.0 | 2026-08-28 | 由 opt-paper-codegen 单独使用模式（分支 C，阶段 E）生成。契约来源为重构后的稿件 `cas-sc-template.tex`（分支 `claude/latex-paper-restructure-nfwghr`）及其占位符清单，而非自由格式方案。 |
-| v1.2 | 2026-09-24 | 原稿已录用；新增 §9：新论文（Commit-or-Hold）试点的预注册判定规则，在试点开跑前固定。 |
-| v1.1 | 2026-08-29 | 算法优化轮。诊断发现三层结构性问题并据此修订规格，详见下方 §7 变更记录与 §8 预注册判定规则。**本版之前产出的全部实验数据作废。** |
+| v2.0 | 2026-09-24 | 第二篇论文。第一篇（FSHGRL）已录用，其规格（v1.x）随代码一并移出工作树，只留 git 历史。 |
 
-> 本文件是代码仓库的任务书。**论文里每一个 `\PH{}` 与每一张表的 `\dc` 单元格，都必须能在 §6C 映射表里找到产出它的脚本与 CSV 列**；反之每一列落盘都必须有论文去向。映射表无天窗 ⇔ 工程无天窗。
+> 本文件是代码仓库的任务书。**论文里每一个 `\PH{}` 与每一张数据表都必须能在 §5 映射表里找到产出它的
+> 脚本与 CSV 列**；反之每一列落盘都必须有论文去向。映射表无天窗 ⇔ 工程无天窗。
 
 ---
 
 ## 0. 范式判定
 
-**默认范式**：构造式 DRL（PPO / Actor–Critic + 异构图注意力编码器 + 动作级自注意力）。
-不触发模块替换协议——`agent/` 保留 PPO 结构，但按稿件 §4.8.2 引入**行为策略修正**（存 `log b_k` 而非 `log π_old`）。
+- **构造式 DRL**：PPO + 候选打分 actor-critic，动作是 (工序类型, 机器, 订单) 三元组或"保留产能"（no-op）。
+- **环境不可张量化**（离散事件仿真，随机到达、完工事件、订单丢弃），因此采用**多进程采样 + 批量更新**：
+  每个 worker 进程各一份环境与 CPU 策略，整条 episode 采完发回；主进程把一个 epoch 的转移填充成
+  带掩码的批，在 GPU（有则用）上做 PPO 更新。spawn 启动方式，Windows 与 Linux 同一条代码路径。
+- **预算按环境交互步数计**（`training.total_steps`），所有学习方法相同；epoch 的 episode 数固定，与
+  worker 数无关，因此不同机器采到同一批数据。
 
-**环境不可张量化**：本问题是**离散事件仿真**（随机到达、机器完工事件、订单丢弃），且 `step` 内需调用 LP 求解器（SciPy 自带的 HiGHS）求解流体 LP。按 codegen 技能"环境并行判定表"，此形态属于**值得引入多进程**一类。当前实现为单进程 + LP 缓存；worker 并行留作可选项，判定与实测加速比记录在 README §2。
+## 1. 问题定义
 
----
+- 动态柔性流水车间，订单持续插入（Poisson 到达，评测另含 MMPP 与确定性到达）。R 种产品各走 J 个阶段，
+  每阶段多台可选机器，工时为整数（CP-SAT 用整数时间网格）。
+- 决策时点：至少一台机器空闲且至少一道工序就绪。动作：派工三元组，或 no-op（保留产能：本时刻不派工，
+  等到下一事件）。no-op 的两条防死锁守卫：(i) 存在严格更晚的未来事件；(ii) 连续 no-op 不超过 3 次。
+- 候选暴露：每工序类型只暴露 top-K（K=5）张订单，顺序为"可救优先"（临界比 ≥ 1.5 的先暴露，再按交期）。
+  规则与学习策略看到同一候选集。
+- 订单在剩余路径最短工时已超过交期时被丢弃；超期完工按未达成计。目标 = 按时达成率 η = N_c / S。
+- 奖励 r_t = ΔN_c / S，无任何塑形项与可调权重；恒等式 **Σ_t r_t = η** 由 `analysis/identity_check.py`
+  在 24 个算例上校验（`run_00` 第 2 步）。
+- 观测严格因果：只用当前时刻已知的量。时间除以 DDT 参数（交期政策），工时除以最大工时，计数除以已到达
+  订单数；未到达订单的数量、交期、到达时间不进观测。
 
-## 1. 问题定义（与稿件 §3 一一对应）
+## 2. 方法：Commit-or-Hold（CoH）
 
-- **对象**：动态柔性流水车间，高频插单（DFFSP-HFOI）。机器集 $\mathcal{M}$，产品类型 $\mathcal{R}$，每型固定阶段链 $1..J_r$，每阶段多台可选机器。
-- **决策**：在每个决策时点，把某个就绪订单的当前工序指派给某台合格空闲机器，动作为三元组 $(o_{rj}, m, s)$；订单维度以**紧急度排序的 top-$K$ 槽**表示（$K=5$）。
-- **目标**：最大化订单按时达成率 $\eta = N_c/|\mathcal{S}|$；订单在剩余路径最小加工时间已超过交期时被**丢弃**，丢弃率 $\nu = N_d/|\mathcal{S}|$。
-- **奖励**（稿件 Eq. 46）：$r_t = (\Delta N_c - \kappa_d \Delta N_d)/|\mathcal{S}|$，$\kappa_d = 1$。
-  **恒等式**：$\gamma=1$ 时 $\sum_t r_t = \eta - \kappa_d\nu$ —— 由 `scripts/run_00_smoke.py` 用随机策略 rollout 强制校验，不通过即报错退出。
-- **可选稠密信号**：势函数塑形 $F_t = \gamma\Psi(\omega_{t+1}) - \Psi(\omega_t)$，$\Psi = \min\{\Phi^*, 1\}$，策略不变（Ng et al. 1999）。
+- **骨干**：工序类型节点 [N,10] 与机器节点 [M,3] 各过逐节点 MLP（LayerNorm），掩码均值池化；候选特征 =
+  [所选节点嵌入 ‖ 全局嵌入 ‖ 动作特征 [4] ‖ η_t]；actor 逐候选打分；critic 用全局嵌入 + 全局量 [5]。
+- **承诺评估器** p̂(o|s)：逐候选"现在派出后按时完成"的概率，用同一 episode 内的实际结果做 BCE 监督；
+  detach 后作为 actor 的一维特征。
+- **等待门控**：P(hold) = σ(β·(logit ĥ − logit max p̂) + c(s))，ĥ 为等待前景评估器（被保留的机器下一次
+  派工是否给了等待时尚未暴露且按时完成的订单，事后标签，BCE），c(s) 看 8 个工况特征 + 5 个全局量；
+  P(a) = (1 − P(hold))·softmax(派工 logits)。门控里的 max p̂ 与 ĥ 不回传策略梯度（`coh.detach_gate_inputs`）。
+  输出层小初始化、门控偏置 −1.5：起点是 non-delay（P(hold)≈0.18），再由训练学会何时等待。
+- **训练**：PPO（clip 0.2，4 个 update-epoch，minibatch 2048/4096，熵 0.01，价值 0.5，梯度裁剪 0.5，
+  lr 3e-4 线性退火到 0.1×），KL 用 k3 估计并早停（0.02，单批 4× 硬停），GAE λ 0.95，γ = 1；辅助损失
+  权重 0.5。每个 epoch 56 条 episode，验证每 2 个 epoch，`checkpoint_best` 按验证 η。预算 6M 步，5 个
+  独立 run（种子 1..5）；episode (epoch, k) 的算例与动作由 (种子, epoch, k) 决定，可精确复现。
+- **贪心读出**：有 no-op 时先判 gate logit > 0 则等待，否则在派工行取 argmax。
 
----
+## 3. 算例设计（`configs/instance.yaml`）
 
-## 2. 流体松弛（稿件 §3.3）— 相对旧实现的三处规格级改动
+训练分布 `param_table`：R = J = 5、每阶段 5 台、工时 [25, 450]、S ∈ [20, 200]、ρ ∈ [0.8, 2.2]、
+DDT ∈ [400, 2000]、逐单交期扰动 U[0.7, 1.4]、Poisson。评测档（每档固定种子，逐算例种子 = 档种子×1000 + 序号）：
 
-| # | 旧实现（`agent/training_simulator.py::_solve_cached_lp`） | 新规格 | 依据 |
+| 档 | 设计 | 数 | 用途 |
 |---|---|---|---|
-| F1 | 约束为 `service >= min_rate * demand`，**不含交期** | 约束改为 $\hat\delta_{rj}\sum_m \mu_{rjm}u_{mrj} \ge \Phi W_{rj}$ | 稿件 Eq. (21)，回应 R3.2/R4.1 |
-| F2 | 无阶段间流平衡约束 | 增加 $W_{rj}\sum_m\mu_{r,j-1,m}u_{m,r,j-1} \ge W_{r,j-1}\sum_m\mu_{rjm}u_{mrj}$ | 稿件 Eq. (24) |
-| F3 | 只返回 `(allocations, rates)` | 另返回 $\Phi^*(t)$、基本解支撑集大小、求解/缓存计数 | 势函数塑形 + Prop 1(d) 实证 |
+| `grid` | ρ ∈ {0.8, 1.2, 1.6, 2.0} × DDT ∈ {700, 1100, 1800} × S ∈ {50, 100, 150} | 36 | 主评测、分层、代价热图 |
+| `val` | ρ ∈ {1.0, 1.6, 2.0} × DDT ∈ {900, 1500}，S = 80 | 6 | 选 checkpoint，不进论文 |
+| `small` | S ∈ {12, 16, 20, 25} × DDT ∈ {500, 600, 700} × 2，ρ = 2.5 | 24 | CP-SAT 离线最优与滚动重优化 |
+| `ood` | S300、S500、每阶段 3 台、每阶段 8 台、R8J7、MMPP、确定性到达（ρ = 1.6、DDT = 900） | 7 | 不重训的迁移 |
 
-**有效松弛期**：$\hat\delta_{rj}(t) = \max\{\delta_{rj}(t) - \sum_{j'>j}\min_m p_{rj'm},\ \delta_{\min}\}$。
+## 4. 数据落盘清单
 
----
-
-## 3. 剪枝与安全网（稿件 §4.5）
-
-$$\mathcal{A}^f_t = \{(o_{rj},m,s)\in\mathcal{A}^{\text{feas}}_t : u^*_{mrj}>\epsilon_f \ \lor\ s\in\mathcal{S}^{\text{crit}}_{rj}(t)\}$$
-
-$\mathcal{S}^{\text{crit}}_{rj}(t) = \{s : d_s - t \le \theta_{\text{crit}}\underline{P}_{rj}(t)\}$，回退规则保证非空（Prop 2(a)）。
-
-$\epsilon_f = 10^{-5}$，$\theta_{\text{crit}}$ 见 `configs/env.yaml`。
-
----
-
-## 6A. 算例设计
-
-### 6A-1 算例参数表（训练随机构造的分布）
-
-| 参数 | 取值 |
-|---|---|
-| 每阶段机器数 | 5 |
-| 阶段数 $J_r$ | 5 |
-| 产品类型数 $R$ | 5 |
-| 加工时间 $p_{rjm}$ (s) | $\mathrm{rand}[25,450]$ |
-| 订单数 $S$ | $[20,200]$ |
-| 到达间隔 $\Delta t$ (s) | $\mathrm{rand}[1,200]$ |
-| 交期宽松度 DDT | $\mathrm{rand}[300,2500]$ |
-
-**派生负荷指标**（每个算例族都必须落盘）：$\Lambda = 1/\mathbb{E}[\Delta t]$，$\bar W = \sum_r \pi_r\sum_j \bar p_{rj}$，$\rho_{\text{sys}} = \Lambda\bar W/|\mathcal{M}|$，$\iota = \Lambda\bar p$。
-
-### 6A-2 算例设计表（评测算例，k=1，每单元一个算例）
-
-| 档位 | 数量 | 规模因子 | 结构因子 | 用途 | 论文去向 |
-|---|---|---|---|---|---|
-| `small` | 16 | $S\in\{6,8,10,12\}$，$R=2$，$J_r=3$，$\|\mathcal{M}\|=6$ | DDT 低/高 2 水平 | 可精确求解，校准真实 gap | Table T-NEW-5 |
-| `main` | 15 | $S\in\{50,100,150\}$ | DDT $\in\{500,600,900,1200,1600\}$ 全因子 | 主对比、消融、统计检验 | Tables T-NEW-3/4、PDR、DRL、Wilcoxon |
-| `arrival` | 15 | $S=100$ 固定 | $\mathbb{E}[\Delta t]\in\{200,100,50,25,12.5\}$ × 到达过程 {确定性, Poisson, MMPP 突发} | 到达强度扫描 | Table T-NEW-8(a) |
-| `ood` | 5 | $S\in\{300,500\}$；$\|\mathcal{M}_{\text{stage}}\|\in\{3,8\}$；$R=8,J_r=7$ | 留在参数表内水平 | 分布外泛化（不重训） | Table T-NEW-8(b) |
-| `val` | 5 | 按参数表随机 | — | 选 best checkpoint，不进论文 | 训练曲线 |
-| `case3d` | 9 | $S\in\{50,100,150\}$ × DDT $\in\{600,900,1200\}$ | 6 阶段 3D 打印工艺链 | 情景可迁移性 | Table 案例研究 |
-
-**防混淆**：`ood` 档只推规模/结构因子，不同时改到达分布；到达分布偏移单独由 `arrival` 档承担。
-
----
-
-## 6B. 数据落盘清单（唯一真源，全部 CSV）
-
-| 文件 | 关键列 | 产出脚本 |
+| 文件 | 产出脚本 | 列 |
 |---|---|---|
-| `data/instances/<tier>/instance_*.csv` + `index.csv` | `instance_id,tier,S,R,J,M,DDT,arrival_process,E_dt,Lambda,W_bar,rho_sys,iota` | `run_01` |
-| `result/<run>/log.csv` | `iter,steps,eta_val,reward,policy_loss,value_loss,entropy,approx_kl,clip_frac,ratio_max,ratio_bound,sps,gpu_mem_gb,fluid_solve_count,fluid_cache_hit,phi_star_mean` | `run_02/03/04` |
-| `result/<run>/config_snapshot.yaml`、`commit.txt` | 生效配置 + git commit | `run_02/03/04` |
-| `result/eval_results.csv` | `instance_id,tier,method,variant,run_id,eta,nu,decision_time_ms,steps,feasible` | `run_05` |
-| `result/pruning_stats.csv` | `instance_id,A_feas_mean,A_feas_max,A_f_mean,A_f_max,prune_ratio,p_singleton,fallback_rate,retention_all,retention_crit,retention_se,delta_eta,t_lp_ms,t_enc_ms,t_pol_ms,zeta,support_size` | `run_06` |
-| `result/pruning_sensitivity.csv` | `eps_f,prune_ratio,retention_all,retention_crit,eta,decision_time_ms` | `run_06` |
-| `result/exact_results.csv` | `instance_id,S,DDT,eta_off,eta_off_source,eta_off_cpsat,cpsat_status,cpsat_time_s,eta_off_milp,milp_status,milp_upper,milp_time_s,cert_cpsat_in_milp,replay_match,replay_match_milp,eta_online,online_solves,online_all_optimal,online_time_s,replay_match_online,eta_fshgrl,eta_fshgrl_sd,n_fshgrl_runs,eta_best_pdr,best_pdr,eta_best_drl,best_drl,abs_gap,rel_gap` | `run_07` |
-| `result/arrival_results.csv` | `E_dt,rho_sys,iota,arrival_process,eta,nu,phi_star_mean,decision_time_ms` | `run_08` |
-| `result/ood_results.csv` | `condition,method,eta,eta_matched,retention` | `run_08` |
-| `result/shift_matrix.csv` | `shift_axis,train_cond,test_cond,eta,retention` | `run_08` |
-| `result/reward_exploration.csv` | `panel,config,runs,eta,eta_ci_lo,eta_ci_hi,nu,steps_to_90pct,ratio_max,ratio_bound,approx_kl` | `run_09` |
-| `result/case3d_results.csv` | `case,DDT,S,infeasible_share,eta_best,eta_avg,ci_lo,ci_hi,n_runs,decision_time_s,eta_best_rule,best_rule,eta_avg_rule,eta_best_drl,best_drl,imp_pct,gap_pct` | `run_10` |
-| `result/stats_summary.csv` | `comparison,R_plus,R_minus,p_raw,p_holm,p_bh,r_rb,cliff_delta,A12,lmm_est,lmm_ci_lo,lmm_ci_hi` | `run_11` |
-| `result/variance_decomposition.csv` | `source,var_component,icc` | `run_11` |
-| `result/friedman_nemenyi.csv` | `method,mean_rank,cd,friedman_stat,friedman_df,friedman_p` | `run_11` |
-| `result/figures/*.pdf` | F-NEW-2 / F-NEW-4 / F-NEW-5 + 消融面板 + 训练曲线面板 | `run_12` |
-| `result/paper_values.tex` | 全部 `\PH{}` 宏定义 + 已填数的 LaTeX 表格 | `run_13` |
+| `data/instances/index.csv` | run_01 | instance_id, tier, path, S, R, J, M, machines_per_stage, DDT, rho_target, arrival_process, E_dt, Lambda, W_bar, p_bar, rho_sys, iota, regime, seed |
+| `result/<run>/log.csv` | run_02–04（train.py） | iter, steps, episodes, eta_val, eta_train, return, ep_len, a_mean, noop_rate, p_hold, held_share, policy_loss, value_loss, entropy, approx_kl, clip_frac, ratio_max, update_epochs_done, commit_bce, commit_brier, hold_bce, n_labels, q_loss, q_mean, n_updates, epsilon, lr, collapse, sps_collect, sps_total, t_collect, t_update, t_val, elapsed_s |
+| `result/eval_results.csv` | run_05 | instance_id, tier, S, DDT, rho_target, rho_sys, method, variant, run_id, seed, eta, nu, decision_time_ms, steps, n_cand_mean, noop_rate, noop_offer_rate, held_share |
+| `result/gate_trace.csv` | run_05（CoH 主方法） | instance_id, variant, run_id, t, now, held, p_hold, p_max, hold_logit, gate_logit, gap, with_work, n_dispatch, exp_arrivals, backlog, viable, max_cr, min_proc, eta_t, open_share, rate, idle_share, p_hat_chosen, order, outcome |
+| `result/exact_results.csv` | run_06 | instance_id, S, DDT, eta_off, cpsat_status, cpsat_time_s, replay_match, eta_online, online_solves, online_all_optimal, online_time_s, replay_match_online, eta_coh, eta_coh_sd, n_coh_runs, eta_nohold, eta_best_rule, best_rule, eta_best_drl, best_drl, gap_coh_off, gap_online_off |
+| `result/stats_summary.csv` | run_07 | comparison, band, n, wins, ties, mean_diff, ci_lo, ci_hi, p_raw, p_holm, cliff_delta, eta_ours, eta_other |
+| `result/stratified_summary.csv` | run_07 | 同上（band = DDT700/DDT1100/DDT1800/rho<1/rho>=1/pooled，含交–并检验行） |
+| `result/cell_means.csv` | run_07 | rho, DDT, variant, n, eta, held_share, price_vs_nohold, price_vs_oracle_rule |
+| `result/heterogeneity.csv` | run_07 | comparison, contrast, diff_of_means, p_perm |
+| `result/variance_decomposition.csv`、`friedman_nemenyi.csv`、`budget_check.csv`、`ood_summary.csv`、`exact_summary.csv`、`calibration.csv`、`gate_map.csv`、`verdict.csv` | run_07 | 见脚本头 |
+| `result/figures/F1–F6` | run_08 | 代价热图、保留产能、门控决策图、校准、学习曲线、临界差异图 |
+| `result/paper_values.tex`、`result/tables/*.tex` | run_09 | 论文占位符与整张数据表 |
 
----
+派生对手（run_07 计算）：`SPT-Idle*` = 逐算例在阈值 {1.0, 1.25, 1.5, 2.0, 3.0} 中取最优（事后选择，规则族的
+上界）；`OracleRule` = 逐算例全部规则取最优；`BestRule` = 池化均值最高的单条规则。
 
-## 6C. claim → 实验 → 数据 → 论文占位符 映射（核心，无天窗）
+## 5. claim → 实验 → 数据 → 论文占位符
 
-| # | claim / 论文需求 | 实验 | 落盘 | 论文占位符 |
-|---|---|---|---|---|
-| C1 | 流体松弛是有效松弛且与目标对齐 | 精确解对照 + 回放校验 | `exact_results.csv` | `A3`、`P-MILPCHK`、Table T-NEW-5 全部 `\dc` |
-| C2 | 剪枝安全、紧凑、保留临界动作 | 剪枝统计 + oracle 保留率 + $\epsilon_f$ 扫描 | `pruning_stats.csv`、`pruning_sensitivity.csv` | `A1`、`A2`、`O1`、`O2`、`P-TIE`、`S2`–`S6`、Table T-NEW-4、Fig F-NEW-2 |
-| C3 | 宏观引导的贡献 ≠ 动作空间缩减 | 9 变体因子化消融（含同基数随机/启发式对照） | `eval_results.csv` → `stats_summary.csv` | `S1`、Table T-NEW-3、Fig 消融面板(b) |
-| C4 | 奖励到达不变 + 行为策略修正有效 | 奖励/探索消融 3 面板 | `reward_exploration.csv` | `H4`、Table T-NEW-9 |
-| C5 | 优于规则与学习基线（等预算） | 主评测 + 基线适配 | `eval_results.csv` | `A4`、`A5`、`A6`、`B1`、`B2`、`H5`、Table T-NEW-6、PDR/DRL 表 |
-| C6 | 高频插单可度量、越过饱和仍有效 | 到达强度扫描 + 过程形态 | `arrival_results.csv` | `L0`–`L4`、Table T-NEW-8(a) |
-| C7 | 分布外泛化（不重训） | OOD 档 + 偏移矩阵 | `ood_results.csv`、`shift_matrix.csv` | `S7`、`S8`、Table T-NEW-8(b)、Fig F-NEW-4 |
-| C8 | 统计结论稳健 | BCa CI + 效应量 + 多重校正 + Friedman/Nemenyi + LMM/ICC | `stats_summary.csv`、`variance_decomposition.csv`、`friedman_nemenyi.csv` | `R1`–`R5`、Table Wilcoxon、Fig F-NEW-5 |
-| C9 | 情景可迁移性（非工业验证） | 3D 打印 9 算例 | `case3d_results.csv` | 案例研究表全部 `\dc` |
-| C10 | 复现性协议完整 | 各 run 落盘配置/commit | `config_snapshot.yaml`、`commit.txt` | `R4`、`H1`–`H3` |
-
-**天窗检查**：论文 35 个唯一 `\PH` id 与 10 张表的 `\dc` 单元格，均已在上表出现；`run_13_fill_placeholders.py` 会在缺任何一项时报错列出，即自动化的天窗检查。
-
-
----
-
-## 7. v1.1 变更记录（算法优化轮）
-
-每条都注明"改了什么、为什么、影响哪个下游"。规格级改动一律登记，不允许静默偏离。
-
-### 7.1 修复：策略从未学习（代码缺陷，非规格问题）
-
-`agent/networks.py` 的动作级自注意力写成 `feats = attn @ v`，丢失残差与 LayerNorm。
-候选集仅 1–5 个元素且 68 维中 65 维在候选间相同 ⟹ 注意力权重近似均匀 ⟹ 所有候选被映射为
-`mean(v)` ⟹ logits 全等 ⟹ 策略**恰好**均匀。实测 `‖∂log π/∂θ_actor‖` = 1.77e-05（无注意力时
-7.98e-02，相差 4501 倍），归一化熵恒为 1.000000。
-
-连带失效：`b_k=(1-ε)π+ε/n` 退化为 π ⟹ `ratio_max≡1.000`、`clip_frac≡0`、`approx_kl≡0`，
-log.csv 的三个诊断量全部丧失诊断能力；贪心评测退化为"取枚举顺序第 0 个"。
-
-> 该缺陷由本仓库重建时引入。原作者 `HGHH_model.py:520` 写的是
-> `norm_layer(candidate_features + attended)`，残差与 LayerNorm 都在。
-
-修复后实测：`‖grad‖` = 2.00e+00，熵 0.9988（不再全等），三个诊断量恢复变化
-（`ratio_max` 1.14–1.73、`clip_frac` 0–0.020）。**影响下游**：v1.1 之前所有训练结果作废。
-
-### 7.2 规格改动一览
-
-| # | 改动 | 依据（实测） | 影响 |
+| 论断 | 实验 | 数据 | 占位符 / 表 |
 |---|---|---|---|
-| 7.2.1 | `rollout_episodes` 2→8，`minibatch_size` 512→128 | 原配置下 minibatch(512) > buffer(~434)，退化为全批量，1000 epoch 仅 3000–9000 个梯度步 | 训练协议 |
-| 7.2.2 | `epsilon0` 1.0→0.3，`anneal_epochs` 1000→350 | ε=1 时 `b_k` 恒为均匀分布，PPO 裁剪区间等价于"强制 π 保持均匀"，是持续的反向拉力；原设定全程平均 ε=0.5 | 训练协议 |
-| 7.2.3 | `approx_kl` 基准从 `log b_k` 改为 `log π_old` | 前者衡量的是行为分布与目标策略的距离，在第一次梯度步前就非零，会把 `update_epochs` 误削成 1 | 训练协议 |
-| 7.2.4 | 观测全面无量纲化 + 网络加 LayerNorm | `act_feat[:,1]`（唯一有区分度的列）量纲 0.007，其余特征 O(1)，相差四个数量级 | 6B `log.csv` 列不变 |
-| 7.2.5 | 动作特征增加**临界比** `slack / 剩余路径最小加工时间`，ACT_DIM 3→4 | 交期目标下判别力最强的单一信号，原观测完全没有 | 6B 不变 |
-| 7.2.6 | critic 增加全局状态：未到达比例 / 未结清比例 / 时间进度 / 丢弃率 | 原 critic 输入 33 维且**看不到未到达订单**，价值函数结构不可辨识 | 6B 不变 |
-| 7.2.7 | 流体目标从 max-min 交期可行比改为**吞吐对齐** `max Σ min(δ̂λ, W)` | max-min 是均衡型目标，与"按时完工件数"在过载下要求的选择性放弃方向相反 | §2 F1 改写；Φ* 语义变为"可按时交付工作量占比"，天然落在 [0,1] |
-| 7.2.8 | `theta_crit` 1.0→1.5 | θ=1.0 时安全网是死分支，实测生效率 0/747，Prop 2(c) 空洞成立 | §3 |
-| 7.2.9 | 新增**规则行为克隆热启动**（`training.bc_warmup_steps=3000`，专家为 SPT） | PPO 随机初始化时性能远低于最强规则；热启动给出可证的性能下界 | 方法节须如实报告；新增消融 `nobc.yaml` |
-| 7.2.10 | 新增消融变体 `fluid_maxmin.yaml`、`nobc.yaml` | 对应 7.2.7 与 7.2.9 | 6C 消融矩阵扩到 11 个变体 |
+| 非延迟的代价：同一网络去掉等待后的损失 | run_05 grid（CoH vs CoH-NoHold） | stats_summary, stratified_summary, cell_means | GAIN-NOHOLD, W-NOHOLD, P-NOHOLD, D-NOHOLD, PRICE-*, PRICE-MAX/MIN, CELL-MAX/MIN, tab_price, F1 |
+| 优于最强规则（含逐算例调优的 SPT-Idle*） | run_05 grid | stats_summary, stratified_summary | GAIN-SPTIDLESTAR, W-/P-/D-SPTIDLESTAR, GAIN-ORACLERULE …, P-IUT, GAINR-*, tab_rules |
+| 优于三个学习基线 | run_04 + run_05 | stats_summary | ETA-RULESEL/TDQN/HDQN, NAME-BESTDRL, GAIN-/W-/P-/D-BESTDRL, tab_drl |
+| 代价随交期紧度与负荷变化 | run_07 分层与异质性 | stratified_summary, heterogeneity | PRICE-/GAINR-/W-NOHOLD-/W-ORACLE-/P-NOHOLD-/P-ORACLE-{DDT700,DDT1100,DDT1800,RHOLT1,RHOGE1}（论文表 tab:price_bands）, P-HET-DDT, P-HET-RHO, HET-DDT；tab_stratified 为补充 |
+| 策略保留了多少产能 | run_05 | eval_results.held_share | HELD-*, NOOP-RATE, F2 |
+| 承诺评估器可校准 | run_05 trace | calibration | BRIER, ECE, F4 |
+| 门控在何时等待 | run_05 trace | gate_map | F3 |
+| 两个创新各自的价值 | run_03 + run_05 | stats_summary | A-NOCRITIC/P-NOCRITIC … A-EDD/P-EDD, tab_ablation |
+| 与"优化完美但不能预判"的参照比 | run_06 small | exact_results, exact_summary | ETA-OFF, ETA-ONLINE, ETA-COH-SMALL, GAP-*, W-COH-ONLINE, P-COH-ONLINE, N-OPT, N-REPLAY, T-ONLINE, T-CPSAT, tab_exact |
+| 不重训迁移到未见工况 | run_05 ood | ood_summary | ETA-COH-OOD, ETA-BESTRULE-OOD, W-COH-OOD, ETA-*-S500, ETA-*-MMPP, tab_ood |
+| 训练协议与稳定性 | run_02–04 日志 | budget_check, variance_decomposition | R-RUNS, B-STEPS-M, STEPS-RUN-M, T-RUN-MIN, SPS, BEST-STEPS-M, VAL-RANGE, ICC-SEED, ICC-INST, tab_budget, F5 |
+| 全局检验 | run_07 | friedman_nemenyi | FRIEDMAN-P, CD, N-FAMILY, F6 |
+| 算例设计 | run_01 | index | N-GRID, N-VAL, N-SMALL, N-OOD, tab_instances |
+| 决策时延 | run_05 | eval_results.decision_time_ms | DT-COH, DT-SPT |
 
-### 7.2b Phase 0 验收结果（2026-08-29，main 档 15 算例，**不改算例、不改 MDP**）
+## 6. 学习基线协议
 
-修复后用一次截断的探针训练（60 epoch 请求，实际跑到约 18 epoch，best checkpoint 在
-epoch 10）贪心评测，全部方法走同一条 `eval.py` 路径、同一批算例：
+三个基线与主方法共用环境、候选暴露、奖励、编码器结构、交互预算（`training.total_steps`）、验证与
+checkpoint 规则，且都能表达保留产能：
 
-| 方法 | mean η | 与 FSHGRL 之差 | p_raw | p_holm | Cliff δ | Â₁₂ |
-|---|---|---|---|---|---|---|
-| **FSHGRL（探针）** | **0.7911** | — | — | — | — | — |
-| SPT | 0.7964 | −0.0053 | 0.237 | 0.237 | 0.004 | 0.502 |
-| RRC | 0.5393 | +0.2518 | 6.1e-05 | 4.3e-04 | 0.400 | 0.700 |
-| Random | 0.5207 | +0.2704 | 6.1e-05 | 4.3e-04 | 0.444 | 0.722 |
-| MOR | 0.5160 | +0.2751 | 9.8e-04 | 4.9e-03 | 0.413 | 0.707 |
-| FIFO | 0.5160 | +0.2751 | 9.8e-04 | 4.9e-03 | 0.413 | 0.707 |
-| EDD | 0.5160 | +0.2751 | 9.8e-04 | 4.9e-03 | 0.413 | 0.707 |
-| MWKR | 0.5151 | +0.2760 | 1.5e-03 | 4.9e-03 | 0.400 | 0.700 |
-
-**验收门（须显著优于 Random）：通过**（+0.2704，p_holm = 4.3e-04，Cliff δ = 0.444）。
-修复前 FSHGRL 与 Random 不可区分；诊断量 `ratio_max ≡ 1.000`、`clip_frac ≡ 0`、
-`approx_kl ≡ 0`，修复后分别恢复到 1.14–1.73、0.9%–4.2%、~2e-03，
-`‖∂log π/∂θ_actor‖` 从 1.77e-05 回到 2.0e+00 量级。
-
-两条必须如实记录的观察：
-
-1. **MOR / FIFO / EDD 的 η 完全相同（0.5160，逐算例相等）**，MWKR 仅差 0.0009。
-   直接证据说明 §7.3.1–7.3.2 的两处退化是真的：常数 DDT 使 EDD≡FIFO，
-   而 96% 的单订单决策点使这些不含机器信息的规则退化为同一策略。
-2. **FSHGRL 与 SPT 统计上不可区分**（δ=0.004），且逐算例看在 8/15 上**完全相等**、
-   5 个略负、2 个略正。这不是训练不足，而是当前算例设计下**可学的最优策略本身就
-   近似等于 SPT**——多候选时点里 100% 只能选机器，选最快的机器就是 SPT。
-   这正是 Phase 1 必须重做算例的理由：在现有设计上继续调参没有可争取的余量。
-
-### 7.3 待执行的规格改动（Phase 1–2）
-
-| # | 改动 | 依据 |
+| 基线 | 动作 | 学习 |
 |---|---|---|
-| 7.3.1 | 每单独立抽交期 `due = arrival + DDT·U[0.7,1.4]` | 现为 `due = arrival + 常数 DDT`，实测每算例 `due−arrival` 唯一值=1 ⟹ **EDD ≡ FIFO ≡ 环境自带排序键**，订单维度永无信息 |
-| 7.3.2 | 主档负荷从 ρ_sys≈0.47 提到 ≈1.2 | 实测订单维度激活率：ρ=0.47→6%，ρ=0.97→37%，ρ=1.83→82%。当前主档 96% 决策点只有 1 张订单可选、84% 只有 1 种工序类型 |
-| 7.3.3 | 剔除饱和档 DDT=1600 | 全部方法在该档均为 1.000，无区分度 |
-| 7.3.4 | 增加 no-op（主动空闲）动作 | 当前是严格 non-delay 调度，而 non-delay 调度类不含最优解；规则基线按构造都是 non-delay，这是学习策略可差异化的能力 |
+| RuleSel-PPO（DRLG 风格） | 6 条规则 ∪ {hold}，规则再定三元组 | 同一 PPO 学习器（无辅助头） |
+| Triplet-DQN（AHP-DQN 风格） | 逐候选 Q（含 no-op 行）+ 三个优先级代理特征 | Double DQN、目标网络、5 步回报、replay 30 万、每个新转移 0.05 步梯度（minibatch 512）、ε 1.0→0.05（前 20% 预算） |
+| Hier-DQN（HSDDQN 风格） | 上层 Q 在规则 ∪ {hold}，下层 Q 在所选规则前 3 个候选内 | 两层 Double DQN，下层次态 argmax 限制在 t+n 时的窗口（SARSA 式近似，论文写明） |
 
----
+## 7. 预注册判据（先于任何正式结果写定）
 
-### 7.4 Phase 1 验收结果与一处判据修正（2026-08-29）
+- **主判据**（grid 档 36 算例，逐算例取 5 个 run 的均值，配对 Wilcoxon，Holm 族 = 全部池化对比）：
+  CoH 对 `SPT-Idle*`、对 `OracleRule`、对 `CoH-NoHold`、对最强学习基线，各自 Holm p < 0.05 **且**
+  Cliff's δ ≥ 0.33。任何一条不成立都如实报告，不追加机制。
+- **分层**：按 DDT 三档与负荷两档分别报告（族内 Holm）；异质性用置换检验；"同时优于全部规则"用交–并
+  检验。结论只在成立的档内陈述。
+- **消融**：五个消融变体的差值与 Holm p 无论方向都报告；"无增益"照写。
+- **精确参照**：small 档报告离线最优、滚动重优化、CoH、非延迟策略与最强规则的均值与差距；CoH 对滚动
+  重优化的胜场与 p。
+- **效应量口径**：Cliff's δ 用非配对定义；胜场、均值差与 BCa 区间作描述。BCa 固定种子。
 
-**判据修正（须记录，避免事后看起来像挪门槛）。** 计划书写的 `P(|A_f| = 1) ≤ 25%`
-把两件事混在了一起：算例设计是否退化，与本文剪枝把动作集削到多小。实测在
-ρ_sys=1.2 的重建算例上：
+## 8. 必须报告的负面结果
 
-| 动作集 | 均值 \|A\| | P(\|A\|=1) | 订单维度 | 工序类型 | 机器 |
-|---|---|---|---|---|---|
-| 剪枝前 A_feas | 3.36 | **17.8%** | 40.1% | 37.6% | 81.7% |
-| 剪枝后 A_f | 2.16 | 43.9% | 41.9% | 33.5% | 77.3% |
-
-剪枝前已满足 ≤25%；43.9% 是**本文剪枝自身造成的**，而缩小动作集正是该机制的
-设计意图，不是算例缺陷。因此该判据改为在 **A_feas** 上判定（判据本身不放宽，
-只是改判在正确的集合上）。附带一个可报告的性质：剪枝削掉 35.9% 的动作，却使
-订单维度激活率不降反升（40.1%→41.9%），而机器维度下降（81.7%→77.3%）——
-流体剪枝优先剪掉的是机器替代项，保留的是订单间的取舍。
-
-**负荷标定。** 订单维度激活率在 ρ=1.2 时为 33–40%，达不到 50% 的门槛，且剪枝
-不是原因。按负荷扫描（多候选时点上的维度激活率，A_feas / A_f）：
-
-| ρ_sys | 订单维度 | 工序类型 | 机器 | P(\|A_feas\|=1) | η_SPT |
-|---|---|---|---|---|---|
-| 1.2 | 33.4 / 36.2% | 32.0 / 31.7% | 85.1 / 82.3% | 17.7% | 0.620 |
-| **1.6** | **53.7 / 57.9%** | 50.8 / 46.7% | 70.1 / 64.7% | 16.5% | 0.532 |
-| 2.0 | 68.4 / 71.9% | 65.7 / 60.6% | 56.8 / 48.7% | 17.6% | 0.398 |
-
-取 **ρ_sys = 1.6**：三个维度同时活跃（订单 54%、工序类型 51%、机器 70%），
-即稿件所称的"工序–机器–订单三元组决策"在此负荷下才真正成立；η_SPT=0.532
-远离饱和。ρ=2.0 订单维度更高，但机器维度塌到 57%，且 η 偏低。
-
-**判据 (3) 通过。** ρ=1.2 重建算例上七条规则已彼此分离：
-SPT 0.5838、RRC 0.3700、MOR 0.3571、MWKR 0.3540、FIFO 0.3527、Random 0.3458、EDD 0.3318。
-对照 Phase 0（旧算例）MOR/FIFO/EDD 逐算例完全相同（0.5160），逐单交期扰动
-确实打破了 EDD ≡ FIFO ≡ 环境排序键的退化。
-
-### 7.5 最终算例设计与 Phase 1 验收（ρ_sys = 1.6）
-
-| 参数 | 旧值 | 新值 | 依据 |
-|---|---|---|---|
-| main `target_rho_sys` | ≈0.47（区间中点） | **1.6** | 负荷扫描，见 §7.4 |
-| main `ddt_levels` | [500,600,900,1200,1600] | **[700,900,1100,1400,1800]** | ρ=1.6 下 η_SPT 依次 0.40/0.46/0.53/0.80/0.96，规则间极差 0.17–0.33；2400 全饱和（极差 0.075）剔除 |
-| small `ddt_levels` | [200,260] | **[260,320]** | 交期扰动后 0.7×200=140 低于路径下界（117–254），实测有算例 6/6 订单到达即 hopeless、最优解恒为 0；260 → 到达即 hopeless 0–17%，320 → 0%，≥380 全饱和 |
-| `ddt_spread` | 无（常数 DDT） | **U[0.7, 1.4]** | 打破 EDD ≡ FIFO ≡ 环境排序键 |
-| 训练分布 | Δt ~ U[1,200] | **ρ ~ U[0.8,1.8]** 反推 Δt | 对 Δt 均匀抽样使 ρ ∝ 1/Δt 极度右偏 |
-
-**Phase 1 验收（main 档 15 个重建算例，SPT 轨迹 A_f，A_feas 数据见 §7.4 的 ρ 扫描）：**
-
-| 判据 | 门槛 | 实测 | 结论 |
-|---|---|---|---|
-| (1) 订单维度激活率 | ≥ 50% | **71.8%**（工序类型 53.4%，机器 46.0%） | 过（原设计 6%） |
-| (2) P(\|A_feas\|=1) | ≤ 25% | **16.5%**（ρ=1.6 扫描） | 过 |
-| (3) 四条规则不再逐位相等 | 不相等 | SPT 0.6149、MWKR 0.4120、MOR 0.4071、FIFO 0.3982 …… | 过 |
-
-三条判据全部通过。附注：机器维度激活率随负荷上升而下降（ρ=1.2 时 85%、
-ρ=1.6 时 46%）——高负荷下机器几乎总是全忙，同时空闲的机器变少。这是负荷与
-维度活跃度之间的真实权衡，ρ=1.6 是三个维度同时非平凡的取值。
-
-### 7.6 流体松弛缓存的一处实现缺陷（影响稿件 §4.9 与 Eq. 26）
-
-`trigger_key` 把**当前空闲机器集**放进了缓存键，而 LP 的机器容量约束是对全部出现在
-合格对中的机器施加的，`_solve_impl` 根本不接收该参数——解对空闲集恒不变。后果是
-每次派工都使缓存失效：实测 **ζ = 0.997（命中率 0.3%）**，LP 几乎每个决策点重解一次，
-占 rollout 用时约 50%，而稿件 §4.9 的摊销成本论证正建立在 ζ 较小之上。
-
-修复（从键中移除空闲机器集，解不变）后 ζ = 0.938。剩余未命中来自整数负载：每次派工
-都使某两个工序类型的 W 各变 1，键必然改变。因此另加一个可配置的重解节流
-`fluid.resolve_every`（默认 1，即方法行为不变；K>1 时在活跃工序类型集不变的前提下
-最多每 K 个决策点重解一次），作为 §4.9 摊销的显式实现，并作为敏感性研究报告。
-
-**稿件须相应修改**：Eq. (26) 的 χ(t) 定义应删去空闲机器集分量；§4.9 的 ζ 需给出
-实测值而非断言其小。
-
----
-
-## 8. 预注册判定规则（在跑主实验**之前**确定，避免事后择优）
-
-本节在 Phase 0/1 完成、算例重建之后、主实验开跑之前定稿。§8.3 的旧数值全部作废
-（那些是在 ρ_sys≈0.47、常数 DDT 的旧算例上测的），此处按新设计重述。
-
-### 8.1 主判据
-
-- **主指标**：main 档 15 个算例（ρ_sys=1.6，DDT∈{700,900,1100,1400,1800}×S∈{50,100,150}）
-  上的订单按时达成率 η，实例级配对 Wilcoxon 符号秩检验，Holm–Bonferroni 校正后 α = 0.05。
-- **主要对照**：FSHGRL vs **最强单条调度规则**。该规则由 `run_05` 的规则评测结果选出，
-  不由作者指定；重建算例上的实测为 SPT（η=0.6149，次强者 MWKR 0.4120）。
-  次要对照：全部 11 个消融变体与三个学习基线。
-- **成功判据**：校正后 p < 0.05 **且** Cliff's δ ≥ 0.33（中等以上效应量）。
-  仅有显著性而效应量微弱不算成立。
-
-### 8.2 机制判据（每一条都可能落空，落空就如实写）
-
-| 编号 | 判据 | 落空时怎么写 |
-|---|---|---|
-| C3 | FSHGRL vs FSHGRL-RP（同基数随机剪枝）的差值 > 0 且显著 | 若不显著，则流体引导等价于单纯缩小动作空间，稿件必须撤回"引导的内容有价值"这一论断，只保留动作空间界的论断 |
-| C-OBJ | FSHGRL vs FSHGRL-MaxMin > 0 | 若 max-min 不劣，则 §3.3"均衡型目标与计数型准则错配"的论证不成立，应改回 max-min 并删去该论证 |
-| C-NOOP | 训练后策略的 no-op 使用率 > 2% **且** FSHGRL vs FSHGRL-NoNoOp > 0 | 若使用率≈0 或无增益，**从方法中撤掉 no-op**，不保留不起作用的机制；§4.5.3 相应删除 |
-| C-BC | FSHGRL vs FSHGRL-NoBC > 0，且 FSHGRL 终点 > 热启动起点 | 若终点 ≈ 起点，则相对 SPT 的增益是克隆来的而非学出来的，必须在正文明说，不能把它算作方法的贡献 |
-
-### 8.2b 等预算协议（本轮实测采用的训练预算）
-
-`configs/algo.yaml` 推荐的预算是 250 epoch。本轮在 4 核机器上实测约 78 s/epoch，
-单 run 约 5.4 h，而完整 run 矩阵是 15 个配置 × 5 个种子 —— 数百小时，一次会话内
-跑不完。因此本轮采用**统一 60 epoch 的等预算协议**：
-
-- **所有方法**（主方法、全部消融变体、全部学习基线）一律训练 60 个 epoch，
-  没有任何方法拿到更多预算。等预算是可比性的前提，不是可以商量的细节。
-- 60 这个数字由学习曲线定：主方法 eta_val 在 ep0/ep10/ep20 分别为
-  0.510/0.682/0.695，增益已明显放缓，60 epoch 足以分辨方法间差异。
-- `checkpoint_best.pt` 只在验证时刷新（每 10 epoch），所以即使进程在第 62 个
-  epoch 才被停掉，该 checkpoint 仍只反映 ≤60 epoch 的策略。
-- 规则基线不训练，不受该预算影响。
-
-**等 epoch 不等于等交互步数。** 主动空闲让每个 episode 的决策点变多：实测主方法
-约 3100 步/epoch，FSHGRL-NoNoOp 约 2300 步/epoch，相差约三成。受影响最大的恰好是
-效应量最大的那个消融，因此必须两种口径都查，而不是挑对自己有利的那个。把所有 run
-截断到共同的步数上限后，排序与最好验证分完全不变（0.695 / 0.678 / 0.545），
-因为各 run 都在上限之前就已达峰。`run_11` 现在自动做这项检查并产出
-`result/budget_check.csv`，两种口径给出不同排序时会打印警告。
-
-**该预算下策略尚未收敛，这一点必须一并写明。** 三个 run 的 eta_val 都在 ep10–20 达到
-峰值后回落（主方法 0.682 → 0.695 → 0.575）。已排除训练故障：value_loss 从 0.0034
-稳定降到 0.0010，policy_loss 在零附近，归一化熵稳定在约 0.75（|A_f|≈4.8）。
-也就是说策略仍处在高熵、未收敛的阶段，贪心读出在边界决策上翻转，5 个验证算例上
-η 的量化步长是 1/80，0.12 的摆动约等于 10 张订单，与该熵水平相符。
-`checkpoint_best.pt` 按验证集择优，对所有方法一视同仁，因此比较仍然可比；
-但**报告的是早期训练的工作点，不是收敛点**，绝不能说成"训练至收敛"。
-
-**论文中必须写明**：报告的对比是在 60 epoch 等预算下取得的，低于推荐的 250 epoch；
-全预算的完整 run 矩阵留给复现者按 README §8 执行。把等预算的结果说成全预算的结果
-是虚报。
-
-### 8.2c 验证档的结论不能外推到测试档（实测警告）
-
-验证档只有 5 个算例，且用于 checkpoint 择优；测试档有 15 个算例、从不参与选择。
-二者已经实测出现**方向相反**的结论：
-
-| 对比 | 验证档（5 算例） | 测试档（15 算例） |
-|---|---|---|
-| FSHGRL-NoNoOp vs SPT | 0.545 vs 0.510（**+0.035**） | 0.576 vs 0.603（**−0.027**） |
-
-因此本文的一切结论一律以**测试档**为准，验证档只用于 checkpoint 择优，
-其数值不得作为结果报告，也不得用来预判测试档的结论。训练过程中看到的
-`eta_val` 只是选 checkpoint 的依据，不是成绩。
-
-### 8.2d 测量设计本身会制造假结论（实测反例）
-
-RQ1 的"最优性间隙"原先在一个与训练**不同构**的 small 档上测（3 阶段/2 机/2 产品/
-工时[20,120]，而训练是 5/5/5/[25,450]）。测出来的不是间隙，是间隙叠加结构外推误差：
-
-| small 档设计 | FSHGRL 达最优 | 最优规则达最优 | 读起来像 |
-|---|---|---|---|
-| 不同构（3/2/2，S 6-12） | 77.6% | **85.7%** | 学习方法不如一条规则 |
-| 同构（5/5/5，S 6-12） | 68.3% | 69.8% | 基本持平 |
-| 同构且入训练规模（S 12-25） | **63.3%** | 56.3% | 学习方法领先 |
-
-同一个方法、同一个 checkpoint，只因为参照算例的设计不同，结论从"输给规则"翻转为
-"领先规则"。分布内子集（S=20、25）上分别为 55% vs 52%、57% vs 46%，方向一致。
-
-**教训**：一个不利结论出现时，先确认它测的是不是想测的量。这里若照旧发表，等于
-用错误的测量设计给自己的方法判了负。反过来同样成立——有利结论也要过同一道检查。
-
-### 8.2e C3 的两种版本必须分开报告（固定策略 vs 学习策略）
-
-C3 问的是"流体引导的**内容**是否有价值，而不只是缩小了动作空间"。这个问题在
-**固定策略**与**学习策略**下答案可能不同，两者都要报。
-
-**固定策略版本（SPT，main 档 15 算例，新算例实测）：**
-
-| 剪枝模式 | η | \|A_f\| | 相对不剪枝 |
-|---|---|---|---|
-| 不剪枝 | 0.6242 | 3.95 | — |
-| **流体** | **0.6033** | **2.48** | **−0.021** |
-| 同基数随机 | 0.4020 | 2.58 | −0.222 |
-| 同基数最小负载 | 0.3564 | 2.78 | −0.268 |
-
-流体剪枝的解质量代价是同基数随机剪枝的 **1/10.6**。且两个对照组的 \|A_f\| 反而
-**略大于**流体（2.58 / 2.78 vs 2.48）——它们没有因候选更少而吃亏，差距全部来自
-"保留了哪些动作"。这是 C3 在固定策略下成立的直接证据（+0.2013），且在作废前的
-旧算例上测得 +0.195，两套算例上复现。
-
-**学习策略版本**：即 `FSHGRL` vs `FSHGRL-RP`，由 run_11 裁决。验证档初步显示
-两者相差 0.0125（远小于单 run 0.12 的摆动），很可能判不出方向。
-
-**若两个版本结论不一致（固定策略成立、学习策略判不出）**，这不是矛盾，而是本文
-最值得报告的观察之一：**动作空间先验对固定规则的增益，远大于对学习策略的增益，
-因为 PPO 能自行补偿一个较差的先验**。届时须同时报告两版结果，并明确写出
-"学习策略上证据不足"而非"学习策略上无效"——n=1 且效应量落在噪声量级时，
-两者不是一回事。
-
-### 8.3 若主判据不成立
-
-不再追加机制，改为**收窄论断到成立的区间**——按负荷与交期紧度分层报告，
-明确写出成立的区间与不成立的区间（例如"在紧交期档优于全部基线；在 DDT≥1400 的
-宽松档与 SPT 相当"），并如实报告最强规则的强势。带着不成立的 claim 写论文是过度承诺。
-
-### 8.4 必须报告的负面结果（无论主判据是否成立）
-
-- 剪枝相对不剪枝的解质量代价（旧算例实测 −0.045，新算例待测）。
-- 流体解作为**优先级信号**（直接给动作打分）时的表现。旧算例上实测劣于 SPT
-  −0.083，即它的价值在于**保留哪些动作**而不在于给动作打分；新算例上须重测，
-  结论若反转同样如实写。
-- Phase 0 记录的两条观察（§7.2b）：修复前 FSHGRL 与 Random 不可区分；
-  旧算例设计下 MOR/FIFO/EDD 的 η 逐算例完全相同。这两条是算例设计与实现缺陷
-  如何伪装成"方法有效/无效"的直接证据，属于本文方法论贡献的一部分。
-- ζ 的实测值（约 0.6，而非稿件原先默认的"很小"），以及 LP 占 rollout 用时的比例。
-
----
-
-## 9. 新论文预注册：Commit-or-Hold（CoH）试点
-
-原稿《Fluid-Guided Sparse Heterogeneous Graph RL for Real-Time Scheduling in DFFSP-HFOI》已录用，
-§1–§8 对应的实验全部完成。本节起服务新论文：**超负荷柔性流水车间里非延迟调度的代价，以及
-学会保留产能的策略**。研究问题、证据与方法设计见 README §0 与新论文稿；
-本节只写**在试点开跑前固定**的判定规则，`scripts/_pilot_report.py` 按此机械核对。
-
-### 9.1 试点设计
-
-- 配置（`configs/coh/`）：P0 最小骨干（无流体、MLP 编码、无动作自注意力、无 BC、无势函数
-  塑形、保留 no-op、候选按"可救优先"暴露）；P1 = P0 + 承诺评估器 p̂(o|s)；P2 = P1 + 显式等待
-  门控 + 等待前景评估器 ĥ(s)；P3 = 第一波胜者 + 纯 on-policy（`exploration.epsilon0 = 0`）。
-- 每配置 3 个独立 run；预算 = 主方法的 `ppo.total_epochs`（250 epoch）；训练算例分布与主方法
-  相同（`param_table`）。
-- 评测：main 档 15 算例，`checkpoint_best` 贪心 1 次；八条规则在**同一环境设置**（可救优先
-  暴露、无流体）下重评，写 `result/pilot_rules.csv`。
-- 试点 run（`coh_p*_run*`）只用于选配置，**不进最终矩阵**；最终矩阵另起 5 个 run。
-
-### 9.2 指标
-
-- T(P)：紧档（DDT ∈ {700, 900, 1100}，9 算例）逐算例 3-run 均值的算例均值；
-- L(P)：宽档（DDT ∈ {1400, 1800}，6 算例）同上；
-- V(P)：各 run 末 10 次验证 η 极差的均值（训练稳定性）；
-- W(P, Q)：紧档逐算例 3-run 均值 P > Q 的算例数。
-
-### 9.3 采纳规则（先于任何试点结果写定）
-
-| 比较 | 采纳当且仅当 |
-|---|---|
-| P1 vs P0（承诺评估器） | [T 提高 ≥ 0.02 且 W ≥ 7/9] 或 [V 减半且 T ≥ T(P0) − 0.01]；且 L ≥ L(P0) − 0.03 |
-| P2 vs P1（等待门控） | 同一规则，对照为 P1 |
-| P3 vs 第一波胜者（纯 on-policy） | T ≥ T(胜者) − 0.01 且 L ≥ L(胜者) − 0.03（平局取简） |
-
-- 宽档比对照低 > 0.03 一票否决，论文里改报"紧档增益、宽档代价"。
-- P0 池化 η < 0.70（NoAll 的水平）时，加跑 P0 + 动作自注意力 3 run 作为骨干候选，规则同上。
-- 未采纳的组件在论文中如实报告"无增益"，不改规则事后补救；方法创新相应退为分析贡献
-  （非延迟的代价 + 迁移 + 可解释）。
-
-### 9.4 最终矩阵（试点后执行，框架先定）
-
-- 工况网格：ρ ∈ {0.8, 1.2, 1.6, 2.0} × DDT ∈ {700, 1100, 1800} × S ∈ {50, 100, 150}；训练分布
-  随机化 ρ ∈ [0.8, 2.2]、DDT ∈ [400, 2000]；small 档与 ood 档沿用。
-- 对比：8 条规则（SPT-Idle 阈值按工况在验证档调优）；同网络去等待（= 非延迟的代价）；三个
-  学习基线（修复实现后、给等待、等交互步数）；small 档 CP-SAT 离线最优与滚动精确重优化。
-- 消融：去 critic 三处、去 ĥ、去 c(s)、单体 softmax（no-op 作为一行候选）、EDD 暴露。
-- 判据：主判据 = CoH vs 最强非延迟策略，逐算例配对 Wilcoxon + Holm，Cliff δ ≥ 0.33；紧档与
-  宽档分别报告；每格 5 run。
-- 已录用的 FSHGRL 不作对比方法，只引用其仿真器与问题模型。
+- 任一档内 CoH 不优于最强规则或非延迟策略的事实；
+- 任一消融不劣于主方法的事实；
+- `SPT-Idle*` 与 `OracleRule` 是逐算例事后选择，是规则族的上界而非可部署的规则；
+- 承诺评估器的校准误差（ECE）与 Brier；
+- 训练稳定性：末 10 次验证极差、崩塌次数、最佳 checkpoint 出现的步数分布。
