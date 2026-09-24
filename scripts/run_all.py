@@ -1,35 +1,58 @@
-"""顺序执行 01-13 全部实验。任一步失败即停。
+"""按顺序跑完全部实验：数据 -> 训练（主方法、消融、基线）-> 评测 -> 精确参照 -> 统计 -> 图 -> 回填。
 
-重跑时的行为因脚本而异，不是"自动跳过已完成步骤"：
-  * run_01 跳过已生成的算例档，run_02-04 跳过已有 checkpoint_best.pt 的训练 run；
-  * run_07 只补 exact_results.csv 中缺失的算例，run_09 只训练未训满预算的 run；
-  * run_05、06、08、10 会先清空自身产物再全部重算（数小时，且含随机 rollout 的数会变）；
-  * run_11-13 只读结果文件，重算很快。
-已有部分结果时，按 README §0 单独运行剩下的脚本，不要用本脚本从头重跑。
+    python scripts/run_all.py [--runs 5] [--total-steps N] [--workers W] [--jobs J] [--smoke] [--from run_05]
+
+--smoke 用极小预算走一遍全流程（约半小时，用来验证链路），产物不能用于论文。
+训练脚本会跳过已训满预算的 run，评测与统计每次重算。
 """
-import subprocess
-import sys
-from pathlib import Path
+import argparse
 
-HERE = Path(__file__).resolve().parent
-STEPS = [
-    "run_01_prepare_data.py",
-    "run_02_train_main.py",
-    "run_03_train_ablations.py",
-    "run_04_train_baselines.py",
-    "run_05_eval_main.py",
-    "run_06_pruning_analysis.py",
-    "run_07_exact_optimality.py",
-    "run_08_arrival_ood.py",
-    "run_09_reward_exploration.py",
-    "run_10_case_study.py",
-    "run_11_aggregate_stats.py",
-    "run_12_make_figures.py",
-    "run_13_fill_placeholders.py",
-]
+from _bootstrap import run_py, step
 
-for name in STEPS:
-    print("\n" + "#" * 72 + f"\n# {name}\n" + "#" * 72, flush=True)
-    if subprocess.call([sys.executable, str(HERE / name)]) != 0:
-        sys.exit(f"[FAIL] {name} 失败，后续步骤已中止")
-print("\n[ALL OK] 全部实验数据已产出，见 result/ 与 result/paper_values.tex", flush=True)
+ORDER = ["run_01_prepare_data.py", "run_02_train_coh.py", "run_03_train_ablations.py",
+         "run_04_train_baselines.py", "run_05_eval.py", "run_06_exact_reference.py",
+         "run_07_stats.py", "run_08_figures.py", "run_09_fill_placeholders.py"]
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--runs", type=int, default=None)
+    parser.add_argument("--total-steps", type=int, default=None)
+    parser.add_argument("--workers", type=int, default=None)
+    parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--from", dest="start", default=None, help="从某一步开始（脚本名前缀，如 run_05）")
+    parser.add_argument("--paper-dir", default=None)
+    args = parser.parse_args()
+    runs = 1 if args.smoke else args.runs
+    steps = 3000 if args.smoke else args.total_steps
+    started = args.start is None
+    for name in ORDER:
+        if not started:
+            started = name.startswith(args.start)
+            if not started:
+                continue
+        step(name)
+        extra = []
+        if name.startswith(("run_02", "run_03", "run_04")):
+            if runs:
+                extra += ["--runs", runs]
+            if steps:
+                extra += ["--total-steps", steps]
+            if args.workers:
+                extra += ["--workers", args.workers]
+        if name.startswith("run_04") and args.smoke:
+            # 两个 DQN 基线每个 epoch 做 replay_ratio x 新转移数 步梯度；冒烟在 CPU 上只走通链路
+            extra += ["--override", "dqn.replay_ratio=0.002"]
+        if name.startswith(("run_05", "run_06")):
+            extra += ["--jobs", args.jobs]
+        if name.startswith("run_06") and args.smoke:
+            extra += ["--cpsat-time-limit", 60, "--online-time-limit", 10]
+        if name.startswith("run_09") and args.paper_dir:
+            extra += ["--paper-dir", args.paper_dir]
+        run_py(f"scripts/{name}", *extra)
+    print("\n[ALL DONE] 全部步骤完成；论文数值在 result/paper_values.tex，表格在 result/tables/", flush=True)
+
+
+if __name__ == "__main__":
+    main()

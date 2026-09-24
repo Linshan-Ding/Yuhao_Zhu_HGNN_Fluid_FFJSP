@@ -11,6 +11,7 @@ def train_tags(tags, title):
     parser.add_argument("--runs", type=int, default=None, help="每个配置的独立 run 数（默认 runtime.n_runs）")
     parser.add_argument("--total-steps", type=int, default=None)
     parser.add_argument("--workers", type=int, default=None)
+    parser.add_argument("--override", nargs="*", default=[], help="key=value，透传给 train.py（冒烟用）")
     args = parser.parse_args()
     from configs.config import load_config
     n_runs = args.runs or int(load_config().get("runtime.n_runs", 5))
@@ -28,6 +29,8 @@ def train_tags(tags, title):
             extra = ["--total-steps", budget, "--seed", run_seed(i)]
             if args.workers:
                 extra += ["--workers", args.workers]
+            if args.override:
+                extra += ["--override", *args.override]
             if (run_dir / "checkpoint_last.pt").exists():
                 extra.append("--resume")
             run_py("train.py", "--config", *overlays, "--run-name", name, *extra)

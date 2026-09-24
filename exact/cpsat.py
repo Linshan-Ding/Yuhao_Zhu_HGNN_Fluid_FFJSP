@@ -1,20 +1,7 @@
-"""离线 clairvoyant 精确解、在线滚动重优化与解回放校验（稿件 §3.2、§5.8）。
+"""精确参照：CP-SAT 离线最优（知道全部到达）与滚动精确重优化（只知道已到达的订单）。
 
-同一个连续时间模型，两个免授权求解器：
-  * CP-SAT（OR-Tools）—— 在保序的整数时间尺度上求解（见 `_TimeScale`）。工时为整数时
-    它与连续时间模型逐解等价，不是近似；
-  * HiGHS MILP（SciPy 自带的 `scipy.optimize.milp`）—— 稿件 Eqs. (1)-(11) 的逐条直译，
-    含丢弃变量 v_s、析取排序变量 y 与大常数 L。
-一致性检查是双向的：HiGHS 证得的最优值必须等于 CP-SAT 的最优值；CP-SAT 的最优排程
-代入字面 MILP 的约束矩阵必须逐行满足（`milp_certificate`）。两个求解器都证得最优而
-数值不同，说明两份公式化之一有错。
-
-eta_off 是知道全部未来到达才能达到的离线最优。`solve_online_reoptimization` 是在线
-参照：每个到达时刻只对已知订单精确重排，不看未来。它精确但短视，既不是在线策略的
-上界也不是下界。
-
-全部排程都以连续时间的左对齐形式返回；`replay_check` 除了逐条核对约束，还能驱动
-真实的离散事件环境逐道工序回放，核对开工时刻与按时完工数。
+两者都在整数时间网格上求解（工时为整数，网格保序），排程回放进离散事件环境核对一致。
+滚动重优化是"优化完美但不能预判"的参照：每个到达时刻对已知订单重排，已开工工序冻结。
 """
 from __future__ import annotations
 
@@ -251,169 +238,7 @@ def solve_cpsat(problem: Problem, time_limit_s: float = 3600.0, workers: int = 8
 
 
 # --------------------------------------------------------------------------- #
-# 稿件 Eqs. (1)-(11) 的 MILP：HiGHS 求解与证书核对共用同一份矩阵
-# --------------------------------------------------------------------------- #
-@dataclass
-class _MilpStructure:
-    c: np.ndarray
-    matrix: object                        # scipy.sparse.csr_matrix
-    row_lb: np.ndarray
-    row_ub: np.ndarray
-    col_lb: np.ndarray
-    col_ub: np.ndarray
-    integrality: np.ndarray
-    x_col: Dict[Tuple[int, int, int], int]
-    y_col: Dict[Tuple[int, Tuple[int, int], Tuple[int, int]], int]
-    big_l: float
-
-
-def _milp_structure(problem: Problem) -> _MilpStructure:
-    """列依次为 z_s、v_s、C_sj（下标 2S + s*J + j）、x_sjm、y；目标为 min -sum z。"""
-    from scipy.sparse import coo_matrix
-
-    inst = problem.inst
-    S, J = problem.n_order, problem.n_stage
-    L = float(_horizon(problem))
-    n = 2 * S + S * J
-    x_col: Dict[Tuple[int, int, int], int] = {}
-    for s in range(S):
-        for j in range(J):
-            for m in problem.eligible[problem.task_of(s, j)]:
-                x_col[(s, j, m)] = n
-                n += 1
-    ops_on_machine: Dict[int, List[Tuple[int, int]]] = {m: [] for m in range(problem.n_machine)}
-    for s in range(S):
-        for j in range(J):
-            for m in problem.eligible[problem.task_of(s, j)]:
-                ops_on_machine[m].append((s, j))
-    y_col = {}
-    for m, ops in ops_on_machine.items():
-        for a in range(len(ops)):
-            for b in range(a + 1, len(ops)):
-                y_col[(m, ops[a], ops[b])] = n
-                n += 1
-
-    rows, cols, vals, lb, ub = [], [], [], [], []
-
-    def add(coeffs, lo, hi):
-        r = len(lb)
-        for col, val in coeffs:
-            rows.append(r)
-            cols.append(col)
-            vals.append(val)
-        lb.append(lo)
-        ub.append(hi)
-
-    C = lambda s, j: 2 * S + s * J + j                                      # noqa: E731
-    for s in range(S):
-        add([(s, 1.0), (S + s, 1.0)], -np.inf, 1.0)                          # Eq. (3)
-        for j in range(J):
-            task = problem.task_of(s, j)
-            add([(x_col[(s, j, m)], 1.0) for m in problem.eligible[task]] + [(S + s, 1.0)],
-                1.0, 1.0)                                                    # Eq. (2)
-            dur = [(x_col[(s, j, m)], -float(inst.proc_times[task, m])) for m in problem.eligible[task]]
-            if j == 0:
-                add([(C(s, 0), 1.0)] + dur, float(inst.arrival_times[s]), np.inf)       # Eq. (4)
-            else:
-                add([(C(s, j), 1.0), (C(s, j - 1), -1.0)] + dur, 0.0, np.inf)          # Eq. (5)
-        add([(C(s, J - 1), 1.0), (s, L)], -np.inf, float(inst.due_dates[s]) + L)       # Eq. (9)
-    for (m, (s1, j1), (s2, j2)), y in y_col.items():                                    # Eqs. (7)-(8)
-        x1, x2 = x_col[(s1, j1, m)], x_col[(s2, j2, m)]
-        p1 = float(inst.proc_times[problem.task_of(s1, j1), m])
-        p2 = float(inst.proc_times[problem.task_of(s2, j2), m])
-        # C2 >= C1 + p2 - L(1 - y) - L(2 - x1 - x2)
-        add([(C(s2, j2), 1.0), (C(s1, j1), -1.0), (y, -L), (x1, -L), (x2, -L)], p2 - 3 * L, np.inf)
-        # C1 >= C2 + p1 - L y - L(2 - x1 - x2)
-        add([(C(s1, j1), 1.0), (C(s2, j2), -1.0), (y, L), (x1, -L), (x2, -L)], p1 - 2 * L, np.inf)
-
-    matrix = coo_matrix((vals, (rows, cols)), shape=(len(lb), n)).tocsr()
-    c = np.zeros(n)
-    c[:S] = -1.0                                                             # Eq. (1)：max sum z
-    integrality = np.ones(n)
-    col_lb, col_ub = np.zeros(n), np.ones(n)
-    integrality[2 * S: 2 * S + S * J] = 0                                    # C 连续、非负
-    col_ub[2 * S: 2 * S + S * J] = np.inf
-    return _MilpStructure(c=c, matrix=matrix, row_lb=np.asarray(lb), row_ub=np.asarray(ub),
-                          col_lb=col_lb, col_ub=col_ub, integrality=integrality,
-                          x_col=x_col, y_col=y_col, big_l=L)
-
-
-def solve_milp(problem: Problem, time_limit_s: float = 3600.0) -> ExactResult:
-    """稿件 Eqs. (1)-(11) 的 MILP 直译，SciPy 自带的 HiGHS 分支定界求解，免授权。"""
-    from scipy.optimize import Bounds, LinearConstraint, milp
-
-    inst, S, J = problem.inst, problem.n_order, problem.n_stage
-    started = time.perf_counter()
-    ms = _milp_structure(problem)
-    res = milp(ms.c, integrality=ms.integrality, bounds=Bounds(ms.col_lb, ms.col_ub),
-               constraints=LinearConstraint(ms.matrix, ms.row_lb, ms.row_ub),
-               options={"time_limit": float(time_limit_s), "mip_rel_gap": 0.0, "disp": False})
-    seconds = time.perf_counter() - started
-    bound = getattr(res, "mip_dual_bound", None)
-    upper = min(-float(bound), S) / max(S, 1) if bound is not None and np.isfinite(bound) else float("nan")
-    if res.x is None:
-        status = {2: "INFEASIBLE", 3: "UNBOUNDED"}.get(res.status, "NO_SOLUTION")
-        return ExactResult(eta=float("nan"), status=status, solver="highs-milp",
-                           seconds=seconds, assignment={}, upper=upper)
-
-    x = res.x
-    ops = {}
-    for s in range(S):
-        if x[s] < 0.5:
-            continue
-        for j in range(J):
-            m = next(m for m in problem.eligible[problem.task_of(s, j)] if x[ms.x_col[(s, j, m)]] > 0.5)
-            end = float(x[2 * S + s * J + j])
-            ops[(s, j)] = (m, end - float(inst.proc_times[problem.task_of(s, j), m]))
-    dur = lambda s, j, m: float(inst.proc_times[problem.task_of(s, j), m])  # noqa: E731
-    shifted = _left_shift(ops, dur, {s: float(inst.arrival_times[s]) for s in range(S)}, {})
-    assignment = {key: (m, start, start + dur(key[0], key[1], m)) for key, (m, start) in shifted.items()}
-    completed = int(round(float(np.sum(x[:S]))))
-    status = "OPTIMAL" if res.status == 0 else ("TIME_LIMIT" if res.status == 1 else f"HIGHS_{res.status}")
-    return ExactResult(eta=completed / max(S, 1), status=status, solver="highs-milp",
-                       seconds=seconds, assignment=assignment, n_completed=completed,
-                       upper=upper if res.status != 0 else completed / max(S, 1))
-
-
-def milp_certificate(problem: Problem, result, tol: float = 1e-6) -> Dict[str, object]:
-    """把一份排程代入字面 MILP（Eqs. 1-11）的约束矩阵，逐行核对。
-
-    由排程重建全部决策变量：按时完工的订单 z=1，全部工序排上但超期的订单 z=v=0，
-    其余订单 v=1（丢弃，完工变量取到达时刻）；x 取所用机器；C 取完工时刻；同机的
-    两道工序按开工先后定 y。任何一行不满足都说明 CP-SAT 模型与 MILP 不是同一个问题。
-    """
-    inst, S, J = problem.inst, problem.n_order, problem.n_stage
-    ms = _milp_structure(problem)
-    vec = np.zeros(ms.c.size)
-    assignment = result.assignment
-    for s in range(S):
-        complete = all((s, j) in assignment for j in range(J))
-        if complete:
-            on_time = assignment[(s, J - 1)][2] <= float(inst.due_dates[s]) + DUE_TOL
-            vec[s] = 1.0 if on_time else 0.0
-            for j in range(J):
-                m, _, end = assignment[(s, j)]
-                vec[ms.x_col[(s, j, m)]] = 1.0
-                vec[2 * S + s * J + j] = end
-        else:
-            vec[S + s] = 1.0
-            vec[2 * S + s * J: 2 * S + (s + 1) * J] = float(inst.arrival_times[s])
-    for (m, op1, op2), y in ms.y_col.items():
-        if op1 in assignment and op2 in assignment and assignment[op1][0] == m == assignment[op2][0]:
-            vec[y] = 1.0 if assignment[op1][1] < assignment[op2][1] else 0.0
-
-    activity = ms.matrix @ vec
-    row_violation = float(np.max(np.concatenate([ms.row_lb - activity, activity - ms.row_ub, [0.0]])))
-    col_violation = float(np.max(np.concatenate([ms.col_lb - vec, vec - ms.col_ub, [0.0]])))
-    violation = max(row_violation, col_violation)
-    objective = int(round(float(vec[:S].sum())))
-    return {"ok": bool(violation <= tol and objective == result.n_completed),
-            "max_violation": violation, "n_rows": int(ms.matrix.shape[0]),
-            "objective": objective}
-
-
-# --------------------------------------------------------------------------- #
-# 在线滚动重优化：每个到达时刻只对已知订单精确重排
+# 排程校验的辅助类型（与 CP-SAT 模型共用）
 # --------------------------------------------------------------------------- #
 def solve_online_reoptimization(problem: Problem, time_limit_per_solve: float = 60.0,
                                 workers: int = 1, tie_break_work: float = 1.0) -> OnlineResult:
@@ -544,10 +369,7 @@ def _replay_in_env(problem: Problem, assignment: Schedule, cfg, tol: float) -> T
     from configs.config import Config
     from environment.env import NOOP, WAITING, SchedulingEnv
 
-    quiet = Config(cfg.to_dict())                     # 塑形项不改变动态，关掉以免逐步求解流体 LP
-    quiet.set("reward.potential_weight", 0.0)
-    quiet.set("reward.fluid_align_weight", 0.0)
-    env = SchedulingEnv(problem.inst, quiet)
+    env = SchedulingEnv(problem.inst, Config(cfg.to_dict()))
     queue = sorted(assignment.items(), key=lambda kv: (kv[1][1], kv[0]))
     issues: List[str] = []
     head = 0
@@ -577,7 +399,7 @@ def _replay_in_env(problem: Problem, assignment: Schedule, cfg, tol: float) -> T
 
 
 def replay_check(problem: Problem, result, cfg=None, tol: float = 1e-6) -> Dict[str, object]:
-    """核对一份排程与问题定义、与仿真器是否一致（论文占位符 P-MILPCHK）。
+    """核对一份排程与问题定义、与仿真器是否一致。
 
     静态核对：机器合格、工时、到达与前后序、同机不重叠、按时完工数与求解器报告的
     一致。给出 cfg 时再驱动真实的离散事件环境回放，环境自己记下的按时完工数必须与

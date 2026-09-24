@@ -117,6 +117,7 @@ if not ZH:
 
     # ---- 3: figure files --------------------------------------------------
     included = re.findall(r"\\includegraphics(\[[^\]]*\])?\{([^}]+)\}", body)
+    included = [(k, t) for k, t in included if "#" not in t]   # macro definitions (\datafig) are not inclusions
     for opts, target in included:
         if not (ROOT / target).exists():
             problems.append(f"missing figure file: {target}")
