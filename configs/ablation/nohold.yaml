@@ -1,0 +1,4 @@
+# CoH-NoHold：不给保留产能动作 —— 同一网络的 non-delay 版本，用来量"非延迟的代价"。
+variant: {name: CoH-NoHold}
+action_space: {allow_noop: false}
+coh: {gate: false, hold_critic: false}

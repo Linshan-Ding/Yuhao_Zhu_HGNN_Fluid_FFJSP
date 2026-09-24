@@ -1,207 +1,180 @@
-"""训练入口：装配 config -> 算例 -> 环境 -> 网络 -> PPO 循环 -> 落盘。
+"""训练入口：多进程采样 + 批量更新，预算按环境交互步数计。
 
-面向复现者的是 scripts/run_XX_*.py 零参数层；本文件是内部/调参接口。
+    python train.py --config coh.yaml --run-name coh_run1 [--seed S] [--workers W] [--total-steps T]
+                    [--method coh|rule_ppo|dqn|hdqn] [--episodes-per-epoch E] [--device auto|cpu]
+                    [--override key=value ...] [--resume]
+
+每个 epoch：广播权重 -> worker 采 episodes_per_epoch 条 episode -> 批量更新 -> 定期在 val 档贪心验证。
+checkpoint_best.pt 按验证 η 刷新，checkpoint_last.pt 每个 epoch 覆盖（含优化器，可 --resume）。
 """
 from __future__ import annotations
 
 import argparse
+import secrets
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
-from agent.baselines.rules import select as rule_select
-from agent.buffer import RolloutBuffer
-from agent.networks import ActorCritic, obs_to_tensors
-from agent.ppo import PPOAgent
+from agent.dqn import DQNLearner, HierDQNLearner
+from agent.ppo import PPOLearner
+from agent.workers import METHODS, WorkerPool
 from configs.config import ROOT, load_config
 from data.dataset import read_index
-from data.generator import load_instance_csv, sample_training_instance
-from environment.env import SchedulingEnv, is_noop
-from result.logger import CsvLogger, VisdomLogger
+from result.logger import CsvLogger
 
-LOG_COLUMNS = ["iter", "steps", "eta_val", "eta_train", "reward", "policy_loss", "value_loss",
-               "entropy", "approx_kl", "clip_frac", "ratio_max", "ratio_bound", "epsilon",
-               "sps", "fluid_solve_count", "fluid_cache_hit", "zeta", "phi_star_mean",
-               "a_f_mean", "commit_bce", "commit_brier", "hold_bce", "n_labels", "held_share",
-               "elapsed_s"]
+LOG_COLUMNS = ["iter", "steps", "episodes", "eta_val", "eta_train", "return", "ep_len", "a_mean",
+               "noop_rate", "p_hold", "held_share", "policy_loss", "value_loss", "entropy", "approx_kl",
+               "clip_frac", "ratio_max", "update_epochs_done", "commit_bce", "commit_brier", "hold_bce",
+               "n_labels", "q_loss", "q_mean", "n_updates", "epsilon", "lr", "collapse",
+               "sps_collect", "sps_total", "t_collect", "t_update", "t_val", "elapsed_s"]
 
 
-def behaviour_clone(net, cfg, rng, param_table, device, steps: int, expert: str) -> float:
-    """用最强调度规则做行为克隆热启动（稿件 §4.8.3）。
-
-    动机是可证的下界而不是调参技巧：PPO 从随机初始化出发时，早期策略近似均匀，
-    其性能远低于一条好规则；先把策略克隆到规则水平，PPO 只需在此之上改进。
-    这条规则在论文中如实报告为方法的一部分，不是隐藏的预训练。
-
-    交叉熵在**完整动作集**（含 no-op）上归一化。曾经试过把 no-op 屏蔽掉，理由是
-    "别把规则永不空闲的限制一起克隆过来"，实测是错的：屏蔽后 no-op 那一维拿不到
-    任何梯度，其 logit 停留在随机初值上，贪心策略于是随机空转 —— BC 结束时
-    eta_val = 0.06，而专家 SPT 约为 0.6。热启动的意义正是**性能下界**，
-    "规则 + 随机空转"根本不构成下界。因此把 no-op 纳入分母、由专家标签把它压低，
-    起点即 non-delay 的规则水平；主动空闲这一自由度改由后续 PPO 的 epsilon-贪婪
-    探索（epsilon_0 = 0.3，no-op 被采样的概率不低于 epsilon/|A_f|）与熵正则去发现。
-    """
-    if steps <= 0:
-        return float("nan")
-    optimizer = torch.optim.Adam(net.parameters(), lr=float(cfg.get("ppo.lr")))
-    collected, losses = 0, []
-    while collected < steps:
-        env = SchedulingEnv(sample_training_instance(rng, param_table), cfg)
-        while not env.done and collected < steps:
-            actions, sol = env.candidate_actions()
-            if not actions:
-                break
-            expert_idx = rule_select(expert, env, actions, rng)
-            n_dispatch = sum(1 for a in actions if not is_noop(a))
-            if n_dispatch > 1:                         # 单个派工候选时没有可学的信息
-                obs = obs_to_tensors(env.observation(actions, sol), device)
-                logits, _ = net(obs, env.problem.n_stage)
-                loss = F.cross_entropy(logits.unsqueeze(0),
-                                       torch.tensor([expert_idx], device=device))
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(net.parameters(),
-                                               float(cfg.get("ppo.max_grad_norm", 0.5)))
-                optimizer.step()
-                losses.append(float(loss.item()))
-            collected += 1
-            if env.step(actions[expert_idx])[1]:
-                break
-    return float(np.mean(losses)) if losses else float("nan")
+def build(method: str, cfg, device: torch.device, total_steps: int):
+    if method == "coh":
+        from agent.networks import ActorCritic
+        return PPOLearner(ActorCritic(cfg), cfg, device, total_steps)
+    if method == "rule_ppo":
+        from agent.baselines.rule_ppo import RulePolicyNet
+        return PPOLearner(RulePolicyNet(cfg), cfg, device, total_steps)
+    if method == "dqn":
+        from agent.baselines.dqn_nets import TripletQNet
+        return DQNLearner(TripletQNet(cfg), cfg, device, total_steps)
+    if method == "hdqn":
+        from agent.baselines.dqn_nets import HierQNet
+        return HierDQNLearner(HierQNet(cfg), cfg, device, total_steps)
+    raise ValueError(f"unknown method: {method}")
 
 
-def evaluate(net, cfg, instances, device, n_rollout: int = 1) -> float:
-    agent = PPOAgent(net, cfg, device)
-    scores = []
-    for inst in instances:
-        for _ in range(n_rollout):
-            env = SchedulingEnv(inst, cfg)
-            while not env.done:
-                actions, sol = env.candidate_actions()
-                if not actions:
-                    break
-                idx, _, _, _ = agent.act(env.observation(actions, sol),
-                                         env.problem.n_stage, 0.0, greedy=True)
-                if env.step(actions[idx])[1]:
-                    break
-            scores.append(env.eta)
-    return float(np.mean(scores)) if scores else 0.0
+def _parse_override(items):
+    out = {}
+    for item in items or []:
+        key, _, value = item.partition("=")
+        try:
+            out[key] = int(value) if value.isdigit() else float(value)
+        except ValueError:
+            out[key] = {"true": True, "false": False}.get(value.lower(), value)
+    return out
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", nargs="*", default=[])
     parser.add_argument("--run-name", required=True)
-    parser.add_argument("--epochs", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--workers", type=int, default=None)
+    parser.add_argument("--total-steps", type=int, default=None)
+    parser.add_argument("--method", choices=METHODS, default=None)
+    parser.add_argument("--episodes-per-epoch", type=int, default=None)
+    parser.add_argument("--device", choices=["auto", "cpu"], default=None)
+    parser.add_argument("--override", nargs="*", default=[], help="key=value，覆盖任意配置项（冒烟用）")
+    parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    if args.epochs is not None:
-        cfg.set("ppo.total_epochs", int(args.epochs))
-    total_epochs = int(cfg.get("ppo.total_epochs"))
-    rollout_episodes = int(cfg.get("ppo.rollout_episodes", 2))
+    for key, value in _parse_override(args.override).items():
+        cfg.set(key, value)
+    if args.total_steps is not None:
+        cfg.set("training.total_steps", int(args.total_steps))
+    if args.method is not None:
+        cfg.set("training.method", args.method)
+    if args.episodes_per_epoch is not None:
+        cfg.set("rollout.episodes_per_epoch", int(args.episodes_per_epoch))
+    if args.workers is not None:
+        cfg.set("rollout.workers", int(args.workers))
+    if args.device is not None:
+        cfg.set("runtime.update_device", args.device)
+    seed = args.seed if args.seed is not None else cfg.get("training.seed")
+    seed = int(seed) if seed is not None else secrets.randbits(31)
+    cfg.set("training.seed", seed)
 
-    device = torch.device("cuda" if (cfg.get("runtime.update_device") == "auto"
-                                     and torch.cuda.is_available()) else "cpu")
-    net = ActorCritic(cfg)
-    agent = PPOAgent(net, cfg, device)
+    method = str(cfg.get("training.method", "coh"))
+    total_steps = int(cfg.get("training.total_steps"))
+    episodes_per_epoch = int(cfg.get("rollout.episodes_per_epoch", 56))
+    val_every = int(cfg.get("rollout.val_every", 2))
+    workers = cfg.get("rollout.workers", "auto")
+    n_workers = WorkerPool.default_workers() if workers in (None, "auto") else int(workers)
+    use_cuda = cfg.get("runtime.update_device", "auto") == "auto" and torch.cuda.is_available()
+    device = torch.device("cuda" if use_cuda else "cpu")
+    torch.set_num_threads(max(1, (torch.get_num_threads() or 4) - n_workers) if device.type == "cpu" else 2)
 
     run_dir = ROOT / "result" / args.run_name
-    logger = CsvLogger(run_dir, LOG_COLUMNS)
+    resume = args.resume and (run_dir / "checkpoint_last.pt").exists()
+    torch.manual_seed(seed)
+    learner = build(method, cfg, device, total_steps)
+    learner.seed(seed)
+    epoch, steps, best, started_offset = 0, 0, -1.0, 0.0
+    if resume:
+        state = torch.load(run_dir / "checkpoint_last.pt", map_location=device, weights_only=False)
+        learner.load_state_dict(state["learner"])
+        epoch, steps, best = int(state["epoch"]) + 1, int(state["steps"]), float(state["best"])
+        started_offset = float(state.get("elapsed_s", 0.0))
+        print(f"[{args.run_name}] 从 epoch {epoch}（{steps} 步）续跑", flush=True)
+    logger = CsvLogger(run_dir, LOG_COLUMNS, append=resume)
     cfg.snapshot(run_dir / "config_snapshot.yaml")
-    vis = VisdomLogger(env_name=args.run_name)
 
-    val_instances = [load_instance_csv(r["path"], r["tier"], r["instance_id"])
-                     for r in read_index("val")]
-    rng = np.random.default_rng()
-    param_table = cfg.get("param_table")
-
-    bc_steps = int(cfg.get("training.bc_warmup_steps", 0))
-    if bc_steps > 0:
-        expert = str(cfg.get("training.bc_expert", "SPT"))
-        t_bc = time.time()
-        bc_loss = behaviour_clone(net, cfg, rng, param_table, device, bc_steps, expert)
-        eta_bc = evaluate(net, cfg, val_instances, device)
-        print(f"[{args.run_name}] BC 热启动完成：expert={expert} steps={bc_steps} "
-              f"loss={bc_loss:.4f} eta_val={eta_bc:.4f} ({time.time() - t_bc:.0f}s)", flush=True)
-
-    best_eta, total_steps, started = -1.0, 0, time.time()
-    for epoch in range(total_epochs):
-        epsilon = agent.epsilon(epoch)
-        buffer = RolloutBuffer()
-        etas, rewards, phis, cand, bound = [], [], [], [], 0.0
-        held = []                                # 每条 episode 的保留产能份额
-        n_solve = n_hit = 0                      # 流体 LP 求解/缓存命中，用于摊销成本 zeta
-        t0 = time.time()
-        for _ in range(rollout_episodes):
-            env = SchedulingEnv(sample_training_instance(rng, param_table), cfg)
-            ep_reward = 0.0
-            ep_start = len(buffer)
-            while not env.done:
-                actions, sol = env.candidate_actions()
-                if not actions:
-                    break
-                obs = env.observation(actions, sol)
-                idx, logp, value, info = agent.act(obs, env.problem.n_stage, epsilon)
-                reward, done, step_info = env.step(actions[idx])
-                buffer.add(obs=obs, action_index=idx, logp_behaviour=logp,
-                           logp_target=info["logp_target"], reward=reward,
-                           value=value, done=done, n_candidates=info["n_candidates"],
-                           n_stage=env.problem.n_stage,
-                           order=step_info.get("order", -1), hold_id=step_info.get("hold_id", -1))
-                ep_reward += reward
-                bound = max(bound, info["ratio_bound"])
-                cand.append(info["n_candidates"])
-                total_steps += 1
-                if done:
-                    break
-            # CoH 标签回填：订单结果与等待前景在 episode 结束时全部已知（关着时都是 -1，不进损失）
-            holds = env.hold_labels()
-            for tr in buffer.data[ep_start:]:
-                if tr.order >= 0:
-                    tr.commit_label = int(env.order_outcome[tr.order])
-                if tr.hold_id >= 0:
-                    tr.hold_label = holds.get(tr.hold_id, -1)
-            held.append(env.held_share)
-            etas.append(env.eta)
-            rewards.append(ep_reward)
-            phis.extend(env.stats.phi_star)
-            n_solve += env.fluid.stats.solve_count
-            n_hit += env.fluid.stats.cache_hit_count
-
-        stats = agent.update(buffer)
-        elapsed = time.time() - t0
-        eta_val = evaluate(net, cfg, val_instances, device) if (epoch % 10 == 0 or
-                                                               epoch == total_epochs - 1) else ""
-        if isinstance(eta_val, float) and eta_val > best_eta:
-            best_eta = eta_val
-            torch.save({"model": net.state_dict(), "eta_val": eta_val, "epoch": epoch},
-                       run_dir / "checkpoint_best.pt")
-        torch.save({"model": net.state_dict(), "epoch": epoch}, run_dir / "checkpoint_last.pt")
-
-        row = {"iter": epoch, "steps": total_steps, "eta_val": eta_val,
-               "eta_train": round(float(np.mean(etas)), 5),
-               "reward": round(float(np.mean(rewards)), 5),
-               "ratio_bound": round(bound, 3), "epsilon": round(epsilon, 5),
-               "sps": round(len(buffer) / max(elapsed, 1e-9), 2),
-               "fluid_solve_count": n_solve, "fluid_cache_hit": n_hit,
-               "zeta": round(n_solve / max(n_solve + n_hit, 1), 4),
-               "phi_star_mean": round(float(np.mean(phis)), 4) if phis else "",
-               "a_f_mean": round(float(np.mean(cand)), 3) if cand else "",
-               "held_share": round(float(np.mean(held)), 4) if held else "",
-               "elapsed_s": round(time.time() - started, 1)}
-        row.update({k: round(v, 6) for k, v in stats.items()})
-        logger.log(row)
-        vis.line("eta_train", epoch, float(np.mean(etas)))
-        if isinstance(eta_val, float):
-            vis.line("eta_val", epoch, eta_val)
-        print(f"[{args.run_name}] ep {epoch}/{total_epochs} eta_train={np.mean(etas):.4f} "
-              f"eta_val={eta_val} eps={epsilon:.3f} sps={row['sps']}", flush=True)
-
-    print(f"[DONE] {args.run_name} best eta_val={best_eta:.4f} -> {run_dir}", flush=True)
+    val_meta = read_index("val")
+    pool = WorkerPool(n_workers, cfg.to_dict(), method, seed, val_meta)
+    print(f"[{args.run_name}] method={method} seed={seed} workers={n_workers} device={device} "
+          f"budget={total_steps} steps, {episodes_per_epoch} episodes/epoch", flush=True)
+    started = time.time() - started_offset
+    low_streak = 0
+    try:
+        while steps < total_steps:
+            t0 = time.time()
+            pool.broadcast(learner.policy_state_numpy())
+            bp = learner.behaviour_params(steps)
+            episodes = pool.collect(epoch, episodes_per_epoch, bp)
+            n_new = sum(len(e) for e in episodes)
+            steps += n_new
+            t1 = time.time()
+            stats = learner.update(episodes, steps)
+            t2 = time.time()
+            infos = [e.info for e in episodes]
+            eta_train = float(np.mean([i["eta"] for i in infos]))
+            row = {"iter": epoch, "steps": steps, "episodes": len(episodes),
+                   "eta_train": round(eta_train, 5),
+                   "return": round(float(np.mean([e.reward.sum() for e in episodes])), 5),
+                   "ep_len": round(n_new / len(episodes), 1),
+                   "a_mean": round(float(np.mean([i["n_cand_mean"] for i in infos])), 3),
+                   "noop_rate": round(float(np.mean([i["noop_used"] / max(i["noop_offered"], 1) for i in infos])), 4),
+                   "held_share": round(float(np.mean([i["held_share"] for i in infos])), 4),
+                   "epsilon": round(float(bp.get("epsilon", 0.0)), 4)}
+            row.update({k: (round(v, 6) if isinstance(v, float) else v) for k, v in stats.items()})
+            del episodes
+            eta_val = ""
+            t_val = 0.0
+            if epoch % val_every == 0 or steps >= total_steps:
+                pool.broadcast(learner.policy_state_numpy())
+                val = pool.validate()
+                t_val = time.time() - t2
+                eta_val = float(np.mean([v["eta"] for v in val]))
+                if eta_val > best:
+                    best = eta_val
+                    torch.save({"model": learner.net.state_dict(), "eta_val": eta_val, "epoch": epoch,
+                                "steps": steps, "seed": seed, "method": method}, run_dir / "checkpoint_best.pt")
+                low_streak = low_streak + 1 if eta_val < best - 0.15 else 0
+            row["collapse"] = int(low_streak >= 2)
+            torch.save({"learner": learner.state_dict(), "model": learner.net.state_dict(), "epoch": epoch,
+                        "steps": steps, "best": best, "seed": seed, "method": method,
+                        "elapsed_s": time.time() - started}, run_dir / "checkpoint_last.pt")
+            t_collect, t_update = t1 - t0, t2 - t1
+            row.update({"eta_val": round(eta_val, 5) if eta_val != "" else "",
+                        "sps_collect": round(n_new / max(t_collect, 1e-9), 1),
+                        "sps_total": round(n_new / max(t_collect + t_update + t_val, 1e-9), 1),
+                        "t_collect": round(t_collect, 2), "t_update": round(t_update, 2),
+                        "t_val": round(t_val, 2), "elapsed_s": round(time.time() - started, 1)})
+            logger.log(row)
+            print(f"[{args.run_name}] ep {epoch} steps={steps}/{total_steps} eta_train={eta_train:.4f} "
+                  f"eta_val={row['eta_val']} held={row['held_share']} sps={row['sps_collect']} "
+                  f"(collect {t_collect:.1f}s, update {t_update:.1f}s)", flush=True)
+            epoch += 1
+    except KeyboardInterrupt:
+        print(f"[{args.run_name}] 中断，checkpoint_last.pt 可用 --resume 续跑", flush=True)
+    finally:
+        pool.close()
+    print(f"[DONE] {args.run_name} best eta_val={best:.4f} steps={steps} -> {run_dir}", flush=True)
 
 
 if __name__ == "__main__":

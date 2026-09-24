@@ -1,0 +1,3 @@
+# CoH-NoHoldCritic：门控只比较 max p̂ 与 c(s)，不用等待前景评估器。
+variant: {name: CoH-NoHoldCritic}
+coh: {hold_critic: false}

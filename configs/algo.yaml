@@ -1,58 +1,55 @@
-# 算法：PPO + 行为策略修正 + 网络结构。对应稿件 §4.7–4.8 与 Table 6。
-
-ppo:
-  total_epochs: 250            # 实测约 78 s/epoch（ρ=1.6，8 episode/epoch）。
-                               # 1000 epoch 对应单 run 约 21 h、完整 run 矩阵数百小时，
-                               # 不是可复现的预算；250 epoch 下 BC 起点已达规则水平，
-                               # PPO 只需在其上改进
-  lr: 3.0e-4
-  gamma: 1.0
-  gae_lambda: 0.95
-  update_epochs: 3             # K_ppo
-  clip_eps: 0.2                # epsilon_clip
-  entropy_coeff: 0.01          # c_3
-  policy_coeff: 1.0            # c_1
-  value_coeff: 0.5             # c_2
-  max_grad_norm: 0.5
-  target_kl: 0.03
-  minibatch_size: 128          # 必须显著小于每 epoch 的 buffer，否则退化为全批量梯度下降
-  rollout_episodes: 8          # 每个 epoch 采集的完整 episode 数（约 2900 条 transition）
-
-exploration:
-  # epsilon-greedy 混合行为策略，稿件 Eq. (54)
-  behaviour_correction: true   # true = 存 log b_k 并用修正比率（默认）
-                               # false = 存 log pi_old（未修正对照，消融用）
-  epsilon0: 0.3                # 起始探索率。取 1.0 会让 b_k 恒等于均匀分布，
-                               # 此时 PPO 的裁剪区间等价于"强制策略保持均匀"，是持续的反向拉力
-  epsilon_min: 0.001
-  anneal_epochs: 90            # K_tot：退火只占总训练量的 35%，留出收敛期
-
-network:
-  embed_dim: 16                # d
-  gat_layers: 2                # L
-  gat_heads: 1
-  actor_hidden: [128, 128, 128]
-  critic_hidden: [128, 128, 128]
-  action_attention: true       # 动作级自注意力，稿件 Eq. (39)
-  action_attention_heads: 1
-  dropout: 0.0
-
-runtime:
-  rollout_device: cpu          # 离散事件环境在 CPU 上推进
-  update_device: auto          # auto -> cuda if available else cpu
-  n_runs: 5                    # 每个方法的独立 run 次数（无随机种子）
-  eval_rollouts: 10            # 每个 checkpoint 在每个算例上的评测 rollout 数
+# 训练：多进程采样 + 批量 PPO（主方法与规则选择基线）、Double DQN（两个价值型基线）、网络与运行时。
 
 training:
-  # 行为克隆热启动：从最强调度规则起步，PPO 只需在此之上改进。
-  # 这是方法的一部分，会在论文方法节如实描述，不是隐藏的预训练技巧。
-  bc_warmup_steps: 3000        # 0 表示关闭（消融变体用）
-  bc_expert: SPT               # 由 run_05 的规则评测结果选出的最强规则
+  method: coh                  # coh | rule_ppo | dqn | hdqn（基线配置覆盖）
+  total_steps: 6000000         # 训练预算 = 环境交互步数（唯一真源；所有方法相同）
+  seed: null                   # null = 随机 31 位整数，写入 config_snapshot.yaml，事后可精确复现
+
+rollout:
+  workers: auto                # auto = max(1, CPU 核数 - 2)；容器里 2-3，用户机器 14
+  episodes_per_epoch: 56       # 每个 epoch 采集的 episode 数，与 worker 数无关
+  val_every: 2                 # 每几个 epoch 在 val 档贪心验证一次
+
+ppo:
+  lr: 3.0e-4
+  lr_final_ratio: 0.1          # 线性退火到 lr * ratio（按 total_steps）
+  gae_lambda: 0.95
+  update_epochs: 4
+  clip_eps: 0.2
+  entropy_coeff: 0.01
+  value_coeff: 0.5
+  max_grad_norm: 0.5
+  target_kl: 0.02              # k3 估计的每个 update-epoch 均值超过即停；单 minibatch 超 4 倍硬停
+  minibatch_size: 2048
+  minibatch_size_large: 4096   # GPU 且 epoch 转移数 >= 64k 时用
+
+dqn:
+  lr: 1.0e-4
+  minibatch_size: 512
+  replay_capacity: 300000      # 转移数
+  learning_starts: 20000
+  replay_ratio: 0.05           # 每个 epoch 梯度步数 = ratio x 新转移数（minibatch 512：每个转移平均被回放约 25 次）
+  n_step: 5
+  target_update_steps: 2000    # 梯度步
+  epsilon_start: 1.0
+  epsilon_end: 0.05
+  epsilon_fraction: 0.2        # ε 线性退火占预算的比例
+  max_grad_norm: 1.0
+
+network:
+  embed_dim: 16
+  actor_hidden: [128, 128, 128]
+  critic_hidden: [128, 128, 128]
 
 coh:
-  # Commit-or-Hold（新论文的试点方法，由 configs/coh/*.yaml 打开）。默认全关，
-  # 主方法、消融与学习基线的行为不受影响。
-  commit_critic: false         # 承诺评估器 p̂(o|s)：候选现在派出后按时完成的概率（实际结果做 BCE 监督）
-  gate: false                  # 显式等待门控 P(hold) = sigmoid(beta (logit ĥ - logit max p̂) + c(s))
-  hold_critic: false           # 等待前景评估器 ĥ(s)：等待是否等来了按时完成的新订单（事后标签）
+  commit_critic: true          # 承诺评估器 p̂(o|s)
+  gate: true                   # 显式等待门控
+  hold_critic: true            # 等待前景评估器 ĥ(s)
+  gate_context: true           # 门控是否看工况特征与全局特征（消融 nogatefeat 关掉）
   critic_coeff: 0.5            # 两个 BCE 辅助损失的权重
+  detach_gate_inputs: true     # 门控里的 max p̂ 与 ĥ 不回传策略梯度，评估器只由标签训练
+
+runtime:
+  update_device: auto          # auto -> cuda if available else cpu（只在主进程）
+  n_runs: 5
+  eval_rollouts: 10            # 随机规则（Random、RRC）的评测 rollout 数

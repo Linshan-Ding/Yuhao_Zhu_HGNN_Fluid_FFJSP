@@ -20,13 +20,14 @@ def git_commit() -> str:
 class CsvLogger:
     """一次 run 的落盘器：log.csv + config_snapshot.yaml + commit.txt。"""
 
-    def __init__(self, run_dir: str | Path, columns: List[str]) -> None:
+    def __init__(self, run_dir: str | Path, columns: List[str], append: bool = False) -> None:
         self.dir = Path(run_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.path = self.dir / "log.csv"
         self.columns = columns
-        with self.path.open("w", newline="", encoding="utf-8") as handle:
-            csv.DictWriter(handle, fieldnames=columns).writeheader()
+        if not (append and self.path.exists()):
+            with self.path.open("w", newline="", encoding="utf-8") as handle:
+                csv.DictWriter(handle, fieldnames=columns).writeheader()
         (self.dir / "commit.txt").write_text(git_commit(), encoding="utf-8")
 
     def log(self, row: Dict[str, object]) -> None:
@@ -38,7 +39,7 @@ class CsvLogger:
 class VisdomLogger:
     """可选实时监督。服务未开时静默降级，绝不影响训练。"""
 
-    def __init__(self, enabled: bool = True, env_name: str = "FSHGRL") -> None:
+    def __init__(self, enabled: bool = True, env_name: str = "CoH") -> None:
         self.vis = None
         if not enabled:
             return

@@ -1,0 +1,3 @@
+# CoH-NoGateFeat：门控不看工况特征与全局特征，只剩 beta (logit ĥ - logit max p̂) + 偏置。
+variant: {name: CoH-NoGateFeat}
+coh: {gate_context: false}

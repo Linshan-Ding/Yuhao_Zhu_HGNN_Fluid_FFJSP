@@ -1,4 +1,5 @@
-"""所有 run_XX 脚本的公共前置：锚定工程根、统一计时/跳过/子进程调用。"""
+"""所有 run_XX 脚本的公共前置：锚定工程根、统一计时/跳过/子进程调用、run 目录发现。"""
+import csv
 import os
 import subprocess
 import sys
@@ -11,14 +12,9 @@ sys.path.insert(0, str(ROOT))
 
 
 def training_budget() -> int:
-    """训练预算的**唯一真源**：configs/algo.yaml 的 ppo.total_epochs。
-
-    各 run_XX 脚本此前各自硬编码 EPOCHS=1000，与 configs 里的值不一致，且注释还写着
-    "与 configs/algo.yaml 一致"。预算一旦有两处定义就必然漂移，而等预算是方法间
-    可比性的前提——主方法和消融拿到不同预算，比较就作废了。
-    """
+    """训练预算的唯一真源：configs/algo.yaml 的 training.total_steps（环境交互步数）。"""
     from configs.config import load_config
-    return int(load_config().get("ppo.total_epochs"))
+    return int(load_config().get("training.total_steps"))
 
 
 def step(title):
@@ -32,14 +28,6 @@ def done(t0, *outputs):
         print(f"     产物 {p.resolve()} {'[已落盘]' if p.exists() else '[缺失!]'}", flush=True)
 
 
-def skip_if_exists(path, what=""):
-    p = Path(path)
-    if p.exists():
-        print(f"[SKIP] {what} 已完成，跳过：{p}", flush=True)
-        return True
-    return False
-
-
 def run_py(entry, *args):
     head = [entry] if entry.endswith(".py") else ["-m", entry]
     cmd = [sys.executable] + head + [str(a) for a in args]
@@ -48,20 +36,58 @@ def run_py(entry, *args):
         sys.exit(f"[FAIL] {entry} 非零退出，后续步骤已中止")
 
 
-# 冒烟/探针类 run 只跑几个 epoch，用来验证链路是否跑得通，绝不能进评测：
-# 它们会作为一个"方法"混进对比表与 Friedman 检验，还会多占一次多重比较校正的名额，
-# 把真正的比较的 p 值推高。run 目录名以这些前缀开头的一律排除。
-# coh_：新论文（Commit-or-Hold）的试点 run，由 scripts/_pilot_report.py 单独评测，
-# 不进主方法的评测与统计（它们用不同的环境设置，混进来比较就不公平）
-EXCLUDED_RUN_PREFIXES = ("smoke", "probe", "ph0", "debug", "tmp", "test", "coh_")
+# 冒烟/探针类 run 只跑几步，绝不能进评测与统计
+EXCLUDED_RUN_PREFIXES = ("smoke", "probe", "debug", "tmp", "test")
+
+# run 目录前缀 -> (训练方法, 论文里的名字, 配置叠加)。run 名 = 前缀 + _run{i}
+RUN_SPECS = {
+    "coh": ("coh", "CoH", ["coh.yaml"]),
+    "coh_nohold": ("coh", "CoH-NoHold", ["ablation/nohold.yaml"]),
+    "coh_nocritic": ("coh", "CoH-NoCritic", ["ablation/nocritic.yaml"]),
+    "coh_nogate": ("coh", "CoH-NoGate", ["ablation/nogate.yaml"]),
+    "coh_noholdcritic": ("coh", "CoH-NoHoldCritic", ["ablation/noholdcritic.yaml"]),
+    "coh_nogatefeat": ("coh", "CoH-NoGateFeat", ["ablation/nogatefeat.yaml"]),
+    "coh_edd": ("coh", "CoH-EDD", ["ablation/edd_exposure.yaml"]),
+    "rulesel": ("rule_ppo", "RuleSel-PPO", ["baseline/rulesel_ppo.yaml"]),
+    "tdqn": ("dqn", "Triplet-DQN", ["baseline/triplet_dqn.yaml"]),
+    "hdqn": ("hdqn", "Hier-DQN", ["baseline/hier_dqn.yaml"]),
+}
+ABLATION_TAGS = [t for t in RUN_SPECS if t.startswith("coh_")]
+BASELINE_TAGS = ["rulesel", "tdqn", "hdqn"]
 
 
-def checkpoints(pattern="*_run*"):
-    """自动发现已训练的 checkpoint，复现者不需要手填任何路径。"""
-    found = sorted((ROOT / "result").glob(f"{pattern}/checkpoint_best.pt"))
-    kept = [c for c in found
-            if not c.parent.name.startswith(EXCLUDED_RUN_PREFIXES)]
-    for c in found:
-        if c not in kept:
-            print(f"[SKIP] {c.parent.name}：冒烟/探针 run，不计入评测", flush=True)
-    return kept
+def run_tag(name: str) -> str:
+    return name.rsplit("_run", 1)[0]
+
+
+def logged_steps(run_dir) -> int:
+    path = Path(run_dir) / "log.csv"
+    if not path.exists():
+        return 0
+    with path.open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    return int(rows[-1]["steps"]) if rows else 0
+
+
+def run_complete(run_dir, budget=None) -> bool:
+    budget = training_budget() if budget is None else int(budget)
+    return logged_steps(run_dir) >= budget and (Path(run_dir) / "checkpoint_best.pt").exists()
+
+
+def discover_runs(tags=None):
+    """{run 前缀: [run 目录...]}，只收有 checkpoint_best.pt 且不属于冒烟前缀的目录。"""
+    out = {}
+    for d in sorted((ROOT / "result").glob("*_run*")):
+        if not d.is_dir() or d.name.startswith(EXCLUDED_RUN_PREFIXES):
+            continue
+        tag = run_tag(d.name)
+        if tag not in RUN_SPECS or (tags is not None and tag not in tags):
+            continue
+        if (d / "checkpoint_best.pt").exists():
+            out.setdefault(tag, []).append(d)
+    return out
+
+
+def run_seed(index: int) -> int:
+    """第 i 个独立 run 的种子：固定为 i，复现者不需要查表。"""
+    return int(index)

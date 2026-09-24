@@ -1,68 +1,134 @@
-"""Rollout 缓存与 GAE。
+"""episode 记录、GAE 与 replay。
 
-关键点（稿件 §4.8.2）：存进缓存的是**行为策略** log b_k(a|omega)，不是目标策略
-log pi_old。epsilon-贪婪探索下二者不同，用后者会让 PPO 的重要性比率算错、
-裁剪区间失去它本该表示的信任域含义。
+`EpisodeRecord` 由 worker 在 episode 结束时组装：逐步数组堆叠，候选轴填充到本 episode 的最大
+候选数，两类监督标签（承诺 / 等待前景）在这里回填。记录只含 numpy 数组与标量，可直接 pickle。
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List, Sequence, Tuple
 
 import numpy as np
-import torch
+
+from environment.env import ACT_DIM
 
 
 @dataclass
-class Transition:
-    obs: dict
-    action_index: int
-    logp_behaviour: float          # log b_k(a_t | omega_t)，用于重要性比率
-    logp_target: float             # log pi_theta_old(a_t | omega_t)，用于 KL 早停判据
-    reward: float
-    value: float
-    done: bool
-    n_candidates: int
-    n_stage: int
-    # CoH（Commit-or-Hold）的监督标签，episode 结束后由 train.py 回填；-1 = 无标签
-    order: int = -1                # 本步派出的订单（no-op 为 -1）
-    hold_id: int = -1              # 本步若为 no-op，其等待记录的编号
-    commit_label: int = -1         # 派出的订单是否按时完成
-    hold_label: int = -1           # 等待是否等来了按时完成的新订单
-
-
-@dataclass
-class RolloutBuffer:
-    data: List[Transition] = field(default_factory=list)
-    advantages: np.ndarray | None = None
-    returns: np.ndarray | None = None
-
-    def add(self, **kwargs) -> None:
-        self.data.append(Transition(**kwargs))
+class EpisodeRecord:
+    op: np.ndarray            # [T, N, OP]
+    ma: np.ndarray            # [T, M, MA]
+    act_feat: np.ndarray      # [T, A, ACT]
+    act_mask: np.ndarray      # [T, A]
+    act_index: np.ndarray     # [T, A, 2]
+    global_feat: np.ndarray   # [T, 5]
+    gate_feat: np.ndarray     # [T, 8]
+    eta: np.ndarray           # [T]
+    action: np.ndarray        # [T] 记录用的动作（候选下标，或规则选择基线的规则下标）
+    env_action: np.ndarray    # [T] 实际执行的候选下标
+    logp: np.ndarray          # [T]
+    value: np.ndarray         # [T]
+    reward: np.ndarray        # [T]
+    done: np.ndarray          # [T]
+    commit_label: np.ndarray  # [T] -1/0/1
+    hold_label: np.ndarray    # [T] -1/0/1
+    extras: Dict[str, np.ndarray] = field(default_factory=dict)
+    info: Dict[str, float] = field(default_factory=dict)
 
     def __len__(self) -> int:
-        return len(self.data)
+        return int(self.reward.shape[0])
 
-    def clear(self) -> None:
-        self.data.clear()
-        self.advantages = None
-        self.returns = None
+    @staticmethod
+    def from_steps(steps: List[dict], env) -> "EpisodeRecord":
+        T = len(steps)
+        A = max(int(s["obs"]["act_feat"].shape[0]) for s in steps)
+        first = steps[0]["obs"]
+        rec = EpisodeRecord(
+            op=np.stack([s["obs"]["op"] for s in steps]).astype(np.float32),
+            ma=np.stack([s["obs"]["ma"] for s in steps]).astype(np.float32),
+            act_feat=np.zeros((T, A, ACT_DIM), np.float32), act_mask=np.zeros((T, A), bool),
+            act_index=np.zeros((T, A, 2), np.int64),
+            global_feat=np.stack([s["obs"]["global_feat"] for s in steps]).astype(np.float32),
+            gate_feat=np.stack([s["obs"]["gate_feat"] for s in steps]).astype(np.float32),
+            eta=np.asarray([float(s["obs"]["eta_t"]) for s in steps], np.float32),
+            action=np.asarray([s["action"] for s in steps], np.int64),
+            env_action=np.asarray([s["env_action"] for s in steps], np.int64),
+            logp=np.asarray([s["logp"] for s in steps], np.float32),
+            value=np.asarray([s["value"] for s in steps], np.float32),
+            reward=np.asarray([s["reward"] for s in steps], np.float32),
+            done=np.asarray([s["done"] for s in steps], bool),
+            commit_label=np.full(T, -1, np.int8), hold_label=np.full(T, -1, np.int8),
+        )
+        for t, s in enumerate(steps):
+            n = s["obs"]["act_feat"].shape[0]
+            rec.act_feat[t, :n] = s["obs"]["act_feat"]
+            rec.act_mask[t, :n] = True
+            rec.act_index[t, :n] = s["obs"]["act_index"]
+        extra_keys = set().union(*(s["extra"].keys() for s in steps))
+        for k in extra_keys:
+            vals = [s["extra"][k] for s in steps]
+            if isinstance(vals[0], np.ndarray) and vals[0].ndim == 1 and vals[0].dtype == bool:
+                arr = np.zeros((T, A), bool)                     # 候选轴掩码，填充到 A
+                for t, v in enumerate(vals):
+                    arr[t, :v.shape[0]] = v
+            else:
+                arr = np.asarray(vals)
+            rec.extras[k] = arr
+        # 监督标签：订单结果与等待前景在 episode 结束时全部已知
+        orders = np.asarray([s["order"] for s in steps], np.int64)
+        hold_ids = np.asarray([s["hold_id"] for s in steps], np.int64)
+        outcome = env.order_outcome
+        rec.commit_label = np.where(orders >= 0, outcome[np.maximum(orders, 0)], -1).astype(np.int8)
+        labels = env.hold_labels()
+        rec.hold_label = np.asarray([labels.get(int(h), -1) if h >= 0 else -1 for h in hold_ids], np.int8)
+        rec.info = {"eta": env.eta, "nu": env.nu, "held_share": env.held_share, "steps": env.step_count,
+                    "noop_offered": env.stats.noop_offered, "noop_used": env.stats.noop_used,
+                    "S": env.problem.n_order, "DDT": float(env.inst.meta.get("DDT", 0.0)),
+                    "rho": float(env.inst.meta.get("rho_sys", 0.0)),
+                    "n_cand_mean": float(np.mean(env.stats.n_candidates)) if env.stats.n_candidates else 0.0}
+        return rec
 
-    def compute_gae(self, gamma: float, lam: float) -> None:
-        n = len(self.data)
-        adv = np.zeros(n, dtype=np.float64)
-        gae = 0.0
-        for i in reversed(range(n)):
-            nonterminal = 0.0 if self.data[i].done else 1.0
-            next_value = 0.0 if i + 1 >= n or self.data[i].done else self.data[i + 1].value
-            delta = self.data[i].reward + gamma * next_value * nonterminal - self.data[i].value
-            gae = delta + gamma * lam * nonterminal * gae
-            adv[i] = gae
-        self.advantages = adv
-        self.returns = adv + np.asarray([t.value for t in self.data], dtype=np.float64)
+    def to_dict(self) -> dict:
+        d = {k: getattr(self, k) for k in self.__dataclass_fields__}
+        return d
 
-    def normalized_advantages(self) -> np.ndarray:
-        adv = self.advantages
-        if adv is None or adv.size <= 1:
-            return np.zeros_like(adv) if adv is not None else np.zeros(0)
-        return (adv - adv.mean()) / (adv.std() + 1e-8)
+    @staticmethod
+    def from_dict(d: dict) -> "EpisodeRecord":
+        return EpisodeRecord(**d)
+
+
+def gae(rec: EpisodeRecord, gamma: float = 1.0, lam: float = 0.95) -> Tuple[np.ndarray, np.ndarray]:
+    """逐 episode 的广义优势估计；记录是完整 episode，末步之后 bootstrap 为 0。"""
+    T = len(rec)
+    adv = np.zeros(T, np.float64)
+    last = 0.0
+    for t in range(T - 1, -1, -1):
+        nonterminal = 0.0 if (t == T - 1 or rec.done[t]) else 1.0
+        next_value = float(rec.value[t + 1]) if nonterminal else 0.0
+        delta = float(rec.reward[t]) + gamma * next_value - float(rec.value[t])
+        last = delta + gamma * lam * nonterminal * last
+        adv[t] = last
+    return adv, adv + rec.value.astype(np.float64)
+
+
+class ReplayStore:
+    """价值型基线的 replay：整段 episode 存放，按转移数限容，采样返回 (记录下标, 步下标)。"""
+
+    def __init__(self, capacity: int) -> None:
+        self.capacity = int(capacity)
+        self.records: List[EpisodeRecord] = []
+        self.size = 0
+
+    def add(self, episodes: Sequence[EpisodeRecord]) -> None:
+        for rec in episodes:
+            self.records.append(rec)
+            self.size += len(rec)
+        while self.size > self.capacity and len(self.records) > 1:
+            self.size -= len(self.records.pop(0))
+
+    def sample(self, n: int, rng: np.random.Generator) -> List[Tuple[int, int]]:
+        lengths = np.asarray([len(r) for r in self.records], np.int64)
+        flat = rng.integers(0, lengths.sum(), size=n)
+        bounds = np.cumsum(lengths)
+        e = np.searchsorted(bounds, flat, side="right")
+        t = flat - (bounds[e] - lengths[e])
+        return list(zip(e.tolist(), t.tolist()))
