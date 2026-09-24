@@ -1,3 +1,0 @@
-# FSHGRL-NoFA：关闭势函数塑形（beta_Psi = 0）
-variant: {name: FSHGRL-NoFA}
-reward: {potential_weight: 0.0}
