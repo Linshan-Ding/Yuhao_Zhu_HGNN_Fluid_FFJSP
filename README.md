@@ -1,7 +1,9 @@
 # FSHGRL — 高频插单动态柔性流水车间调度
 
-本仓库是论文 *Bounding On-Time Delivery, Learning When to Wait: Fluid-Guided Reinforcement
-Learning for Flexible Flow Shops under High-Frequency Order Insertion* 的实验工程。
+本仓库是两篇论文的实验工程：已录用的 *Fluid-Guided Sparse Heterogeneous Graph Reinforcement
+Learning for Real-Time Scheduling in Dynamic Flexible Flow Shops with High-Frequency Order
+Insertion*（FSHGRL，§1–§10 的流水线，实验已全部完成），以及正在做的新论文（Commit-or-Hold，
+§0 的试点）。
 
 **本 README 不是项目简介，而是复现手册**：把 §3–§8 的命令整段复制进终端顺序执行，
 即可产出论文所需的**全部**实验数据。最后一步 `run_13` 会把结果写成
@@ -10,157 +12,87 @@ Learning for Flexible Flow Shops under High-Frequency Order Insertion* 的实验
 
 ---
 
-## 0. 进度与下一步：接着跑完全部实验
+## 0. 进度与下一步：新论文的试点（Commit-or-Hold）
 
-`master` 上 "Add final experimental results" 提交时，训练与前半程评测已全部完成，剩下
-`run_07`、`run_09`、`run_10` 三个实验脚本与 `run_11`–`run_13` 三个汇总脚本。`run_07`
-此前因 Gurobi 授权到期报错；现在全部求解器都免授权（流体 LP 与 MILP 用 SciPy 自带的
-HiGHS，精确解与在线重优化用 OR-Tools CP-SAT，见 §2），代码里已没有任何 Gurobi 调用，
-装没装 `gurobipy`、授权是否有效都不影响运行。
+FSHGRL 的实验矩阵（15 个方法 × 5 run × 250 epoch、`run_05`/`run_06`/`run_08`）已经在 `master`
+上完成，原稿已录用，`run_07`/`run_09`/`run_10` 不再需要为它运行。接下来的工作是新论文
+**"学会保留产能：超负荷柔性流水车间里非延迟调度的代价"** 的试点。它的证据来自 FSHGRL 的全预算
+结果：学会派工但不能等待的策略 ≈ SPT，允许等待后每个交期水平都赢最强规则，而流体、图注意力等
+组件对学习策略没有可测增益（`docs/experiment-spec.md` §9 与计划记录）。
 
-| 脚本 | 状态 | 产物 | 说明 |
-|---|---|---|---|
-| `run_01` 算例 | ✅ 已完成 | `data/instances/` | 评测算例本身就是复现基准，不要重建 |
-| `run_02`–`run_04` 训练 | ✅ 已完成 | 15 个方法 × 5 run × 250 epoch | 重跑会逐个跳过已有 checkpoint 的 run |
-| `run_05` 主评测 | ✅ 已完成 | `eval_results.csv`（1515 行） | **不要重跑**：开头会清空该文件再重算数小时 |
-| `run_06` 剪枝分析 | ✅ 已完成 | `pruning_stats.csv`、`pruning_sensitivity.csv` | 不要重跑：同样先清空再重算，前瞻 oracle 含随机 rollout，数会变 |
-| `run_07` 精确解 | ⏳ **待运行** | `exact_results.csv` | 见 0.2 |
-| `run_08` 到达 / OOD | ✅ 已完成 | `arrival_results.csv`、`ood_results.csv`、`shift_matrix.csv` | 不要重跑（理由同 `run_06`） |
-| `run_09` 奖励 / 探索 | ⏳ **待运行** | `reward_exploration.csv` | 要新训 9 个 run，见 0.3 |
-| `run_10` 案例研究 | ⚠️ **暂缓** | `case3d_results.csv` | 现有 case3d 算例不可用，先定算例再跑，见 0.4 |
-| `run_11`、`run_12` 统计与绘图 | ⏳ **待运行** | `stats_summary.csv` 等、`result/figures/` | 只依赖已完成的结果，现在就能跑，见 0.5 |
-| `run_13` 回填 | ⏳ **最后运行** | `paper_values.tex` | 等上面全部完成，见 0.5 |
+试点只回答一个问题：在最小骨干（无流体、MLP 编码、无自注意力、无 BC、无塑形，保留 no-op）上，
+**承诺评估器**（P1）和**显式等待门控**（P2）各自是否值得进最终方法。采纳规则在试点开跑前已写进
+`docs/experiment-spec.md` §9.3，`scripts/_pilot_report.py` 只做机械核对。
 
-`run_07`、`run_09`、`run_11`（及其后的 `run_12`）互不依赖，可以在不同终端同时开跑；
-`run_10` 要等 case3d 算例重建之后；`run_13` 必须最后跑。`result/` 里旧版 `run_09` 留下的 `rw_betaf0p0`（196/300
-epoch，中断）不在新清单里，新脚本不会读它，可以手动删掉；`smoke_run1` 与
-`smoke_eval.csv` 是冒烟产物，全部汇总脚本都已排除。
+| 配置 | 文件 | 内容 |
+|---|---|---|
+| P0 | `configs/coh/p0_backbone.yaml` | 最小骨干；候选按"可救优先"暴露（规则评测用同一配置） |
+| P1 | `configs/coh/p1_critic.yaml` | P0 + 承诺评估器 p̂(o|s)：候选现在派出后按时完成的概率，实际结果做监督 |
+| P2 | `configs/coh/p2_gate.yaml` | P1 + 等待门控 P(hold) = σ(β(logit ĥ − logit max p̂) + c(s)) + 等待前景评估器 ĥ |
+| P3 | `configs/coh/p3_onpolicy.yaml` | 第一波胜者 + 纯 on-policy（关掉 ε-greedy 行为混合），第二波再跑 |
 
-### 0.1 先合并本分支、更新依赖
+### 0.1 合并本分支、跑冒烟
 
 ```
 git fetch origin
 git checkout master
 git merge origin/claude/latex-paper-restructure-nfwghr
-pip install -r requirements.txt
+python scripts/run_00_smoke.py
 ```
 
-`requirements.txt` 把 `ortools` 的下限提到 9.8（新代码用它的 PEP 8 接口名）。合并后建议
-先跑一次冒烟自检 `python scripts/run_00_smoke.py`（约 5 分钟），其中第 5 步会用新的精确
-求解器解两个小算例并回放进仿真器。
+冒烟约 8 分钟。第 4–5 步是新增的 CoH 检查：用 p2 配置训 2 个 epoch，然后核对旧 checkpoint 在新
+代码下的评测逐位不变、联合分布归一、监督标签回填完整。任何一项不过都会报错退出。
 
-### 0.2 `run_07`：精确解、在线重优化与最优性间隙（Table T-NEW-5）
+### 0.2 第一波：P0 / P1 / P2 各 3 个 run
 
-```
-python scripts/run_07_exact_optimality.py --jobs 4
-```
-
-24 个 small 档算例，每个依次做：CP-SAT 离线最优 → HiGHS 求解稿件 Eqs. (1)–(11) 的 MILP
-（每个算例限时 3600 s，与论文一致）→ 把 CP-SAT 最优排程代入 MILP 约束矩阵逐行核对 →
-两份排程分别驱动离散事件环境回放 → 在线滚动重优化 → FSHGRL 5 个 run、8 条规则、三个
-学习基线 15 个 run 的评测。`--jobs 4` 表示 4 个算例并行，按空闲核数调整。
-
-- **耗时**：CP-SAT 每个算例都在 1 s 内证得最优；在线重优化每个算例 1–80 s；主要开销是
-  MILP。在 4 核容器里以 1200 s 限时试跑了 16 个算例：S=12 的 6 个用 2–43 s 证得最优，
-  S=16–25 的 10 个里 7 个用 4–523 s 证得最优、3 个到时限仍未证得（CP-SAT 的最优值都落在
-  它们的可行解与上界之间）。证得最优的 13 个与 CP-SAT 逐个相等。最坏情况是 24 个算例都
-  跑满 3600 s，即 `--jobs 4` 下约 6 小时。
-- **可以随时中断**：每算完一个算例就写一行，重跑只补缺失的算例。要从头重算先删
-  `result/exact_results.csv`。只想先看结果可加 `--milp-time-limit 600`，但论文写的是
-  3600 s，最终数据请用默认值。
-- **跑完看最后几行**：`[P-MILPCHK]` 回放一致数与 `[证书]` 数应为 24/24，`CONFLICT` 应为 0。
-  MILP 在时限内没证得最优的算例，`eta_off` 取 CP-SAT 证得的最优值（`eta_off_source`
-  列写 `cpsat`），同时核对它落在 MILP 的可行解与对偶上界之间。
-
-### 0.3 `run_09`：奖励与探索消融（Table T-NEW-9）
-
-表里 13 行中，与主配置相同的 4 行（beta_f=0、beta_Psi=0.1、kappa_d=1、修正比率）直接
-复用 `fshgrl_run1`–`5`，不重训；另外 9 个配置各训练 1 个 run，预算与主方法相同
-（250 epoch，单个 run 在你的机器上约 8 小时，按 `fshgrl_run1/log.csv` 的 `elapsed_s` 估）。
-一个 run 只有 `log.csv` 记满 250 行才算完成，中断的会从头重训。
-
-最省事的做法是一条命令顺序训完再汇总（约 9 × 8 小时）：
+每个 run 250 epoch。没有流体 LP 之后每个 epoch 快得多：4 核容器里单线程实测 p0 约 135 步/s
+（随机初始化的前几个 epoch 18–20 s，策略学会派工后每个 epoch 的决策数会增加，估 25–35 s），
+p2 约 90 步/s（24–40 s/epoch，含每 10 个 epoch 一次的验证）。按此估算 250 epoch 一个 run
+p0 约 1.5–2.5 小时、p2 约 2.5–3.5 小时；跑完第一个 epoch 后用 `log.csv` 的 `elapsed_s` 按你的
+机器重新估。bash：
 
 ```
-python scripts/run_09_reward_exploration.py
-```
-
-并行更快：每个终端训练一组，组数按空闲核数定。bash：
-
-```
-OMP_NUM_THREADS=1 python scripts/run_09_reward_exploration.py --only rw_betaf0p05 rw_betaf0p1 rw_betaf0p2 &
-OMP_NUM_THREADS=1 python scripts/run_09_reward_exploration.py --only rw_betaf0p5 rw_betapsi0 rw_kappad0 &
-OMP_NUM_THREADS=1 python scripts/run_09_reward_exploration.py --only rw_ratiodiff rw_uncorrected rw_onpolicy &
+python scripts/run_14_pilot_coh.py --only p0 &
+python scripts/run_14_pilot_coh.py --only p1 &
+python scripts/run_14_pilot_coh.py --only p2 &
 wait
-python scripts/run_09_reward_exploration.py --collect
+python scripts/_pilot_report.py
 ```
 
-PowerShell（PyCharm 内置终端）不支持行尾 `&`，开三个终端标签页，各执行一行：
+PowerShell（PyCharm 内置终端）开三个标签页各执行一行，都结束后再跑报告：
 
 ```
-$env:OMP_NUM_THREADS=1; python scripts/run_09_reward_exploration.py --only rw_betaf0p05 rw_betaf0p1 rw_betaf0p2
-$env:OMP_NUM_THREADS=1; python scripts/run_09_reward_exploration.py --only rw_betaf0p5 rw_betapsi0 rw_kappad0
-$env:OMP_NUM_THREADS=1; python scripts/run_09_reward_exploration.py --only rw_ratiodiff rw_uncorrected rw_onpolicy
+python scripts/run_14_pilot_coh.py --only p0
+python scripts/run_14_pilot_coh.py --only p1
+python scripts/run_14_pilot_coh.py --only p2
+python scripts/_pilot_report.py
 ```
 
-三组都结束后执行 `python scripts/run_09_reward_exploration.py --collect` 汇总。汇总时每个
-run 的 `checkpoint_best.pt` 在 15 个测试算例上贪心评测（复用行直接读 `eval_results.csv`），
-置信区间跨算例；缺 run 时会列出缺哪几个并以非零码退出。
+- 每个训练进程默认单线程（脚本里设了 `OMP_NUM_THREADS=1`）：网络很小，多线程没有收益，
+  而几个进程各开满线程会互相自旋等待，实测慢一个数量级。三个配置并行需要 3 个空闲核。
+- 一个 run 只有 `log.csv` 记满 250 行才算完成，中断的会从头重训；已完成的会跳过。
+- `_pilot_report.py` 把每个 run 的 `checkpoint_best` 在 15 个测试算例上贪心评测一次（可续跑，
+  结果在 `result/pilot_eval.csv`），八条规则在同一环境设置下重评（`result/pilot_rules.csv`），
+  然后打印 §9.3 的裁决表并写 `result/pilot_summary.csv`。裁决表里的"采纳 / 不采纳"就是结论，
+  不要按结果回头改规则。
 
-### 0.4 `run_10`：3D 打印案例研究（暂缓，先重建算例）
+### 0.3 第二波：P3
 
-**现在跑会得到一张几乎全零的表，先不要跑。** 核对 `data/instances/case3d/` 时发现两处问题：
-
-1. 算例在交期上不可行。订单走完 6 道工序的最短可能时间（每道取最快机器）平均为
-   1200–1800，而交期宽松度只有 DDT×U[0.7,1.4]：DDT=600 的三个算例 100% 的订单到达时就
-   已不可能按时完成，DDT=900 为 90%–100%，DDT=1200 为 61%–78%。实测 SPT 在 DDT=600 三个
-   算例上 η=0，任何方法（包括离线最优）都只能是 0。
-2. 算例没有用论文给的数据。论文表 `tab:3d_printing_case_data` 列出了每类订单每道工序
-   可选机器与加工时间（分钟，打印机按产品专用），而 `data/dataset.py::make_case3d` 用的是
-   `rand[30,600]` 的随机工时、每阶段 [2,2,3,3,2,2] 台机器、80% 合格率，与该表对不上。
-   按论文表算，三类订单的最短路径为 387、469、667 分钟，DDT=600–1200 分钟才是有区分度的
-   设置。
-
-需要先决定按论文表重建 case3d 算例（还要定到达率，现代码取 DDT/6），还是改论文的情景
-描述；定了之后重建算例，再运行：
+第一波胜者若不是 P2，先把 `configs/coh/p3_onpolicy.yaml` 里 `coh:` 一段改成胜者的取值，然后：
 
 ```
-python scripts/run_10_case_study.py
+python scripts/run_14_pilot_coh.py --only p3
+python scripts/_pilot_report.py
 ```
 
-FSHGRL 的 5 个 run 各做一次贪心 rollout，`eta_best`/`eta_avg` 分别是 5 个 run 的最大值与
-均值，置信区间跨 run；规则与三个学习基线同 `run_05` 的口径。
+### 0.4 试点之后
 
-### 0.5 汇总与回填
+最终配置、工况网格算例、完整对比与消融矩阵、学习基线修复、统计与论文表格按
+`docs/experiment-spec.md` §9.4 进行，届时更新本节。试点 run（`coh_p*_run*`）只用于选配置，
+不进最终矩阵；它们被 `scripts/_bootstrap.py` 的排除前缀挡在 `run_05`/`run_11` 之外。
 
-```
-python scripts/run_11_aggregate_stats.py
-python scripts/run_12_make_figures.py
-python scripts/run_13_fill_placeholders.py
-```
-
-`run_11`、`run_12` 现在就能跑；`run_13` 要等 0.2–0.4 全部完成（`C-DDT600/900/1200` 三个
-占位符来自 `run_10`），打印
-`[闭环] 论文全部占位符均已有数据来源。` 才算结束，随后按 §10 把数值填回论文。
-
-**回填前先读 `result/preregistered_verdict.csv`，不要只填数。** 用 `master` 上的全部结果
-（15 个方法 × 5 run × 250 epoch）试跑 `run_11`，预注册判据的裁决是五条对比判据全部不成立，
-只有"no-op 使用率 > 2%"（实测 53%）成立：
-
-| 判据 | 对手 | FSHGRL 减对手 | Holm p | Cliff δ |
-|---|---|---|---|---|
-| 主判据 | SPT-Idle（数据选出的最强规则） | +0.0788 | 0.25 | +0.23 |
-| C3 引导 vs 缩减 | FSHGRL-RP | −0.0062 | 1.00 | −0.06 |
-| C-OBJ 目标对齐 | FSHGRL-MaxMin | −0.0084 | 1.00 | −0.07 |
-| C-NOOP 主动空闲 | FSHGRL-NoNoOp | +0.0993 | 0.14 | +0.31 |
-| C-BC 热启动 | FSHGRL-NoBC | −0.0388 | 0.09 | −0.17 |
-
-成立的门槛是差值为正且 Holm p < 0.05，主判据与 C3 还要求 δ ≥ 0.33（见 `run_11` 的
-`judge`）。11 个消融变体里有 9 个的均值高于 FSHGRL（0.6884）；`run_11` 还报告等 epoch 与
-等交互步数两种预算口径下方法排序不一致。所以摘要、引言贡献、
-§5.10 与结论里依赖这些判据的论断要按 `docs/experiment-spec.md` §8.3 收窄，而不只是填数。
-另外 `run_13` 会把 `R1` 填成 5、`B3` 填成 250，论文里按"每个方法 1 个 run、预算低于推荐值、
-epsilon 退火在 0.10 处截断"写的几句（§5.3 训练协议、§5.12 局限）届时不再成立，需一并改写。
+FSHGRL 的结果文件（`eval_results.csv` 等）保持不动；`run_07` 的精确解与在线重优化会在新论文的
+small 档参照里复用，现在不必跑。
 
 ---
 
