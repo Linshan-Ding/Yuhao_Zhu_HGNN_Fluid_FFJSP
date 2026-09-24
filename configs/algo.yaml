@@ -48,3 +48,11 @@ training:
   # 这是方法的一部分，会在论文方法节如实描述，不是隐藏的预训练技巧。
   bc_warmup_steps: 3000        # 0 表示关闭（消融变体用）
   bc_expert: SPT               # 由 run_05 的规则评测结果选出的最强规则
+
+coh:
+  # Commit-or-Hold（新论文的试点方法，由 configs/coh/*.yaml 打开）。默认全关，
+  # 主方法、消融与学习基线的行为不受影响。
+  commit_critic: false         # 承诺评估器 p̂(o|s)：候选现在派出后按时完成的概率（实际结果做 BCE 监督）
+  gate: false                  # 显式等待门控 P(hold) = sigmoid(beta (logit ĥ - logit max p̂) + c(s))
+  hold_critic: false           # 等待前景评估器 ĥ(s)：等待是否等来了按时完成的新订单（事后标签）
+  critic_coeff: 0.5            # 两个 BCE 辅助损失的权重
