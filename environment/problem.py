@@ -1,4 +1,4 @@
-"""问题定义：目标计值、可行性、剩余路径下界。稿件 §3.1–3.2 的代码对应物。
+"""问题定义：合格机器、剩余路径下界、无望判定。
 
 本模块是"物理规则"的唯一真源：环境、精确求解器与基线都从这里取常量，
 避免同一个下界在三处各写一遍而悄悄不一致。
@@ -44,11 +44,6 @@ class Problem:
             for j in range(self.n_stage - 1, -1, -1):
                 self.residual[r, j] = self.residual[r, j + 1] + self.min_proc[self.task_index(r, j)]
 
-        # 相邻阶段对（用于流平衡约束）
-        self.stage_pairs = [
-            (self.task_index(r, j - 1), self.task_index(r, j))
-            for r in range(self.n_product) for j in range(1, self.n_stage)
-        ]
 
     def task_index(self, product: int, stage: int) -> int:
         return int(product) * self.n_stage + int(stage)
@@ -62,14 +57,6 @@ class Problem:
             return 0.0
         return float(self.residual[int(self.inst.order_product[order]), int(stage)])
 
-    def downstream_residual(self, task: int) -> float:
-        """delta_hat 中被扣除的下游部分：stage+1 起的剩余最小加工时间。"""
-        r, j = divmod(int(task), self.n_stage)
-        return float(self.residual[r, j + 1])
-
     def is_hopeless(self, order: int, stage: int, now: float) -> bool:
         """稿件假设 (viii)：剩余路径已无法在交期内完成 -> 丢弃。"""
         return now + self.residual_from(order, stage) > float(self.inst.due_dates[order])
-
-    def fulfillment_rate(self, completed: int) -> float:
-        return completed / max(self.n_order, 1)

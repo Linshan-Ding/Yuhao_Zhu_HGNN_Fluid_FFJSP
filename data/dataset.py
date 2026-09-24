@@ -1,10 +1,13 @@
-"""按 docs/experiment-spec.md §6A 的算例设计表逐单元生成固定评测/验证算例。
+"""按 configs/instance.yaml 的设计表生成固定评测档（grid / val / small / ood）。
 
-一次生成永久固定、随论文发布——复现基准是这些算例文件本身 + 多次独立 run，不是随机种子。
-重复运行会跳过已存在的档位。
+每档带固定种子，逐算例的种子由 (档种子, 序号) 派生，重建结果逐位相同；算例文件与
+index.csv 随论文发布，是复现基准。用法：
+    python data/dataset.py                 # 重建全部档并整体重写 index.csv
+    python data/dataset.py --tiers grid    # 只重建指定档，其余档的索引行保留
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import sys
 from pathlib import Path
@@ -14,39 +17,15 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from configs.config import ROOT, load_config          # noqa: E402
+from configs.config import ROOT, load_config                            # noqa: E402
 from data.generator import Instance, build_instance, save_instance_csv  # noqa: E402
 
 INSTANCE_ROOT = ROOT / "data" / "instances"
 INDEX_COLUMNS = [
     "instance_id", "tier", "path", "S", "R", "J", "M", "machines_per_stage",
-    "DDT", "arrival_process", "E_dt", "Lambda", "W_bar", "p_bar",
-    "rho_sys", "iota", "regime",
+    "DDT", "rho_target", "arrival_process", "E_dt", "Lambda", "W_bar", "p_bar",
+    "rho_sys", "iota", "regime", "seed",
 ]
-
-
-def _index_row(inst: Instance, path: Path) -> Dict[str, object]:
-    return {
-        "instance_id": inst.instance_id, "tier": inst.tier,
-        "path": str(path.relative_to(ROOT)).replace("\\", "/"),
-        "S": inst.order_count, "R": inst.product_count, "J": inst.stage_count,
-        "M": inst.machine_count,
-        "machines_per_stage": "-".join(str(m) for m in inst.machines_per_stage),
-        "DDT": inst.meta.get("DDT"), "arrival_process": inst.meta.get("arrival_process"),
-        "E_dt": round(float(inst.meta.get("E_dt", 0.0)), 4),
-        "Lambda": round(float(inst.meta.get("Lambda", 0.0)), 8),
-        "W_bar": round(float(inst.meta.get("W_bar", 0.0)), 3),
-        "p_bar": round(float(inst.meta.get("p_bar", 0.0)), 3),
-        "rho_sys": round(float(inst.meta.get("rho_sys", 0.0)), 4),
-        "iota": round(float(inst.meta.get("iota", 0.0)), 4),
-        "regime": inst.meta.get("regime"),
-    }
-
-
-def _emit(inst: Instance, rows: List[Dict[str, object]]) -> None:
-    path = INSTANCE_ROOT / inst.tier / f"{inst.instance_id}.csv"
-    save_instance_csv(inst, path)
-    rows.append(_index_row(inst, path))
 
 
 def _gap_for_target_rho(proc_range, stage_count, machines_per_stage, target_rho) -> float:
@@ -57,154 +36,121 @@ def _gap_for_target_rho(proc_range, stage_count, machines_per_stage, target_rho)
     return w_bar / (max(float(target_rho), 1e-9) * n_machine)
 
 
-def make_small(cfg, rng, rows):
-    """精确求解参照档。**结构必须与训练分布一致**，只有订单数变小。
+def _index_row(inst: Instance, path: Path, rho_target: float, seed: int) -> Dict[str, object]:
+    return {
+        "instance_id": inst.instance_id, "tier": inst.tier,
+        "path": str(path.relative_to(ROOT)).replace("\\", "/"),
+        "S": inst.order_count, "R": inst.product_count, "J": inst.stage_count,
+        "M": inst.machine_count,
+        "machines_per_stage": "-".join(str(m) for m in inst.machines_per_stage),
+        "DDT": inst.meta.get("DDT"), "rho_target": rho_target,
+        "arrival_process": inst.meta.get("arrival_process"),
+        "E_dt": round(float(inst.meta.get("E_dt", 0.0)), 4),
+        "Lambda": round(float(inst.meta.get("Lambda", 0.0)), 8),
+        "W_bar": round(float(inst.meta.get("W_bar", 0.0)), 3),
+        "p_bar": round(float(inst.meta.get("p_bar", 0.0)), 3),
+        "rho_sys": round(float(inst.meta.get("rho_sys", 0.0)), 4),
+        "iota": round(float(inst.meta.get("iota", 0.0)), 4),
+        "regime": inst.meta.get("regime"), "seed": seed,
+    }
 
-    此前该档自带 3 阶段/2 机/2 产品/工时[20,120]，与训练的 5/5/5、工时[25,450]
-    完全不同。在其上测得的"最优性间隙"因此混杂了结构外推误差：实测 FSHGRL 只达
-    离线最优的 77.6%，而无需训练的规则达 85.7%——读起来像方法不如规则，实际是拿
-    分布外的算例去量分布内的间隙。结构改为从 param_table 继承，不再在此处覆盖。
-    """
-    d = cfg.get("design.small")
-    pt = cfg.get("param_table")
-    proc_range = d.get("proc_time_range", pt["proc_time_range"])
-    J = int(d.get("stage_count", pt["stage_count"]))
-    mps = int(d.get("machines_per_stage", pt["machines_per_stage"]))
-    n_prod = int(d.get("product_count", pt["product_count"]))
-    gap = _gap_for_target_rho(proc_range, J, mps, d.get("target_rho_sys", 2.5))
+
+class _Tier:
+    """一档的构造器：逐算例派生种子，写文件，收集索引行。"""
+
+    def __init__(self, name: str, base_seed: int, rows: List[Dict[str, object]]) -> None:
+        self.name, self.base_seed, self.rows, self.k = name, int(base_seed), rows, 0
+        for stale in (INSTANCE_ROOT / name).glob("*.csv"):
+            stale.unlink()
+
+    def emit(self, rho_target: float, **kwargs) -> None:
+        seed = self.base_seed * 1000 + self.k
+        self.k += 1
+        inst = build_instance(np.random.default_rng(seed), tier=self.name, **kwargs)
+        path = INSTANCE_ROOT / self.name / f"{inst.instance_id}.csv"
+        save_instance_csv(inst, path)
+        self.rows.append(_index_row(inst, path, rho_target, seed))
+
+
+def _structure(pt, **override):
+    J = int(override.get("stage_count", pt["stage_count"]))
+    mps = int(override.get("machines_per_stage", pt["machines_per_stage"]))
+    return {"product_count": int(override.get("product_count", pt["product_count"])),
+            "stage_count": J, "machines_per_stage": [mps] * J,
+            "proc_time_range": pt["proc_time_range"], "ddt_spread": pt.get("ddt_spread", (1.0, 1.0))}
+
+
+def make_grid(cfg, rows):
+    d, pt = cfg.get("design.grid"), cfg.get("param_table")
+    tier = _Tier("grid", d["seed"], rows)
+    for rho in d["rho_levels"]:
+        for ddt in d["ddt_levels"]:
+            for S in d["order_counts"]:
+                st = _structure(pt)
+                gap = _gap_for_target_rho(pt["proc_time_range"], st["stage_count"],
+                                          int(pt["machines_per_stage"]), rho)
+                tier.emit(float(rho), instance_id=f"grid_rho{str(rho).replace('.', 'p')}_DDT{ddt}_S{S}",
+                          order_count=int(S), ddt=float(ddt), mean_interarrival=gap,
+                          arrival_process="poisson", **st)
+
+
+def make_val(cfg, rows):
+    d, pt = cfg.get("design.val"), cfg.get("param_table")
+    tier = _Tier("val", d["seed"], rows)
+    for rho in d["rho_levels"]:
+        for ddt in d["ddt_levels"]:
+            st = _structure(pt)
+            gap = _gap_for_target_rho(pt["proc_time_range"], st["stage_count"],
+                                      int(pt["machines_per_stage"]), rho)
+            tier.emit(float(rho), instance_id=f"val_rho{str(rho).replace('.', 'p')}_DDT{ddt}",
+                      order_count=int(d["order_count"]), ddt=float(ddt), mean_interarrival=gap,
+                      arrival_process="poisson", **st)
+
+
+def make_small(cfg, rows):
+    d, pt = cfg.get("design.small"), cfg.get("param_table")
+    tier = _Tier("small", d["seed"], rows)
+    st = _structure(pt)
+    gap = _gap_for_target_rho(pt["proc_time_range"], st["stage_count"],
+                              int(pt["machines_per_stage"]), d["target_rho_sys"])
     for S in d["order_counts"]:
         for ddt in d["ddt_levels"]:
             for k in range(int(d["instances_per_cell"])):
-                iid = f"small_S{S}_DDT{ddt}_c{k+1}"
-                _emit(build_instance(
-                    rng, instance_id=iid, tier="small",
-                    product_count=n_prod, stage_count=J,
-                    machines_per_stage=[mps] * J,
-                    order_count=int(S), proc_time_range=proc_range,
-                    ddt=float(ddt), mean_interarrival=gap,
-                    ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
-                    arrival_process="poisson"), rows)
+                tier.emit(float(d["target_rho_sys"]), instance_id=f"small_S{S}_DDT{ddt}_c{k + 1}",
+                          order_count=int(S), ddt=float(ddt), mean_interarrival=gap,
+                          arrival_process="poisson", **st)
 
 
-def make_main(cfg, rng, rows):
-    d = cfg.get("design.main")
-    pt = cfg.get("param_table")
-    J = int(pt["stage_count"])
-    # 到达率由目标系统负荷反推，而不是取参数表区间的中点：中点对应 rho_sys≈0.47，
-    # 实测该负荷下 96% 的决策点只有一张订单可选，订单维度从不被触发。
-    gap = _gap_for_target_rho(pt["proc_time_range"], J, int(pt["machines_per_stage"]),
-                              d.get("target_rho_sys", 1.2))
-    for ddt in d["ddt_levels"]:
-        for S in d["order_counts"]:
-            iid = f"main_DDT{ddt}_S{S}"
-            _emit(build_instance(
-                rng, instance_id=iid, tier="main",
-                product_count=int(pt["product_count"]), stage_count=J,
-                machines_per_stage=[int(pt["machines_per_stage"])] * J,
-                order_count=int(S), proc_time_range=pt["proc_time_range"],
-                ddt=float(ddt), mean_interarrival=gap,
-                ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
-                arrival_process="poisson"), rows)
-
-
-def make_arrival(cfg, rng, rows):
-    d = cfg.get("design.arrival")
-    pt = cfg.get("param_table")
-    J = int(pt["stage_count"])
-    for gap in d["mean_interarrival"]:
-        for proc in d["processes"]:
-            iid = f"arr_dt{str(gap).replace('.', 'p')}_{proc}"
-            _emit(build_instance(
-                rng, instance_id=iid, tier="arrival",
-                product_count=int(pt["product_count"]), stage_count=J,
-                machines_per_stage=[int(pt["machines_per_stage"])] * J,
-                order_count=int(d["order_count"]), proc_time_range=pt["proc_time_range"],
-                ddt=float(d["ddt"]), mean_interarrival=float(gap),
-                ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
-                arrival_process=proc), rows)
-
-
-def make_ood(cfg, rng, rows):
-    d = cfg.get("design.ood")
-    pt = cfg.get("param_table")
+def make_ood(cfg, rows):
+    d, pt = cfg.get("design.ood"), cfg.get("param_table")
+    tier = _Tier("ood", d["seed"], rows)
     for cond in d["conditions"]:
-        J = int(cond.get("stage_count", pt["stage_count"]))
-        mps = int(cond.get("machines_per_stage", pt["machines_per_stage"]))
-        _emit(build_instance(
-            rng, instance_id=f"ood_{cond['name']}", tier="ood",
-            product_count=int(cond.get("product_count", pt["product_count"])),
-            stage_count=J, machines_per_stage=[mps] * J,
-            order_count=int(cond.get("order_count", d["order_count_default"])),
-            proc_time_range=pt["proc_time_range"], ddt=float(d["ddt"]),
-            mean_interarrival=_gap_for_target_rho(pt["proc_time_range"], J, mps,
-                                                  cfg.get("design.main").get("target_rho_sys", 1.2)),
-            ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
-            arrival_process="poisson"), rows)
+        st = _structure(pt, **{k: v for k, v in cond.items()
+                               if k in ("stage_count", "machines_per_stage", "product_count")})
+        gap = _gap_for_target_rho(pt["proc_time_range"], st["stage_count"],
+                                  st["machines_per_stage"][0], d["target_rho_sys"])
+        tier.emit(float(d["target_rho_sys"]), instance_id=f"ood_{cond['name']}",
+                  order_count=int(cond.get("order_count", d["order_count_default"])),
+                  ddt=float(d["ddt"]), mean_interarrival=gap,
+                  arrival_process=str(cond.get("arrival_process", "poisson")), **st)
 
 
-def make_val(cfg, rng, rows):
-    d = cfg.get("design.val")
-    pt = cfg.get("param_table")
-    J = int(pt["stage_count"])
-    for k in range(int(d["count"])):
-        _emit(build_instance(
-            rng, instance_id=f"val_{k+1}", tier="val",
-            product_count=int(pt["product_count"]), stage_count=J,
-            machines_per_stage=[int(pt["machines_per_stage"])] * J,
-            order_count=int(d["order_count"]), proc_time_range=pt["proc_time_range"],
-            ddt=float(d["ddt"]),
-            mean_interarrival=_gap_for_target_rho(pt["proc_time_range"], J,
-                                                  int(pt["machines_per_stage"]),
-                                                  cfg.get("design.main").get("target_rho_sys", 1.2)),
-            ddt_spread=pt.get("ddt_spread", (1.0, 1.0)),
-            arrival_process="poisson"), rows)
+TIER_BUILDERS = {"grid": make_grid, "val": make_val, "small": make_small, "ood": make_ood}
 
 
-def make_case3d(cfg, rng, rows):
-    d = cfg.get("design.case3d")
-    mps = [int(m) for m in d["machines_per_stage"]]
-    J = len(mps)
-    for ddt in d["ddt_levels"]:
-        for S in d["order_counts"]:
-            _emit(build_instance(
-                rng, instance_id=f"case3d_DDT{ddt}_S{S}", tier="case3d",
-                product_count=int(d["product_count"]), stage_count=J,
-                machines_per_stage=mps, order_count=int(S),
-                proc_time_range=d["proc_time_range"], ddt=float(ddt),
-                mean_interarrival=float(ddt) / 6.0, arrival_process="poisson",
-                ddt_spread=cfg.get("param_table").get("ddt_spread", (1.0, 1.0)),
-                eligibility_prob=0.8), rows)
-
-
-TIER_BUILDERS = {
-    "small": make_small, "main": make_main, "arrival": make_arrival,
-    "ood": make_ood, "val": make_val, "case3d": make_case3d,
-}
-
-
-def make_eval_instances(tiers: List[str] | None = None, force: bool = False) -> Path:
+def make_eval_instances(tiers: List[str] | None = None) -> Path:
     cfg = load_config()
-    rng = np.random.default_rng()
-    tiers = tiers or list(TIER_BUILDERS)
-    rows: List[Dict[str, object]] = []
-
+    tiers = list(tiers or TIER_BUILDERS)
     index_path = INSTANCE_ROOT / "index.csv"
-    existing: List[Dict[str, object]] = []
-    if index_path.exists() and not force:
+    kept: List[Dict[str, object]] = []
+    if index_path.exists() and set(tiers) != set(TIER_BUILDERS):
         with index_path.open("r", encoding="utf-8") as handle:
-            existing = list(csv.DictReader(handle))
-
-    kept = [r for r in existing if r["tier"] not in tiers]
+            kept = [r for r in csv.DictReader(handle) if r["tier"] not in tiers]
+    rows: List[Dict[str, object]] = []
     for tier in tiers:
-        already = [r for r in existing if r["tier"] == tier]
-        if already and not force:
-            print(f"[SKIP] tier '{tier}' 已有 {len(already)} 个算例")
-            kept.extend(already)
-            continue
         before = len(rows)
-        TIER_BUILDERS[tier](cfg, rng, rows)
-        print(f"[OK] tier '{tier}' 生成 {len(rows) - before} 个算例")
-
+        TIER_BUILDERS[tier](cfg, rows)
+        print(f"[OK] tier '{tier}' 生成 {len(rows) - before} 个算例", flush=True)
     all_rows = kept + rows
     all_rows.sort(key=lambda r: (str(r["tier"]), str(r["instance_id"])))
     INSTANCE_ROOT.mkdir(parents=True, exist_ok=True)
@@ -212,7 +158,7 @@ def make_eval_instances(tiers: List[str] | None = None, force: bool = False) -> 
         writer = csv.DictWriter(handle, fieldnames=INDEX_COLUMNS)
         writer.writeheader()
         writer.writerows(all_rows)
-    print(f"[OK] index.csv 共 {len(all_rows)} 行 -> {index_path}")
+    print(f"[OK] index.csv 共 {len(all_rows)} 行 -> {index_path}", flush=True)
     return index_path
 
 
@@ -226,4 +172,6 @@ def read_index(tier: str | None = None) -> List[Dict[str, str]]:
 
 
 if __name__ == "__main__":
-    make_eval_instances(force="--force" in sys.argv)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--tiers", nargs="+", choices=list(TIER_BUILDERS), default=None)
+    make_eval_instances(parser.parse_args().tiers)
