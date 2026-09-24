@@ -87,6 +87,11 @@ python scripts/run_02_train_coh.py --runs 3 --total-steps 3000000 --workers 12  
   `checkpoint_best.pt` 按验证 η 刷新；`checkpoint_last.pt` 含优化器，中断后重跑同一命令即续跑。
 - 训练曲线在 `result/coh_run1/log.csv`（列见 `docs/experiment-spec.md` §4）。看 `sps_collect`（采样步/秒）
   估算总耗时：`total_steps / sps_collect` 秒。
+- 容器里跑过一条 15 万步、3 worker 的探针（`--total-steps 150000 --seed 7`）作为链路核对：无 NaN，每 worker
+  约 550 步/s，4 个 update-epoch 全部用满、KL 早停未触发；`commit_bce` 0.65→0.33（`commit_brier` 0.23→0.10）、
+  `hold_bce` 0.58→0.23，两个评估器在学；验证 η 在 0.18–0.24 之间波动，`p_hold` 0.13→0.06、`held_share`
+  0.018→0.006——训练早期策略先向 non-delay 收缩，何时以及是否学会选择性等待要看完整预算下的 `p_hold`、
+  `held_share` 与 `eta_val` 曲线（F5）。这条探针只说明链路可用，不是结果。
 
 单独启动一个 run：`python train.py --config coh.yaml --run-name coh_run1 --seed 1`。
 
