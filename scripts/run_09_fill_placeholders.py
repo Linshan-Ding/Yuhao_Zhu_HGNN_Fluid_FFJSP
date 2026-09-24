@@ -53,6 +53,12 @@ def fp(p):
     return "<0.001" if p < 0.001 else f"{p:.3f}" if p < 0.01 else f"{p:.2f}"
 
 
+def fp_rel(p):
+    """正文用：带关系符的 p 值（"<0.001" 或 "=0.03"），论文里写成 $p\\PH{...}$。表格单元用 fp()。"""
+    text = fp(p)
+    return text if text.startswith("<") else "=" + text
+
+
 def sign(x):
     return f"{float(x):+.3f}"
 
@@ -176,7 +182,7 @@ def sources(d):
         "DT-COH": lambda: f2(d.col("CoH", "decision_time_ms")),
         "DT-SPT": lambda: f2(d.col("SPT", "decision_time_ms")),
         "N-FAMILY": lambda: len(need(d.stats, "stats")),
-        "FRIEDMAN-P": lambda: fp(need(d.fried, "friedman")[0]["friedman_p"]),
+        "FRIEDMAN-P": lambda: fp_rel(need(d.fried, "friedman")[0]["friedman_p"]),
         "CD": lambda: f2(d.fried[0]["critical_difference"]),
         # 主结果（grid）
         "ETA-COH": lambda: f3(d.eta("CoH")), "ETA-NOHOLD": lambda: f3(d.eta("CoH-NoHold")),
@@ -187,10 +193,10 @@ def sources(d):
         "ETA-RULESEL": lambda: f3(d.eta("RuleSel-PPO")), "ETA-TDQN": lambda: f3(d.eta("Triplet-DQN")),
         "ETA-HDQN": lambda: f3(d.eta("Hier-DQN")),
         "NAME-BESTDRL": lambda: bdrl(), "ETA-BESTDRL": lambda: f3(d.stat(bdrl(), "eta_other")),
-        "P-IUT": lambda: fp(d.strat["pooled"]["CoH beats all rules (IUT)"]["p_raw"]),
+        "P-IUT": lambda: fp_rel(d.strat["pooled"]["CoH beats all rules (IUT)"]["p_raw"]),
         # 分层
-        "P-HET-DDT": lambda: fp(d.het[("CoH vs CoH-NoHold", "DDT700 vs DDT1800")]["p_perm"]),
-        "P-HET-RHO": lambda: fp(d.het[("CoH vs CoH-NoHold", "rho>=1 vs rho<1")]["p_perm"]),
+        "P-HET-DDT": lambda: fp_rel(d.het[("CoH vs CoH-NoHold", "DDT700 vs DDT1800")]["p_perm"]),
+        "P-HET-RHO": lambda: fp_rel(d.het[("CoH vs CoH-NoHold", "rho>=1 vs rho<1")]["p_perm"]),
         "HET-DDT": lambda: sign(d.het[("CoH vs CoH-NoHold", "DDT700 vs DDT1800")]["diff_of_means"]),
         "HELD-DDT700": lambda: f3(d.held("DDT700")), "HELD-DDT1800": lambda: f3(d.held("DDT1800")),
         "HELD-RHOLT1": lambda: f3(d.held("rho<1")), "HELD-RHOGE1": lambda: f3(d.held("rho>=1")),
@@ -205,7 +211,7 @@ def sources(d):
         "ETA-BESTRULE-SMALL": lambda: f3(d.exact_val("eta_best_rule")),
         "GAP-COH-OFF": lambda: f3(d.exact_val("gap_coh_off")), "GAP-ONLINE-OFF": lambda: f3(d.exact_val("gap_online_off")),
         "W-COH-ONLINE": lambda: f"{d.exact_val('wins_coh_vs_online')}/{d.exact_val('n_instances')}",
-        "P-COH-ONLINE": lambda: fp(d.exact_val("p_coh_vs_online")),
+        "P-COH-ONLINE": lambda: fp_rel(d.exact_val("p_coh_vs_online")),
         "T-ONLINE": lambda: f"{float(d.exact_val('online_time_s')):.0f}",
         "T-CPSAT": lambda: f"{float(d.exact_val('cpsat_time_s')):.1f}",
         # OOD
@@ -221,11 +227,11 @@ def sources(d):
     for key, opp in (("SPTIDLESTAR", "SPT-Idle*"), ("ORACLERULE", "OracleRule"), ("NOHOLD", "CoH-NoHold")):
         src[f"GAIN-{key}"] = (lambda o=opp: sign(d.stat(o, "mean_diff")))
         src[f"W-{key}"] = (lambda o=opp: f"{d.stat(o, 'wins')}/{d.stat(o, 'n')}")
-        src[f"P-{key}"] = (lambda o=opp: fp(d.stat(o, "p_holm")))
+        src[f"P-{key}"] = (lambda o=opp: fp_rel(d.stat(o, "p_holm")))
         src[f"D-{key}"] = (lambda o=opp: sign(d.stat(o, "cliff_delta")))
     src["GAIN-BESTDRL"] = lambda: sign(d.stat(bdrl(), "mean_diff"))
     src["W-BESTDRL"] = lambda: f"{d.stat(bdrl(), 'wins')}/{d.stat(bdrl(), 'n')}"
-    src["P-BESTDRL"] = lambda: fp(d.stat(bdrl(), "p_holm"))
+    src["P-BESTDRL"] = lambda: fp_rel(d.stat(bdrl(), "p_holm"))
     src["D-BESTDRL"] = lambda: sign(d.stat(bdrl(), "cliff_delta"))
     # 分层：非延迟的代价与对最强规则的增益
     for band in ("DDT700", "DDT1100", "DDT1800", "RHOLT1", "RHOGE1"):
@@ -251,7 +257,7 @@ def sources(d):
     for key, var in (("NOCRITIC", "CoH-NoCritic"), ("NOGATE", "CoH-NoGate"), ("NOHOLDCRITIC", "CoH-NoHoldCritic"),
                      ("NOGATEFEAT", "CoH-NoGateFeat"), ("EDD", "CoH-EDD")):
         src[f"A-{key}"] = (lambda v=var: sign(d.stat(v, "mean_diff")))
-        src[f"P-{key}"] = (lambda v=var: fp(d.stat(v, "p_holm")))
+        src[f"P-{key}"] = (lambda v=var: fp_rel(d.stat(v, "p_holm")))
     return src
 
 

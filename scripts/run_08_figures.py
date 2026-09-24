@@ -38,7 +38,7 @@ def save(fig, stem):
 def fig_price(cells):
     rhos = sorted({float(r["rho"]) for r in cells})
     ddts = sorted({float(r["DDT"]) for r in cells})
-    fig, axes = plt.subplots(1, 2, figsize=(7.0, 2.8))
+    fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.8), constrained_layout=True)
     for ax, key, title in zip(axes, ("price_vs_nohold", "price_vs_oracle_rule"),
                               ("CoH minus learned non-delay policy", "CoH minus best rule per instance")):
         grid = np.full((len(rhos), len(ddts)), np.nan)
@@ -54,9 +54,10 @@ def fig_price(cells):
         ax.set_xticks(range(len(ddts)), [f"{int(d)}" for d in ddts])
         ax.set_yticks(range(len(rhos)), [f"{r:.1f}" for r in rhos])
         ax.set_xlabel("Due-date allowance DDT")
-        ax.set_ylabel("Offered load $\\rho_{sys}$")
+        if ax is axes[0]:
+            ax.set_ylabel("Offered load $\\rho_{sys}$")
         ax.set_title(title, fontsize=9)
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="$\\Delta\\eta$")
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.03, label="$\\Delta\\eta$")
     save(fig, "F1_price_of_non_delay")
 
 
@@ -89,10 +90,10 @@ def fig_gate_map(rows):
         i = int(round(float(r["p_max_lo"]) * 5))
         j = int(round(float(r["exp_arr_lo"]) * 5))
         grid[j, i] = float(r["held_rate"])
-    fig, ax = plt.subplots(figsize=(3.8, 3.0))
-    im = ax.imshow(grid, cmap="viridis", vmin=0, vmax=1, origin="lower", aspect="auto")
-    ax.set_xticks(range(5), [f"{e:.1f}" for e in edges[:-1]])
-    ax.set_yticks(range(5), [f"{e:.1f}" for e in edges[:-1]])
+    fig, ax = plt.subplots(figsize=(3.8, 3.0), constrained_layout=True)
+    im = ax.imshow(grid, cmap="viridis", vmin=0, vmax=1, origin="lower", aspect="auto", extent=[0, 1, 0, 1])
+    ax.set_xticks(edges, [f"{e:.1f}" for e in edges])
+    ax.set_yticks(edges, [f"{e:.1f}" for e in edges])
     ax.set_xlabel("Best commitment probability $\\max_o \\hat p(o\\mid s)$")
     ax.set_ylabel("Expected arrivals during the hold (scaled)")
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="Hold rate")
