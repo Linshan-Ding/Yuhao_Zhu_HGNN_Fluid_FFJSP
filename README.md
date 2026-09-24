@@ -23,7 +23,13 @@ Flow Shops with Order Insertion* 的实验工程。**本 README 不是项目简�
 | 回填 | `run_09_fill_placeholders.py --paper-dir <论文目录>` | `paper_values.tex`、`tables/*.tex`、`figures/*.pdf`（复制到论文目录） | 秒级 |
 
 一条命令跑完全部：`python scripts/run_all.py --jobs 12`（训练脚本会跳过已训满预算的 run，评测与统计每次重算）。
-先用 `python scripts/run_all.py --smoke` 走一遍极小预算的全流程（约半小时），确认链路无误再投入算力。
+先用 `python scripts/run_all.py --smoke` 走一遍极小预算的全流程，确认链路无误再投入算力。
+
+容器实测（4 核 CPU、无 GPU、2 个 worker、`--jobs 3`、冒烟预算）：每个 worker 采样约 500–700 步/s（`sps_collect`
+约 1000–1400）；一个 56 条 episode 的 epoch 约 2 万步；CoH 一个 epoch 含更新约 60–110 s，其中 CPU 上的 PPO 更新
+占一半以上；`run_05` 评测 8 条规则 + 5 个阈值 + 10 个 run 共 43 个算例 129 s；`run_06` 24 个 small 算例（CP-SAT
+限时 60 s、滚动重优化每次 10 s）173 s；`run_07`–`run_09` 各 ≤ 4 s。用户机器 14 个 worker 的吞吐按 7 倍估计，
+GPU 上的更新可忽略，因此上表按 6M 步 / (14 × 600 步/s) ≈ 12 分钟采样 + 验证与更新给出每 run 20–40 分钟。
 
 ## 1. 问题假设
 
