@@ -16,6 +16,22 @@ class Problem:
     """把一个算例包装成可查询的问题对象。"""
 
     def __init__(self, inst: Instance) -> None:
+        if inst.proc_times.shape != (inst.task_count, inst.machine_count):
+            raise ValueError("processing catalog shape mismatch")
+        if not np.isfinite(inst.proc_times).all() or (inst.proc_times < 0).any() or not (inst.proc_times > 0).any(1).all():
+            raise ValueError("every operation needs a finite positive eligible processing time")
+        if len(inst.machines_per_stage) != inst.stage_count or min(inst.machines_per_stage) < 1:
+            raise ValueError("invalid stage machine partition")
+        for t in range(inst.task_count):
+            lo, hi = inst.stage_machine_slice(t % inst.stage_count)
+            if np.any(inst.proc_times[t, :lo] > 0) or np.any(inst.proc_times[t, hi:] > 0):
+                raise ValueError("an operation must use machines in its flow-shop stage")
+        if not (len(inst.arrival_times) == len(inst.due_dates) == inst.order_count):
+            raise ValueError("order array length mismatch")
+        if not np.isfinite(inst.arrival_times).all() or not np.isfinite(inst.due_dates).all():
+            raise ValueError("arrival times and deadlines must be finite")
+        if ((inst.order_product < 0) | (inst.order_product >= inst.product_count)).any():
+            raise ValueError("invalid product index")
         self.inst = inst
         self.n_task = inst.task_count
         self.n_machine = inst.machine_count

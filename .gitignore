@@ -1,11 +1,14 @@
+__pycache__/
 *.py[cod]
 *.pt
-
-# Keep all experiment results
-!result/
-!result/**
-# ...but never the bytecode cache that result/logger.py leaves behind
-result/__pycache__/
-
+*.tmp
 .venv/
 .idea/
+.pytest_cache/
+.pytest_tmp/
+.refactor/
+/result/*
+!/result/*.py
+/data/instances/*
+!/data/instances/fixed/
+!/data/instances/fixed/**

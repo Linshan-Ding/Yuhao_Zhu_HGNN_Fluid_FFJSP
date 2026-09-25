@@ -1,7 +1,7 @@
-# 全部免授权：CP-SAT 来自 ortools，其余为 PyTorch/SciPy 生态。GPU 可选（主进程更新用）。
-numpy>=1.24
-scipy>=1.11
-PyYAML>=6.0
-torch>=2.1
-matplotlib>=3.7
-ortools>=9.8
+numpy==2.3.3
+scipy==1.16.2
+PyYAML==6.0.3
+torch==2.11.0
+matplotlib==3.10.6
+ortools==9.15.6755
+pytest==9.1.1

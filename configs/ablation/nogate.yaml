@@ -1,3 +1,0 @@
-# CoH-NoGate：no-op 作为普通一行候选进 softmax，无显式门控与等待前景评估器。
-variant: {name: CoH-NoGate}
-coh: {gate: false, hold_critic: false}

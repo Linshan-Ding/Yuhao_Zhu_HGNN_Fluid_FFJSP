@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import math
+from functools import lru_cache
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
@@ -58,7 +59,8 @@ def load_metrics(inst: Instance) -> Dict[str, float]:
     arrivals = np.sort(inst.arrival_times)
     gaps = np.diff(arrivals)
     mean_gap = float(gaps.mean()) if gaps.size else float("inf")
-    lam = 1.0 / mean_gap if mean_gap > 0 else 0.0
+    empirical_lambda = 1.0 / mean_gap if mean_gap > 0 else 0.0
+    lam = 1.0 / float(inst.meta["mean_interarrival"]) if inst.meta.get("mean_interarrival", 0) > 0 else empirical_lambda
 
     # 每型每阶段在合格机器上的平均加工时间
     per_product_work = np.zeros(inst.product_count, dtype=np.float64)
@@ -72,22 +74,54 @@ def load_metrics(inst: Instance) -> Dict[str, float]:
             per_product_work[r] += mean_p
             per_stage_times.append(mean_p)
 
-    counts = np.bincount(inst.order_product, minlength=inst.product_count).astype(np.float64)
-    pi_r = counts / max(counts.sum(), 1.0)
+    pi_r = np.full(inst.product_count, 1.0 / inst.product_count)
     w_bar = float((pi_r * per_product_work).sum())
     p_bar = float(np.mean(per_stage_times)) if per_stage_times else 0.0
 
-    rho = lam * w_bar / max(inst.machine_count, 1)
+    rho = lam * capacity_unit_load(inst.proc_times, inst.product_count, inst.stage_count, pi_r)
     iota = lam * p_bar
     return {
         "E_dt": mean_gap,
         "Lambda": lam,
+        "empirical_Lambda": empirical_lambda,
         "W_bar": w_bar,
         "p_bar": p_bar,
         "rho_sys": rho,
         "iota": iota,
-        "regime": "overloaded" if rho >= 1.0 else ("high_frequency" if iota >= 1.0 else "moderate"),
+        "regime": "capacity_overload" if rho > 1.0 else "below_capacity",
     }
+
+
+def capacity_unit_load(proc, products, stages, proportions=None):
+    """Fractional routing LP: min max machine workload per unit arrival rate.
+
+    This is an asymptotic capacity diagnostic, not a finite-instance fulfillment bound.
+    """
+    from scipy.optimize import linprog
+    pi = np.full(products, 1.0 / products) if proportions is None else np.asarray(proportions)
+    array = np.ascontiguousarray(proc,dtype=np.float64)
+    return _capacity_cached(array.tobytes(),array.shape,products,stages,tuple(pi))
+
+
+@lru_cache(maxsize=512)
+def _capacity_cached(raw,shape,products,stages,proportions):
+    from scipy.optimize import linprog
+    proc=np.frombuffer(raw,dtype=np.float64).reshape(shape)
+    pi=np.asarray(proportions)
+    tasks, machines = np.nonzero(proc > 0)
+    k, m = len(tasks), proc.shape[1]
+    eq = np.zeros((products * stages, k + 1))
+    eq[tasks, np.arange(k)] = 1.0
+    ub = np.zeros((m, k + 1))
+    ub[machines, np.arange(k)] = proc[tasks, machines]
+    ub[:, -1] = -1.0
+    c = np.zeros(k + 1)
+    c[-1] = 1.0
+    result = linprog(c, A_ub=ub, b_ub=np.zeros(m), A_eq=eq,
+                     b_eq=np.repeat(pi, stages), bounds=(0, None), method="highs")
+    if not result.success:
+        raise ValueError(f"invalid processing catalog: {result.message}")
+    return float(result.fun)
 
 
 # --------------------------------------------------------------------------- #
@@ -95,30 +129,34 @@ def load_metrics(inst: Instance) -> Dict[str, float]:
 # --------------------------------------------------------------------------- #
 def sample_arrivals(rng: np.random.Generator, count: int, mean_gap: float,
                     process: str = "poisson") -> np.ndarray:
+    if count < 0 or not np.isfinite(mean_gap) or mean_gap <= 0:
+        raise ValueError("invalid arrival process parameters")
+    if count == 0:
+        return np.empty(0, dtype=np.float64)
     process = process.lower()
     if process == "deterministic":
         gaps = np.full(count, mean_gap, dtype=np.float64)
     elif process == "poisson":
         gaps = rng.exponential(mean_gap, size=count)
     elif process == "mmpp":
-        # 两相 Markov 调制突发过程：突发相的间隔是安静相的 1/10。
-        p_enter, p_stay = 0.30, 0.75          # 稳态突发概率 = p_enter / (p_enter + 1 - p_stay)
-        burst_scale = 0.1
-        gaps = np.empty(count, dtype=np.float64)
-        in_burst = False
-        for i in range(count):
-            in_burst = (rng.random() < (p_stay if in_burst else p_enter))
-            gaps[i] = rng.exponential(burst_scale if in_burst else 1.0)
+        # Continuous-time two-state chain, stationary mean intensity 1/mean_gap.
+        rates = np.asarray([0.2, 1.8]) / mean_gap
+        switch_rate = 0.2 / mean_gap
+        state, now, arrivals = int(rng.integers(2)), 0.0, []
+        while len(arrivals) < count:
+            now += rng.exponential(1.0 / (rates[state] + switch_rate))
+            if rng.random() < switch_rate / (rates[state] + switch_rate):
+                state = 1 - state
+            else:
+                arrivals.append(now)
+        return np.asarray(arrivals)
     elif process == "uniform":
-        gaps = rng.uniform(0.0, 2.0, size=count)
+        gaps = rng.uniform(0.0, 2.0 * mean_gap, size=count)
     else:
         raise ValueError(f"unknown arrival process: {process}")
 
-    # 三种过程按构造共享同一平均到达率：把间隔整体缩放到样本均值恰为 mean_gap。
-    # 这样 arrival 档内不同过程之间的差异只反映突发性，不混入负荷差异
-    # （稿件 §5.8 的到达过程对照正是建立在这一点上）。
+    # Preserve stochastic sample-to-sample variation; never normalize an entire path.
     gaps = np.maximum(gaps, 1e-9)
-    gaps = gaps * (mean_gap / float(gaps.mean()))
     return np.cumsum(gaps)
 
 
@@ -131,7 +169,8 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
                    ddt: float, mean_interarrival: float,
                    arrival_process: str = "poisson",
                    eligibility_prob: float = 1.0,
-                   ddt_spread: Sequence[float] = (1.0, 1.0)) -> Instance:
+                   ddt_spread: Sequence[float] = (1.0, 1.0),
+                   target_rho: float | None = None, due_factor: float | None = None) -> Instance:
     machines_per_stage = tuple(int(m) for m in machines_per_stage)
     machine_count = int(sum(machines_per_stage))
     lo_p, hi_p = float(proc_time_range[0]), float(proc_time_range[1])
@@ -149,6 +188,13 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
                 row = np.where(keep, row, 0.0).astype(np.float32)
             proc[r * stage_count + j, start:end] = row
 
+    if target_rho is not None:
+        if target_rho <= 0:
+            raise ValueError("target_rho must be positive")
+        mean_interarrival = capacity_unit_load(proc, product_count, stage_count) / target_rho
+    route = np.where(proc > 0, proc, np.inf).min(1).reshape(product_count, stage_count).sum(1)
+    if due_factor is not None:
+        ddt = float(route.mean() * due_factor)
     order_product = rng.integers(0, product_count, size=order_count)
     arrivals = sample_arrivals(rng, order_count, mean_interarrival, arrival_process)
     # 逐单独立抽交期宽松度。若所有订单共用同一常数 DDT，则 due - arrival 恒定，
@@ -156,6 +202,8 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
     # 在决策上不携带任何信息。乘性扰动是让 EDD 与 FIFO 分离的最小改动。
     lo_d, hi_d = float(ddt_spread[0]), float(ddt_spread[1])
     slack = float(ddt) * (rng.uniform(lo_d, hi_d, size=order_count) if hi_d > lo_d else lo_d)
+    if due_factor is not None:
+        slack *= route[order_product] / route.mean()
     due = arrivals + slack
 
     inst = Instance(
@@ -165,53 +213,15 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
         order_product=order_product, arrival_times=arrivals, due_dates=due,
         meta={"DDT": float(ddt), "mean_interarrival": float(mean_interarrival),
               "arrival_process": arrival_process,
-              "ddt_spread_lo": lo_d, "ddt_spread_hi": hi_d},
+              "ddt_spread_lo": lo_d, "ddt_spread_hi": hi_d,
+              "due_factor": due_factor if due_factor is not None else 0.0,
+              "rho_target": target_rho if target_rho is not None else 0.0,
+              "schema_version": "schedule-data-1"},
     )
     inst.meta.update(load_metrics(inst))
     return inst
 
 
-def sample_training_instance(rng: np.random.Generator, param_table: Dict) -> Instance:
-    """训练算例：每个周期按参数表现场随机构造，不预生成、不落盘。
-
-    到达强度按**系统负荷 rho_sys 均匀抽样**再反推到达间隔，而不是对到达间隔均匀
-    抽样。后者因 rho ∝ 1/gap 而极度右偏：实测 82% 的训练算力落在评测从不覆盖的
-    工况上，且 31% 的训练算例随机策略即 eta=1.0（零梯度）、44% 落在 eta<0.2
-    （同样无区分度）。按 rho 分层可把算力集中到有梯度的带内。
-    """
-    lo_s, hi_s = param_table["order_count_range"]
-    lo_ddt, hi_ddt = param_table["ddt_range"]
-    stage_count = int(param_table["stage_count"])
-    machines_per_stage = int(param_table["machines_per_stage"])
-    proc_range = param_table["proc_time_range"]
-
-    rho_range = param_table.get("rho_range")
-    if rho_range is not None:
-        rho = float(rng.uniform(float(rho_range[0]), float(rho_range[1])))
-        mean_p = (float(proc_range[0]) + float(proc_range[1])) / 2.0
-        gap = (stage_count * mean_p) / (rho * stage_count * machines_per_stage)
-    else:                                   # 兼容旧参数表
-        lo_dt, hi_dt = param_table["interarrival_range"]
-        gap = float(rng.integers(int(lo_dt), int(hi_dt) + 1))
-
-    return build_instance(
-        rng,
-        instance_id="train_random", tier="train",
-        product_count=int(param_table["product_count"]),
-        stage_count=stage_count,
-        machines_per_stage=[machines_per_stage] * stage_count,
-        order_count=int(rng.integers(lo_s, hi_s + 1)),
-        proc_time_range=proc_range,
-        ddt=float(rng.integers(int(lo_ddt), int(hi_ddt) + 1)),
-        mean_interarrival=gap,
-        ddt_spread=param_table.get("ddt_spread", (1.0, 1.0)),
-        arrival_process="poisson",
-    )
-
-
-# --------------------------------------------------------------------------- #
-# 单算例 CSV 读写（长表）
-# --------------------------------------------------------------------------- #
 def save_instance_csv(inst: Instance, path: str | Path) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

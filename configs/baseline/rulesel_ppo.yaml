@@ -1,3 +1,0 @@
-# 规则选择 PPO（DRLG 风格）：每个决策点在 7 条规则 + 保留产能里选一个，规则再定三元组。
-variant: {name: RuleSel-PPO}
-training: {method: rule_ppo}

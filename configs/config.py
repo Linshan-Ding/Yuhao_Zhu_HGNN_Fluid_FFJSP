@@ -10,7 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = ROOT / "configs"
-DEFAULT_CONFIGS = ["instance.yaml", "env.yaml", "algo.yaml"]
+
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,16 +60,3 @@ class Config:
         with path.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(self.raw, handle, allow_unicode=True, sort_keys=False)
 
-
-def load_config(extra: List[str] | None = None) -> Config:
-    """按 DEFAULT_CONFIGS 顺序叠加，再叠加 `extra` 中的路径（后者覆盖前者）。"""
-    merged: Dict[str, Any] = {}
-    for name in DEFAULT_CONFIGS + list(extra or []):
-        path = Path(name)
-        if not path.is_absolute():
-            path = CONFIG_DIR / name if (CONFIG_DIR / name).exists() else ROOT / name
-        if not path.exists():
-            raise FileNotFoundError(f"config file not found: {path}")
-        with path.open("r", encoding="utf-8") as handle:
-            merged = _deep_merge(merged, yaml.safe_load(handle) or {})
-    return Config(merged)
