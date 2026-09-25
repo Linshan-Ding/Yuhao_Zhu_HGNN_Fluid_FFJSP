@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-25",
+  "tests_passed": 31,
+  "engineering_interactions": 44222,
+  "engineering_limit": 50000,
+  "training_source": "9e49c83e66c75b679c379b3e3678f05c826c3e8293b481b1a2afdb09804413ac",
+  "evaluation_source": "25d78cf3369afd3a359857ffc53c6765a97b5ed8f7d3cb68a632baeb6e1d8aa3",
+  "formal_jobs": 73,
+  "formal_budget": 64000000,
+  "formal_interactions": 0,
+  "fixed_unique_cases": 50,
+  "data_manifest_sha256": "008825e12e77dd8741ca8a99cef7f025c96c7fc41ef71dd3a0dfab941c7f52a0",
+  "smoke_identity": "969337739d727da312acfddfeb86e191235ccfde1af7be4229655d55b2f1d980",
+  "smoke_seconds": 115.10447319998639,
+  "migration": {
+    "policies": 11,
+    "max_error": 0,
+    "transition_steps": 12
+  },
+  "scope": "code repository only"
+}

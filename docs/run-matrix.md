@@ -1,0 +1,81 @@
+# 正式运行矩阵
+
+全部作业尚未启动。动态状态以 result/formal/budget_ledger.json 和各作业 status.json 为准。
+
+| 作业 | 方法 | 种子 | 预算 | 入口 |
+|---|---|---:|---:|---|
+| full_s1 | full | 1 | 1000000 | run_02_train_main.py |
+| full_s2 | full | 2 | 1000000 | run_02_train_main.py |
+| full_s3 | full | 3 | 1000000 | run_02_train_main.py |
+| full_s4 | full | 4 | 1000000 | run_02_train_main.py |
+| full_s5 | full | 5 | 1000000 | run_02_train_main.py |
+| dqn_s1 | dqn | 1 | 1000000 | run_03_train_comparators.py |
+| dqn_s2 | dqn | 2 | 1000000 | run_03_train_comparators.py |
+| dqn_s3 | dqn | 3 | 1000000 | run_03_train_comparators.py |
+| dqn_s4 | dqn | 4 | 1000000 | run_03_train_comparators.py |
+| dqn_s5 | dqn | 5 | 1000000 | run_03_train_comparators.py |
+| ddqn_s1 | ddqn | 1 | 1000000 | run_03_train_comparators.py |
+| ddqn_s2 | ddqn | 2 | 1000000 | run_03_train_comparators.py |
+| ddqn_s3 | ddqn | 3 | 1000000 | run_03_train_comparators.py |
+| ddqn_s4 | ddqn | 4 | 1000000 | run_03_train_comparators.py |
+| ddqn_s5 | ddqn | 5 | 1000000 | run_03_train_comparators.py |
+| a2c_s1 | a2c | 1 | 1000000 | run_03_train_comparators.py |
+| a2c_s2 | a2c | 2 | 1000000 | run_03_train_comparators.py |
+| a2c_s3 | a2c | 3 | 1000000 | run_03_train_comparators.py |
+| a2c_s4 | a2c | 4 | 1000000 | run_03_train_comparators.py |
+| a2c_s5 | a2c | 5 | 1000000 | run_03_train_comparators.py |
+| ppo_s1 | ppo | 1 | 1000000 | run_03_train_comparators.py |
+| ppo_s2 | ppo | 2 | 1000000 | run_03_train_comparators.py |
+| ppo_s3 | ppo | 3 | 1000000 | run_03_train_comparators.py |
+| ppo_s4 | ppo | 4 | 1000000 | run_03_train_comparators.py |
+| ppo_s5 | ppo | 5 | 1000000 | run_03_train_comparators.py |
+| hgnn_s1 | hgnn | 1 | 1000000 | run_03_train_comparators.py |
+| hgnn_s2 | hgnn | 2 | 1000000 | run_03_train_comparators.py |
+| hgnn_s3 | hgnn | 3 | 1000000 | run_03_train_comparators.py |
+| hgnn_s4 | hgnn | 4 | 1000000 | run_03_train_comparators.py |
+| hgnn_s5 | hgnn | 5 | 1000000 | run_03_train_comparators.py |
+| dual_attention_s1 | dual_attention | 1 | 1000000 | run_03_train_comparators.py |
+| dual_attention_s2 | dual_attention | 2 | 1000000 | run_03_train_comparators.py |
+| dual_attention_s3 | dual_attention | 3 | 1000000 | run_03_train_comparators.py |
+| dual_attention_s4 | dual_attention | 4 | 1000000 | run_03_train_comparators.py |
+| dual_attention_s5 | dual_attention | 5 | 1000000 | run_03_train_comparators.py |
+| no_graph_s1 | no_graph | 1 | 1000000 | run_03_train_comparators.py |
+| no_graph_s2 | no_graph | 2 | 1000000 | run_03_train_comparators.py |
+| no_graph_s3 | no_graph | 3 | 1000000 | run_03_train_comparators.py |
+| no_graph_s4 | no_graph | 4 | 1000000 | run_03_train_comparators.py |
+| no_graph_s5 | no_graph | 5 | 1000000 | run_03_train_comparators.py |
+| no_scenario_s1 | no_scenario | 1 | 1000000 | run_03_train_comparators.py |
+| no_scenario_s2 | no_scenario | 2 | 1000000 | run_03_train_comparators.py |
+| no_scenario_s3 | no_scenario | 3 | 1000000 | run_03_train_comparators.py |
+| no_scenario_s4 | no_scenario | 4 | 1000000 | run_03_train_comparators.py |
+| no_scenario_s5 | no_scenario | 5 | 1000000 | run_03_train_comparators.py |
+| no_demo_s1 | no_demo | 1 | 1000000 | run_03_train_comparators.py |
+| no_demo_s2 | no_demo | 2 | 1000000 | run_03_train_comparators.py |
+| no_demo_s3 | no_demo | 3 | 1000000 | run_03_train_comparators.py |
+| no_demo_s4 | no_demo | 4 | 1000000 | run_03_train_comparators.py |
+| no_demo_s5 | no_demo | 5 | 1000000 | run_03_train_comparators.py |
+| impact_only_s1 | impact_only | 1 | 1000000 | run_03_train_comparators.py |
+| impact_only_s2 | impact_only | 2 | 1000000 | run_03_train_comparators.py |
+| impact_only_s3 | impact_only | 3 | 1000000 | run_03_train_comparators.py |
+| impact_only_s4 | impact_only | 4 | 1000000 | run_03_train_comparators.py |
+| impact_only_s5 | impact_only | 5 | 1000000 | run_03_train_comparators.py |
+| sensitivity_k1_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_k1_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_k1_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_k4_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_k4_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_k4_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_w003_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_w003_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_w003_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_w03_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_w03_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_w03_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_h1_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_h1_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_h1_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_h4_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_h4_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_h4_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+
+共73作业，6400万交互。CPU单进程一线程，上限8并发；初始化与情景已包含于作业预算。
