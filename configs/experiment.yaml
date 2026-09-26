@@ -5,9 +5,13 @@ network:
   layers: 3
   action_layers: 2
   candidate_chunk: 128
+  path_capacity: true
+  path_delivery: true
 environment:
   wait_interval: 0.0
   max_steps: 20000
+  exposure: hopeful_first
+  exposure_threshold: 1.5
 data:
   products: 3
   stages: 3
@@ -21,6 +25,9 @@ data:
   due_factor:
   - 1.5
   - 3.0
+  due_jitter:
+  - 0.9
+  - 1.1
   eligibility_probability: 0.8
   max_attempts: 1000
   regimes:
@@ -94,10 +101,14 @@ scenario:
   replay_batches: 4
   replay_batch: 32
   versions: 2
-  teacher_interval: 8192
+  frozen_interval: 8192
   reliability_floor: 0.01
   max_preference: 2.0
   kl: 0.01
+  minimum_query_cost: 64
+  reservation_floor: 4096
+  reservation_multiplier: 2
+  wait_probe_interval: 4
 runtime:
   device: cpu
   jobs: 8
@@ -109,6 +120,7 @@ demonstration:
   epochs: 10
   minibatch: 256
   learning_rate: 0.001
+  max_grad_norm: 0.5
 classic:
   width: 128
   replay_size: 50000
@@ -155,6 +167,7 @@ experiment:
     wall_seconds: 300
     deterministic_seconds: 60
     workers: 1
+  evaluate_milestones_from: 100000
   bootstrap_repeats: 2000
   statistics_seed: 5691001
   latency_warmup: 10
@@ -195,7 +208,11 @@ recording:
   minimum_free_gb: 5.0
   preflight_headroom: 2.0
   keep_recovery_copies: 2
+  phase_startup_fraction: 0.2
 smoke:
   interaction_limit: 50000
   budget: 128
   scenario_probe_budget: 4096
+  probe_due_factor:
+  - 1.0
+  - 1.3

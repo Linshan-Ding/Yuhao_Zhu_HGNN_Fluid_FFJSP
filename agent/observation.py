@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import numpy as np
 from agent.graph import observe as base_observe
 from environment.public import PublicSchedulingState, readonly
-from environment.interfaces import Wait
 
 EXTRA_DIM=11
 CONDITION_DIM=8

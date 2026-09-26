@@ -7,39 +7,37 @@ import subprocess
 import zipfile
 from importlib.metadata import version, PackageNotFoundError
 from configs.experiment import ROOT
-from result.storage import atomic_json, digest
+from result.storage import atomic_json, digest, normalized_bytes
 
 
 def hash_files(paths):
+    """Identity of a set of source files: path-tagged, with CRLF folded to LF (see storage.normalized_bytes)."""
     h=hashlib.sha256()
     for p in sorted(set(Path(p) for p in paths)):
-        h.update(p.relative_to(ROOT).as_posix().encode()+b"\0"+p.read_bytes()+b"\0")
+        h.update(p.relative_to(ROOT).as_posix().encode()+b"\0"+normalized_bytes(p)+b"\0")
     return h.hexdigest()
 
 
 def training_files():
+    """Sources whose semantics define a training run (result/evaluation.py drives validation monitoring and best-checkpoint selection)."""
     names=['model','observation','learning','preference','rules','training','graph','graph_layers','returns','ppo','future']
     return [ROOT/f'agent/{n}.py' for n in names]+[ROOT/p for p in (
         'configs/experiment.py','configs/config.py','data/online.py','data/benchmark.py','data/generator.py',
         'environment/env.py','environment/public.py','environment/interfaces.py','environment/problem.py',
-        'environment/accounting.py','result/storage.py','result/recording.py','result/provenance.py')]
+        'environment/accounting.py','result/storage.py','result/recording.py','result/provenance.py','result/evaluation.py')]
 
 
 def source_hash(): return hash_files(training_files())
 
 
 def evaluation_hash():
-    return hash_files([*training_files(),ROOT/'result/evaluation.py',ROOT/'agent/offline.py',
-                      ROOT/'environment/offline_replay.py',ROOT/'result/offline.py'])
+    return hash_files([*training_files(),ROOT/'environment/offline_cpsat.py',ROOT/'environment/offline_replay.py',ROOT/'result/offline.py'])
 
 
 def source_files():
     return sorted(p for folder in ('agent','configs','data','environment','result','scripts','tests','docs')
         for p in (ROOT/folder).glob('**/*') if p.is_file() and p.suffix in ('.py','.yaml','.md')
         and '__pycache__' not in p.parts and not any(x in p.parts for x in ('formal','engineering','instances','raw','runs')))
-
-
-def full_source_hash(): return hash_files(source_files()+[ROOT/'README.md',ROOT/'requirements.txt'])
 
 
 def runtime_info():

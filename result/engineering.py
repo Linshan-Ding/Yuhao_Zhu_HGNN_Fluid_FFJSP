@@ -1,13 +1,14 @@
 """Bounded engineering validation, independent of the formal training ledger."""
 import json
 import time
-from configs.experiment import ROOT
+from configs.experiment import ROOT, config
 from result.storage import atomic_json
 
 
 class InteractionCounter:
-    def __init__(self, limit=50000):
-        self.path=ROOT/'result/engineering/interaction_ledger.json';self.limit=limit
+    def __init__(self, limit=None):
+        self.path=ROOT/'result/engineering/interaction_ledger.json'
+        self.limit=config()['smoke']['interaction_limit'] if limit is None else limit
         if self.path.exists(): state=json.loads(self.path.read_text())
         else: state=dict(charged_upper_bound=24, committed=24, sessions=[], migration_interactions=24)
         self.sessions=state.get('sessions',[])
@@ -19,7 +20,7 @@ class InteractionCounter:
                                   sessions=self.sessions,migration_interactions=24))
 
     def charge(self):
-        if self.spent>=self.limit: raise RuntimeError('Engineering interaction cap of 50000 reached')
+        if self.spent>=self.limit: raise RuntimeError(f'Engineering interaction cap of {self.limit} reached')
         if self.spent>=self.reserved:
             self.reserved=min(self.limit,self.spent+128);self.persist()
         self.spent+=1

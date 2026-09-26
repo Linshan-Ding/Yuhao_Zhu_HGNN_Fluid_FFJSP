@@ -3,7 +3,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 import torch
-from configs.experiment import config,environment_config,METHODS,CLASSIC
+from configs.experiment import config,environment_config
 from data.generator import Instance
 from data.online import sample
 from environment.public import SchedulingEnv,ActionSet
@@ -102,11 +102,11 @@ def test_candidates_use_live_policy_and_continuation_stays_frozen():
     assert label.continuations.count('SPT')==label.continuations.count('frozen_policy')==1
 
 def test_preferences_expire_and_rollback(monkeypatch):
-    import agent.learning as learning
+    import agent.ppo as ppo  # the transactional step (shared by PPO and preference updates) lives there
     c=config(True);o=observe(tiny());p=Policy(c);opt=torch.optim.Adam(p.parameters(),lr=.001)
     label=ScenarioPreference((0,1),np.array([[0.,1.],[0.,1.]]),1.,0.,.9,.9,1,8,0.,True,'test',[],[],'',[],[])
     replay=PreferenceReplay(4,2);replay.add(o,label);replay.expire(2);assert len(replay.items)==1
-    before=deepcopy(p.state_dict());monkeypatch.setattr(learning,'categorical_kl',lambda *args:torch.tensor(1.))
+    before=deepcopy(p.state_dict());monkeypatch.setattr(ppo,'categorical_kl',lambda *args:torch.tensor(1.))
     m=preference_update(p,opt,replay,c,np.random.default_rng(1),2);assert m['preference_rejected']==1 and not opt.state
     for k,v in before.items():torch.testing.assert_close(v,p.state_dict()[k],rtol=0,atol=0)
     replay.expire(3);assert not replay.items
@@ -126,3 +126,19 @@ def test_exact_resume_and_budget(tmp_path,method):
     for k in a['model']:torch.testing.assert_close(a['model'][k],b['model'][k],rtol=0,atol=0)
     bad=deepcopy(c);bad['training']['learning_rate']*=2
     with pytest.raises(ValueError,match='incompatible'):train(bad,tmp_path/'part',3,32,tmp_path/'data')
+
+
+def test_recovery_landing_on_milestone_still_writes_its_checkpoint(tmp_path):
+    import json
+    from agent.training import train
+    c=config(True);c['method']='hgnn';c['demonstration'].update(steps=8,epochs=1)
+    c['training'].update(milestones=[16,32],evaluate_every=32,rollout_steps=8);torch.set_num_threads(1)
+    run=tmp_path/'run';train(c,run,3,8,tmp_path/'data')
+    assert (run/'checkpoint_8.pt').exists()  # budget reached before any update loop
+    # Simulate a crash after reserving up to the 16-interaction milestone: the reservation is charged as lost.
+    json_path=run/'budget.json';ledger=json.loads(json_path.read_text());ledger['charged_upper_bound']=16;json_path.write_text(json.dumps(ledger))
+    train(c,run,3,32,tmp_path/'data')
+    milestone=torch.load(run/'checkpoint_16.pt',weights_only=False);last=torch.load(run/'checkpoint_last.pt',weights_only=False)
+    assert milestone['steps']==16 and last['lost_upper_bound']==8 and last['steps']==32
+    before=torch.load(run/'checkpoint_8.pt',weights_only=False)['model']
+    for k in before:torch.testing.assert_close(before[k],milestone['model'][k],rtol=0,atol=0)

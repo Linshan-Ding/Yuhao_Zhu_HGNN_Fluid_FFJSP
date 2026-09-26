@@ -89,7 +89,7 @@ def observe(state):
 
 
 
-def rule_index(obs, rule='SPT', threshold=1.5):
+def rule_index(obs, rule='SPT'):
     x=obs.candidate_features;live=np.flatnonzero(x[:,4]==0);wait=np.flatnonzero(x[:,4]!=0)
     if not len(live): return int(wait[0])
     if rule!='SPT': raise ValueError(rule)

@@ -15,6 +15,7 @@ class Policy(nn.Module):
         super().__init__();self.cfg=c;self.method=c['method'];self.local=uses_graph(self.method);self.residual_enabled=True
         self.classic=self.method in CLASSIC;d=c['classic']['width'] if self.classic else c['network']['width']
         self.width=d;self.chunk=c['network']['candidate_chunk']
+        self.path_capacity=bool(c['network']['path_capacity']);self.path_delivery=bool(c['network']['path_delivery'])
         self.order_encoder=mlp(ORDER_DIM,d,d);self.op_encoder=mlp(OP_DIM,d,d)
         self.machine_encoder=mlp(MACHINE_DIM,d,d);self.edge_encoder=mlp(EDGE_DIM,d,d)
         self.layers=nn.ModuleList([] if self.classic else [GraphLayer(d,self.method!='dual_attention') for _ in range(c['network']['layers'])])
@@ -81,8 +82,8 @@ class Policy(nn.Module):
                 ox=ops[lo];order=orders[go];cond=self.condition_encoder(b.lc[link])
                 mx=machines[c[start:end,1].clamp_min(0)]*live[start:end]
                 for cap,delivery,act,on,an in zip(self.capacity,self.delivery,self.action_update,self.op_norm,self.action_norm):
-                    if self.cfg.get('path_capacity',True): ox=on(ox+cap(torch.cat((ox,mx[la],hc[la],cond),-1)))
-                    if self.cfg.get('path_delivery',True): order=order+delivery(torch.cat((order,segment_mean(ox,group,len(unique))),-1))
+                    if self.path_capacity: ox=on(ox+cap(torch.cat((ox,mx[la],hc[la],cond),-1)))
+                    if self.path_delivery: order=order+delivery(torch.cat((order,segment_mean(ox,group,len(unique))),-1))
                     weights=segment_softmax((order*hc[ga]).sum(-1)/math.sqrt(self.width),ga,len(hc))
                     horder=segment_sum(weights[:,None]*order,ga,len(hc))
                     hc=an(hc+act(torch.cat((hc,horder,segment_mean(ox,la,len(hc))),-1)))

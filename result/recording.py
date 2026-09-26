@@ -7,19 +7,20 @@ import time
 import uuid
 import numpy as np
 from data.generator import save_instance_csv
-from result.storage import atomic_json, atomic_torch_save, digest, disk_check, object_hash, plain
+from result.storage import atomic_json, digest, disk_check, object_hash, plain
 
 DYNAMIC = ('status', 'stage', 'machine_free_at', 'machine_busy_with', 'machine_busy_time', 'order_outcome')
 PHASES = ('startup', 'arrivals', 'drain')
 
 
-def phase_at(now, last_arrival):
-    return 'drain' if now >= last_arrival else ('startup' if now < .2 * last_arrival else 'arrivals')
+def phase_at(now, last_arrival, startup):
+    """Post-hoc phase label: 'startup' before `startup` of the last arrival time, 'drain' after the last arrival."""
+    return 'drain' if now >= last_arrival else ('startup' if now < startup * last_arrival else 'arrivals')
 
 
-def split_time(start, end, last_arrival):
-    cuts = sorted(set([start, end] + [t for t in (.2*last_arrival, last_arrival) if start < t < end]))
-    return [(phase_at((a+b)/2, last_arrival), b-a) for a,b in zip(cuts[:-1],cuts[1:])]
+def split_time(start, end, last_arrival, startup):
+    cuts = sorted(set([start, end] + [t for t in (startup*last_arrival, last_arrival) if start < t < end]))
+    return [(phase_at((a+b)/2, last_arrival, startup), b-a) for a,b in zip(cuts[:-1],cuts[1:])]
 
 
 class Recorder:
@@ -102,7 +103,7 @@ class Recorder:
         self.emit('decisions', dict(episode_id=env._record_id, step=env.step_count,
                   start=before['now'], end=env.now, action=act, reward=reward, done=done, info=info,
                   legal_actions=before['legal_actions'],waiting_orders=before['waiting_orders'],busy_machines=before['busy_machines'],
-                  phase=phase_at(before['now'],float(env.inst.arrival_times[-1])),
+                  phase=phase_at(before['now'],float(env.inst.arrival_times[-1]),self.cfg['recording']['phase_startup_fraction']),
                   delta=delta, held_machine_time=env.stats.held_time-before['held'], environment_seconds=seconds,
                   **self.pending.pop(env._record_id, {})))
         for event in events: self.emit('events', dict(episode_id=env._record_id, decision=env.step_count, **event))
@@ -116,7 +117,7 @@ class Recorder:
                 snapshot_time=env.now, episode_reason=reason))
 
     def artifact(self, value, kind):
-        # Immutable teacher/public-state snapshots are referenced by bytes hash.
+        # Immutable frozen-policy/public-state snapshots are referenced by the hash of their serialized bytes.
         start = time.perf_counter()
         import io, torch
         buffer = io.BytesIO(); torch.save(value, buffer)

@@ -1,7 +1,7 @@
-"""问题定义：合格机器、剩余路径下界、无望判定。
+"""问题定义：合格机器、剩余路径下界。
 
-本模块是"物理规则"的唯一真源：环境、精确求解器与基线都从这里取常量，
-避免同一个下界在三处各写一遍而悄悄不一致。
+本模块是"物理规则"的唯一真源：环境、精确求解器与观测都从这里取剩余路径下界，
+避免同一个下界在多处各写一遍而悄悄不一致（无望订单的放弃由环境按同一下界向量化判定）。
 """
 from __future__ import annotations
 
@@ -72,7 +72,3 @@ class Problem:
         if stage >= self.n_stage:
             return 0.0
         return float(self.residual[int(self.inst.order_product[order]), int(stage)])
-
-    def is_hopeless(self, order: int, stage: int, now: float) -> bool:
-        """稿件假设 (viii)：剩余路径已无法在交期内完成 -> 丢弃。"""
-        return now + self.residual_from(order, stage) > float(self.inst.due_dates[order])

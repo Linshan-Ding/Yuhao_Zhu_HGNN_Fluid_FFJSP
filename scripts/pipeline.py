@@ -41,7 +41,8 @@ def prepare_study(c,root,data,specs):
 def worker(spec,root,data):
     from agent.training import train
     from result.recording import verify
-    os.environ['OMP_NUM_THREADS']='1';os.environ['MKL_NUM_THREADS']='1';torch.set_num_threads(1)
+    threads=spec.config['runtime']['threads']
+    os.environ['OMP_NUM_THREADS']=str(threads);os.environ['MKL_NUM_THREADS']=str(threads);torch.set_num_threads(threads)
     run=Path(root)/'runs'/spec.name
     with run_lock(run):
         final=run/f'checkpoint_{spec.budget}.pt';status=run/'status.json'
@@ -111,7 +112,7 @@ def storage_preflight(root,c):
             buffer_ratio=c['classic']['replay_size']/small['classic']['replay_size'] if spec.method in ('dqn','ddqn') else c['training']['rollout_steps']/small['training']['rollout_steps']
             components['checkpoints_and_buffers']+=(base/'checkpoint_last.pt').stat().st_size*order_ratio*buffer_ratio*2
             width_ratio=c['classic']['width']/small['classic']['width'] if spec.method in ('dqn','ddqn','a2c','ppo') else c['network']['width']/small['network']['width']
-            components['checkpoints_and_buffers']+=(base/'checkpoint_128.pt').stat().st_size*width_ratio**2*(len(spec.config['training']['milestones'])+2)
+            components['checkpoints_and_buffers']+=(base/f"checkpoint_{small['experiment']['budget']}.pt").stat().st_size*width_ratio**2*(len(spec.config['training']['milestones'])+2)
             if uses_demo(spec.method):components['checkpoints_and_buffers']+=(base/'demonstrations.pt').stat().st_size*order_ratio*c['demonstration']['steps']/small['demonstration']['steps']
         components['evaluation_and_reports']=sum(p.stat().st_size for p in (micro_root/'evaluations').rglob('*') if p.is_file())*len(matrix(c))/len(matrix(small))*50/6*order_ratio
         estimate=int(sum(components.values())*c['recording']['preflight_headroom'])
@@ -120,8 +121,20 @@ def storage_preflight(root,c):
         explanation='Approximate smoke-based trajectory, buffer and checkpoint scaling, with configured headroom; not a measured formal size. Actual usage is checked without dropping data.'))
 
 
-def run(stage,jobs=8,micro=False):
+def retire_stale_smoke_data(c,data):
+    """Engineering-only: smoke data generated under an older configuration fingerprint is moved aside, never deleted."""
+    from data.benchmark import dataset_identity
+    data=Path(data);manifest=data/'manifest.json'
+    if manifest.exists():
+        saved=json.loads(manifest.read_text(encoding='utf-8'))
+        if saved['fingerprint']!=dataset_identity(c):
+            stale=data.with_name(f"{data.name}_stale_{saved['fingerprint'][:12]}");data.rename(stale)
+            print(f'[DATA] smoke data configuration changed; previous set kept at {stale}',flush=True)
+
+
+def run(stage,jobs,micro=False):
     c=config(micro);specs=matrix(c);root,data=paths(micro)
+    if micro:retire_stale_smoke_data(c,data)
     with run_lock(root):
         prepare_study(c,root,data,specs);ledger(root,specs)
         if stage in ('main','comparators','sensitivity','all'):
@@ -163,8 +176,9 @@ def smoke():
         run('all',1,True)
         # Actual scenario labels must reach the preference optimizer; this is not a performance run.
         from agent.training import train
-        c=config(True);c['training']['milestones']=[2048,4096];c['training']['evaluate_every']=4096
-        c['data']['due_factor']=[1.0,1.3]  # Engineering-only tight deadlines exercise nonzero preference gradients.
+        c=config(True);probe_budget=c['smoke']['scenario_probe_budget']
+        c['training']['milestones']=[probe_budget//2,probe_budget];c['training']['evaluate_every']=probe_budget
+        c['data']['due_factor']=list(c['smoke']['probe_due_factor'])  # Engineering-only tight deadlines exercise nonzero preference gradients.
         root,data=paths(True);probe=root/'scenario_probe';probe_data=probe/'data'
         # Its tighter training distribution has a separate engineering data identity.
         with run_lock(probe):out=train(c,probe,29,c['smoke']['scenario_probe_budget'],probe_data)
@@ -183,11 +197,13 @@ def smoke():
 
 
 def entry(stage):
+    runtime=config()['runtime']
     parser=argparse.ArgumentParser(description=f'Fixed-cell scheduling study: {stage}')
-    parser.add_argument('jobs',type=int,nargs='?',default=8);args=parser.parse_args()
+    parser.add_argument('jobs',type=int,nargs='?',default=runtime['jobs'],
+                        help=f"concurrent CPU jobs; default and upper cap runtime.jobs={runtime['jobs']}");args=parser.parse_args()
     if args.jobs<1:parser.error('concurrency must be a positive integer')
-    jobs=min(args.jobs,8,max(1,os.cpu_count() or 1))
-    if jobs!=args.jobs:print(f'[RESOURCE] requested {args.jobs}; using {jobs} CPU jobs, one thread each')
+    jobs=min(args.jobs,runtime['jobs'],max(1,os.cpu_count() or 1))
+    if jobs!=args.jobs:print(f"[RESOURCE] requested {args.jobs}; using {jobs} CPU jobs, {runtime['threads']} thread(s) each")
     if stage=='smoke':smoke();return
     if stage in ('main','comparators','sensitivity','all'):smoke()
     run(stage,jobs)

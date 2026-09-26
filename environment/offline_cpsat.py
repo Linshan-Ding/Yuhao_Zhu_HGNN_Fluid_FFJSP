@@ -13,11 +13,10 @@ from typing import Callable, Dict, Iterable, List, Sequence, Tuple
 import numpy as np
 
 from environment.problem import Problem
+from environment.offline_replay import Schedule, _replay_in_env
 
 # 按时判定的容差，与仿真器 `SchedulingEnv._release_machines` 一致
 DUE_TOL = 1e-9
-
-Schedule = Dict[Tuple[int, int], Tuple[int, float, float]]   # (order, stage) -> (machine, start, end)
 
 
 @dataclass
@@ -231,16 +230,8 @@ def solve_cpsat(problem: Problem, time_limit_s: float = 3600.0, workers: int = 8
 
 
 # --------------------------------------------------------------------------- #
-# 排程校验的辅助类型（与 CP-SAT 模型共用）
-# --------------------------------------------------------------------------- #
-
-
-# --------------------------------------------------------------------------- #
 # 回放校验
 # --------------------------------------------------------------------------- #
-from environment.offline_replay import _replay_in_env
-
-
 def replay_check(problem: Problem, result, cfg=None, tol: float = 1e-6) -> Dict[str, object]:
     """核对一份排程与问题定义、与仿真器是否一致。
 

@@ -1,7 +1,6 @@
 """Causal nonpreemptive flexible-flow-shop discrete-event simulator."""
 from __future__ import annotations
 
-import time as _time
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
@@ -14,8 +13,6 @@ NOT_ARRIVED, WAITING, IN_PROCESS, COMPLETED, DISCARDED = 0, 1, 2, 3, 4
 
 # Internal tuple representation of the public Wait action; rules may also select it.
 NOOP = (-1, -1, -1)
-
-OP_DIM, MA_DIM, ACT_DIM, GLOBAL_DIM, GATE_DIM = 10, 3, 4, 5, 8
 
 
 def is_noop(action) -> bool:
@@ -41,28 +38,24 @@ class SchedulingEnv:
         self.problem = Problem(inst)
         p = self.problem
 
-        self.exposure = str(cfg.get("action_space.exposure", "hopeful_first"))
+        # Candidate enumeration order (relevant only to the SPT-mixed tie variant): all keys are required.
+        self.exposure = str(cfg.action_space.exposure)
         if self.exposure not in ("edd", "hopeful_first"):
             raise ValueError(f"unknown action_space.exposure: {self.exposure}")
-        self.exposure_threshold = float(cfg.get("action_space.exposure_threshold", 1.5))
-        self.allow_noop = bool(cfg.get("action_space.allow_noop", True))
-        self.max_consecutive_noop = int(cfg.get("action_space.max_consecutive_noop", 3))
-        self.max_steps = int(cfg.get("episode.max_decision_steps", 200000))
+        self.exposure_threshold = float(cfg.action_space.exposure_threshold)
+        self.allow_noop = bool(cfg.action_space.allow_noop)
+        self.max_steps = int(cfg.episode.max_decision_steps)
 
         # 因果尺度：DDT 参数（交期政策）与最大工时（工艺数据）都是决策前已知的量
         self.t_ref = max(float(inst.meta.get("DDT", 0.0)) or float(p.residual[:, 0].mean()), 1.0)
         self.p_ref = max(float(inst.proc_times.max()), 1.0)
-        self.wait_interval = float(cfg.get("action_space.wait_interval", 0.0)) or float(np.median(inst.proc_times[inst.proc_times > 0])) / 4.0
+        self.wait_interval = float(cfg.action_space.wait_interval) or float(np.median(inst.proc_times[inst.proc_times > 0])) / 4.0
         if not np.isfinite(self.wait_interval) or self.wait_interval <= 0:
             raise ValueError("wait_interval must be finite and positive")
 
         # 静态结构表
         self._elig_matrix = inst.proc_times > 0                                   # [N, M]
         self._task_machines = [np.nonzero(self._elig_matrix[t])[0] for t in range(p.n_task)]
-        self._elig_count = self._elig_matrix.sum(1).astype(np.float32)           # [N]
-        self._machine_task_count = self._elig_matrix.sum(0).astype(np.float32)   # [M]
-        self._task_product = (np.arange(p.n_task) // p.n_stage).astype(np.float32)
-        self._task_stage = (np.arange(p.n_task) % p.n_stage).astype(np.float32)
         self.reset()
 
     # ------------------------------------------------------------------ 生命周期
@@ -81,15 +74,8 @@ class SchedulingEnv:
         self.truncated = False
         self._events = []
         self.stats = StepStats()
-        self._consecutive_noop = 0
         self.order_outcome = np.full(p.n_order, -1, dtype=np.int8)   # 1 按时 / 0 超期或丢弃 / -1 未定
-        self._feasible_machines: set = set()
-        self._exposed_orders: set = set()
         self._grouped: Dict[int, np.ndarray] = {}
-        self._w_orders = np.zeros(0, dtype=np.int64)
-        self._w_tasks = np.zeros(0, dtype=np.int64)
-        self._w_slack = np.zeros(0, dtype=np.float64)
-        self._w_cr = np.zeros(0, dtype=np.float64)
         self._cand_stamp = -1
         self._advance_to_decision()
 
@@ -198,10 +184,6 @@ class SchedulingEnv:
         """等待订单按工序类型分组，组内按暴露顺序排序（可救优先再交期，或只按交期）。"""
         waiting = np.nonzero(self.status == WAITING)[0]
         if waiting.size == 0:
-            self._w_orders = waiting.astype(np.int64)
-            self._w_tasks = np.zeros(0, dtype=np.int64)
-            self._w_slack = np.zeros(0, dtype=np.float64)
-            self._w_cr = np.zeros(0, dtype=np.float64)
             self._grouped = {}
             return
         prod = self.inst.order_product[waiting]
@@ -214,11 +196,10 @@ class SchedulingEnv:
             order = np.lexsort((slack, (cr < self.exposure_threshold).astype(np.int8), tasks))
         else:
             order = np.lexsort((slack, tasks))
-        waiting, tasks, slack, cr = waiting[order], tasks[order], slack[order], cr[order]
+        waiting, tasks = waiting[order], tasks[order]
         starts = np.flatnonzero(np.r_[True, tasks[1:] != tasks[:-1]])
         ends = np.r_[starts[1:], tasks.size]
         self._grouped = {int(tasks[s]): waiting[s:e] for s, e in zip(starts, ends)}
-        self._w_orders, self._w_tasks, self._w_slack, self._w_cr = waiting, tasks, slack, cr
 
     def _feasible_actions(self) -> List[Tuple[int, int, int]]:
         """All ready orders crossed with their idle eligible machines."""
@@ -252,8 +233,6 @@ class SchedulingEnv:
         if not feasible:
             return []
         self.stats.n_feasible.append(len(feasible))
-        self._feasible_machines = {a[1] for a in feasible}
-        self._exposed_orders = {a[2] for a in feasible}
         if len(feasible) == 1:
             self.stats.singleton += 1
         actions = feasible
@@ -279,7 +258,6 @@ class SchedulingEnv:
             if tuple(action) != NOOP or not self._noop_available():
                 raise ValueError("wait is not admissible")
             return self._step_noop()
-        self._consecutive_noop = 0
         task, machine, order = int(action[0]), int(action[1]), int(action[2])
         if not (0 <= order < self.problem.n_order and 0 <= machine < self.problem.n_machine and 0 <= task < self.problem.n_task):
             raise ValueError("dispatch index out of range")
@@ -305,18 +283,15 @@ class SchedulingEnv:
         d_c = self.n_completed - before_c
         d_d = self.n_discarded - before_d
         return d_c / max(self.problem.n_order, 1), self.done, {
-            "order": order, "hold_id": -1, "d_completed": d_c, "d_discarded": d_d, "noop": False,
+            "order": order, "d_completed": d_c, "d_discarded": d_d, "noop": False,
             "terminated": self.done and not self.truncated, "truncated": self.truncated}
 
     def _step_noop(self) -> Tuple[float, bool, dict]:
         """保留产能：本时刻不派工，推进到下一事件。奖励与派工同一计数式。"""
         before_c, before_d = self.n_completed, self.n_discarded
-        self._consecutive_noop += 1
         self.stats.noop_used += 1
         self.step_count += 1
         machines = {a[1] for a in self._feasible_actions()}
-        hold_id = -1  # no hindsight supervision
-
         nxt = self._next_event_time()
         wake = self.now + self.wait_interval
         if nxt is not None and nxt > self.now + 1e-9:
@@ -329,7 +304,7 @@ class SchedulingEnv:
         d_c = self.n_completed - before_c
         d_d = self.n_discarded - before_d
         return d_c / max(self.problem.n_order, 1), self.done, {
-            "order": -1, "hold_id": hold_id, "d_completed": d_c, "d_discarded": d_d, "noop": True,
+            "order": -1, "d_completed": d_c, "d_discarded": d_d, "noop": True,
             "terminated": self.done and not self.truncated, "truncated": self.truncated}
 
     def _check_limit(self):
