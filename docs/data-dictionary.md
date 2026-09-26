@@ -4,7 +4,9 @@
 
 固定基准为 data/instances/fixed。cases中的CSV长表以kind区分header、stage_machines、proc、order、meta。订单和机器下标从0开始；时间单位为生成加工时间单位，不自动称为秒。CPU计时字段seconds为墙钟秒，ms为毫秒。
 
-index.csv每参数组合一行：instance_id、role、family、parameter_hash、file、sha256、orders/products/stages/machines_per_stage、processing、eligibility_probability、arrival_process、iota、due_factor、catalog_sha256、seed、sampling_attempts、Lambda、empirical_Lambda、p_bar、rho_sys。manifest记录四族的随机子流和联合接受条件。sensitivity与main引用同一ID列表。训练实例不混入固定测试索引。
+index.csv每参数组合一行：instance_id、role、family、parameter_hash、file、sha256、orders/products/stages/machines_per_stage、processing、eligibility_probability、arrival_process、iota、due_factor、machines（机器总数）、catalog_sha256、seed、sampling_attempts、Lambda、empirical_Lambda、p_bar、rho_sys。manifest记录四族的随机子流和联合接受条件。sensitivity与main引用同一ID列表。训练实例不混入固定测试索引。
+
+所有sha256按换行归一后的内容计算（CRLF折为LF，二进制文件按原字节），因此同一提交在不同平台得到相同身份值；manifest的fingerprint是数据与基准配置段的哈希，配置键增减会改变它但不改变算例内容。
 
 ## 原始记录
 
@@ -16,10 +18,10 @@ index.csv每参数组合一行：instance_id、role、family、parameter_hash、
 | decisions | episode_id + step | start/end、动作、全部合法legal_actions、等待订单/忙机器数、reward、done/terminated/truncated、phase、动态数组变更、主动空闲机器时间、environment_seconds；评测额外有全部候选评分与观测/推断时间 |
 | events | episode_id + decision | arrival、operation_start/finish、order_resolved、wait；工序开始含order/stage/machine/duration/scheduled_end；结局含原因 |
 | orders | episode_id + order + snapshot_time + episode_reason | 产品、到达、交期、outcome、status、stage、快照时间；预算收尾可能仍未解决，不强行记失败 |
-| queries | query_id | 查询公开快照、动作对、推荐来源、教师版本、冻结教师对象 |
+| queries | query_id | 查询公开快照（public_state）、冻结策略对象（frozen_policy）、动作对、推荐来源、冻结策略版本 |
 | futures | query_id + scenario | 实际模拟产品、到达、交期数组，不只是哈希 |
 | branches | query_id + scenario + action_index | 分支episode_id，连接完整动作与事件轨迹 |
-| preferences | query_id | 逐情景returns、mean、standard_error、reliability、probability、complete、steps、seconds、后续策略与哈希 |
+| preferences | query_id | 逐情景returns、mean、standard_error、reliability、probability、complete、steps、seconds、后续策略（SPT或frozen_policy）、冻结策略与候选策略哈希 |
 | updates | kind + epoch或number | 实际损失、梯度、KL、尝试/接受/回退及优化时间 |
 | mechanisms | episode_id + phase | 阶段首个有效决策的公开图、动作、评分及表示对象引用 |
 
@@ -35,17 +37,17 @@ DQN/DDQN的scores是Q值，probabilities和value为空；规则没有神经分�
 
 训练total_steps=real_steps+scenario_steps+demonstration_steps+lost_upper_bound。记录器steps还包括该运行中的验证评测，不能直接当训练预算。预留账本在执行前持久化，恢复时未提交预留保守计费；未提交块和failed_raw清单保留但不混入已提交轨迹。
 
-训练checkpoint包含记录器提交点、环境、RNG、优化器、经验/标签缓冲和教师；当前和上一份恢复检查点保留。只有完整身份一致才可续训。校验失败不会覆盖已有数据。
+训练checkpoint包含记录器提交点、环境、RNG、优化器、经验/标签缓冲、冻结策略与DQN目标网络；恢复检查点保留recording.keep_recovery_copies份（checkpoint_last、checkpoint_previous）。只有完整身份一致才可续训。校验失败不会覆盖已有数据。里程碑检查点checkpoint_里程碑.pt在training.milestones处写出（示范结束恰在1万时也写出）；崩溃恢复中按上界计费的预留恰落在里程碑时同样补写。
 
 ## 指标
 
-eta为按时完成订单数/订单总数。wait_fraction为Wait动作占决策比例；held_share为主动空闲机器时间/总机器时间。startup为最后到达时刻前20%，arrivals为随后至最后到达，drain为收尾；阶段仅事后标注，时间区间跨界拆分。
+eta为按时完成订单数/订单总数。wait_fraction为Wait动作占决策比例；held_share为主动空闲机器时间/总机器时间。startup为最后到达时刻前recording.phase_startup_fraction（0.2）的区间，arrivals为随后至最后到达，drain为收尾；阶段仅事后标注，时间区间跨界拆分。
 
 decision_ms为平均网络/规则推断耗时，observation_ms为平均公开观测构建时间；decision_p50/p95_ms包含二者。environment_seconds仅环境事件推进。wall_seconds为整个调度评测，包括记录开销。recording_seconds累计序列化和写入计时；优化、构图等余项不能靠相减伪造。
 
 latency.csv为SPT固定公共状态面板上的原始计时，不重复生成算例。orders/operations/machines/candidates描述该状态规模；seed是模型训练种子。规则seed=0仅是非训练标记，不增加重复。
 
-统计以固定参数格上的训练种子向量为随机单位。相同参数一个实例；区间不覆盖随机算例生成波动。对照规则没有种子标准差。多方法的主比较以full为参照、逐组Holm校正；配对检验的有效样本数是训练种子数。
+统计以固定参数格上的训练种子向量为随机单位。相同参数一个实例；区间不覆盖随机算例生成波动。对照规则没有种子标准差。多方法的主比较以full为参照：summary/effects给出各条件组的自助95%区间与正向种子数、胜/平/负单元数，case_effects给出每个固定单元的配对种子均值差、种子标准差、自助区间与正向种子数（主证据）；tests只保留未校正的配对Wilcoxon原始p值作附录参考，有效样本数是训练种子数，不做Holm等多重比较校正。
 
 ## 离线与来源
 

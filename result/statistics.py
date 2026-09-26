@@ -1,55 +1,45 @@
-"""Fixed-grid comparisons; uncertainty is over training seeds, never case replicas."""
+"""Fixed-grid comparisons; uncertainty is over training seeds, never case replicas.
+
+Primary evidence: seed-vector bootstrap intervals of grid averages and paired per-cell effects (summary, effects,
+case_effects). Paired Wilcoxon p-values are kept as an unadjusted appendix reference in tests.csv.
+"""
 from pathlib import Path
 import json
 import numpy as np
 from scipy.stats import wilcoxon
-from configs.experiment import ALL_RULES, uses_demo
 from data.benchmark import prepare
 from result.storage import read_csv, write_csv, atomic_json, digest
 from result.recording import records, verify
 from result.provenance import evaluation_hash
+from result.evaluation import evaluation_plan, load_policy, policy_identity
 
 
 def validate(root,data,c,specs):
     root=Path(root);dataset=prepare(c,data);m=json.loads((root/'evaluation_manifest.json').read_text())
     if m['data']!=digest(Path(data)/'manifest.json'): raise ValueError('Evaluation data identity changed')
     if m['evaluation']!=evaluation_hash():raise ValueError('Evaluation implementation changed')
-    by_name={s.name:s for s in specs};core=[s for s in specs if s.group!='sensitivity'];policy_ids={}
-    points={x for s in core for x in s.config['training']['milestones'] if x<s.budget and x>=(64 if c['purpose']=='engineering-smoke' else 100000)}
-    required={'main','small','long_stream','large_shop','main_best','initialization','sensitivity_changes','sensitivity_default','sensitivity',*(f'main_{x}' for x in points)}
-    if set(m['outputs'])!=required:raise ValueError('Missing evaluation output groups')
-    for name,item in m['outputs'].items():
-        rows=read_csv(root/item['file'])
-        if digest(root/item['file'])!=item['sha256'] or len(rows)!=item['rows']: raise ValueError('Evaluation table changed')
-        split=name if name in ('main','small','long_stream','large_shop') else 'validation' if name=='initialization' else 'main'
-        ids=set(dataset['splits'][split]);expected=set()
-        selected=core
-        if name.startswith('sensitivity'):
-            selected=[s for s in specs if s.group=='sensitivity'] if name!='sensitivity_default' else []
-            if name in ('sensitivity','sensitivity_default'):
-                selected += [s for s in core if s.method=='full' and s.seed in c['experiment']['sensitivity_seeds']]
-        elif name=='initialization': selected=[s for s in core if uses_demo(s.method)]
-        expected.update((s.name,str(s.seed),i) for s in selected for i in ids)
-        if name in ('main','small','long_stream','large_shop'):expected.update((r,'0',i) for r in ALL_RULES for i in ids)
-        if name=='initialization':expected.update((c['teacher'],'0',i) for i in ids)
+    plan=evaluation_plan(c,specs);cases={x['instance_id']:x for x in dataset['cases']};policy_ids={}
+    if set(m['outputs'])!={item['name'] for item in plan}:raise ValueError('Missing evaluation output groups')
+    for item in plan:
+        table=m['outputs'][item['name']];rows=read_csv(root/table['file'])
+        if digest(root/table['file'])!=table['sha256'] or len(rows)!=table['rows']: raise ValueError('Evaluation table changed')
+        ids=set(dataset['splits'][item['split']]);models={s.name:(s,f) for s,f in item['models']}
+        expected={(name,str(s.seed),i) for name,(s,_) in models.items() for i in ids}|{(r,'0',i) for r in item['rules'] for i in ids}
         actual=[(r['run'],r['seed'],r['instance_id']) for r in rows]
-        if len(actual)!=len(set(actual)) or set(actual)!=expected:raise ValueError(f'Missing/duplicate evaluation cells: {name}')
+        if len(actual)!=len(set(actual)) or set(actual)!=expected:raise ValueError(f"Missing/duplicate evaluation cells: {item['name']}")
         for r in rows:
             cache=root/'evaluations'/r['evaluation_key']/'complete.json';entry=json.loads(cache.read_text())
             if entry['row']['instance_id']!=r['instance_id'] or float(r['eta'])!=entry['row']['eta']:raise ValueError('Evaluation row not backed by cache')
-            case=next(x for x in dataset['cases'] if x['instance_id']==r['instance_id'])
-            if entry['identity']['evaluation']!=evaluation_hash() or entry['identity']['instance']!=case['sha256']:raise ValueError('Evaluation cache identity changed')
+            if entry['identity']['evaluation']!=evaluation_hash() or entry['identity']['instance']!=cases[r['instance_id']]['sha256']:raise ValueError('Evaluation cache identity changed')
             if digest(cache.parent/entry['raw_manifest'])!=entry['raw_sha256']:raise ValueError('Raw manifest changed')
-            if r['run'] in by_name:
-                filename='checkpoint_best.pt' if name=='main_best' else 'checkpoint_initialization.pt' if name=='initialization' else f"checkpoint_{r['budget']}.pt"
-                if digest(root/'runs'/r['run']/filename)!=r['checkpoint_sha256']:raise ValueError('Checkpoint changed')
-                from result.evaluation import load_policy,policy_identity
-                key=(r['run'],filename)
-                if key not in policy_ids:
-                    _,state=load_policy(root/'runs'/r['run']/filename,by_name[r['run']]);policy_ids[key]=policy_identity(state)
-                if entry['identity']['model']!=r['policy_sha256'] or r['policy_sha256']!=policy_ids[key]:raise ValueError('Cached model identity mismatch')
-                expected_budget=c['experiment']['sensitivity_budget'] if name=='sensitivity_default' or name=='sensitivity' and by_name[r['run']].group!='sensitivity' else int(name[5:]) if name.startswith('main_') and name!='main_best' else by_name[r['run']].budget
-                if name not in ('main_best','initialization') and int(r['budget'])!=expected_budget:raise ValueError('Evaluation budget mismatch')
+            if r['run'] in models:
+                spec,filename=models[r['run']];path=root/'runs'/r['run']/filename
+                if digest(path)!=r['checkpoint_sha256']:raise ValueError('Checkpoint changed')
+                if (r['run'],filename) not in policy_ids:
+                    _,state=load_policy(path,spec);policy_ids[r['run'],filename]=policy_identity(state)
+                if entry['identity']['model']!=r['policy_sha256'] or r['policy_sha256']!=policy_ids[r['run'],filename]:raise ValueError('Cached model identity mismatch')
+                budget=filename[len('checkpoint_'):-len('.pt')]
+                if budget.isdigit() and int(r['budget'])!=int(budget):raise ValueError('Evaluation budget mismatch')
     exact=json.loads((root/'exact_manifest.json').read_text())
     if set(exact['cases'])!={i+'.json' for i in dataset['splits']['small']}:raise ValueError('Missing offline reference cases')
     for filename,sha in exact['cases'].items():
@@ -80,8 +70,9 @@ def interval(values,rng,repeats):
 
 
 def aggregate(root,data,c,specs):
-    root=Path(root);manifest=validate(root,data,c,specs);rng=np.random.default_rng(c['experiment']['statistics_seed'])
-    summaries=[];effects=[];case_rows=[];seed_rows=[];tests=[]
+    root=Path(root);manifest=validate(root,data,c,specs);seed=c['experiment']['statistics_seed'];repeats=c['experiment']['bootstrap_repeats']
+    rng=np.random.default_rng(seed);cell_rng=np.random.default_rng([seed,1])
+    summaries=[];effects=[];case_rows=[];seed_rows=[];tests=[];case_effects=[]
     for split in ('main','small','long_stream','large_shop','sensitivity','main_best','initialization'):
         rows=read_csv(root/f'{split}.csv');methods=sorted({r['variant'] for r in rows})
         for method in methods:
@@ -95,28 +86,33 @@ def aggregate(root,data,c,specs):
             sub=grouped(rows,group)
             if not sub:continue
             for method in methods:
-                seeds,ids,values=seed_values(sub,method);means=values.mean(1);lo,hi=interval(means,rng,c['experiment']['bootstrap_repeats'])
+                seeds,ids,values=seed_values(sub,method);means=values.mean(1);lo,hi=interval(means,rng,repeats)
                 summaries.append(dict(split=split,group=group,variant=method,eta=float(means.mean()),
                     seed_sd=float(means.std(ddof=1)) if len(seeds)>1 else None,ci_low=lo,ci_high=hi,seeds=len(seeds),instances=len(ids),
                     uncertainty='training-seed variation conditional on fixed parameter grid'))
                 seed_rows.extend(dict(split=split,group=group,variant=method,seed=s,eta=float(v),instances=len(ids)) for s,v in zip(seeds,means))
             if 'full' not in methods:continue
-            ss,ids,av=seed_values(sub,'full');pairs=[]
+            ss,ids,av=seed_values(sub,'full')
             for method in methods:
                 if method=='full':continue
                 bs,bids,bv=seed_values(sub,method)
                 if ids!=bids or (bs!=[0] and bs!=ss): raise ValueError('Unmatched paired comparison')
-                diff=av-bv;means=diff.mean(1);lo,hi=interval(means,rng,c['experiment']['bootstrap_repeats']);per_case=diff.mean(0)
+                diff=av-bv;means=diff.mean(1);lo,hi=interval(means,rng,repeats);per_case=diff.mean(0)
                 effects.append(dict(split=split,group=group,contrast='full minus '+method,difference=float(means.mean()),ci_low=lo,ci_high=hi,
                     positive_seeds=int((means>1e-9).sum()),seeds=len(ss),instances=len(ids),wins=int((per_case>1e-9).sum()),
                     ties=int((abs(per_case)<=1e-9).sum()),losses=int((per_case< -1e-9).sum())))
+                if group=='all':
+                    # Paired effect per fixed cell: seed-mean difference with a seed-vector bootstrap interval.
+                    for j,inst in enumerate(ids):
+                        lo_j,hi_j=interval(diff[:,j],cell_rng,repeats)
+                        case_effects.append(dict(split=split,contrast='full minus '+method,instance_id=inst,difference=float(per_case[j]),
+                            seed_sd=float(diff[:,j].std(ddof=1)) if len(ss)>1 else None,ci_low=lo_j,ci_high=hi_j,
+                            positive_seeds=int((diff[:,j]>1e-9).sum()),seeds=len(ss)))
                 p=1. if np.allclose(means,0) else float(wilcoxon(means,zero_method='wilcox',method='auto').pvalue)
-                pairs.append(dict(split=split,group=group,comparison='full minus '+method,p=p,seeds=len(ss),unit='training seed; fixed grid',
-                                  test='two-sided paired Wilcoxon; small-sample conditional inference'))
-            last=0.
-            for k,r in enumerate(sorted(pairs,key=lambda r:r['p'])):last=max(last,min(1.,r['p']*(len(pairs)-k)));r['p_holm']=last
-            tests.extend(pairs)
-    for name,rows in [('summary',summaries),('effects',effects),('per_case',case_rows),('per_seed',seed_rows),('tests',tests)]:write_csv(root/f'{name}.csv',rows)
+                tests.append(dict(split=split,group=group,comparison='full minus '+method,p=p,seeds=len(ss),unit='training seed; fixed grid',
+                                  test='two-sided paired Wilcoxon; unadjusted appendix reference, not the primary evidence'))
+    for name,rows in [('summary',summaries),('effects',effects),('case_effects',case_effects),('per_case',case_rows),('per_seed',seed_rows),('tests',tests)]:
+        write_csv(root/f'{name}.csv',rows)
     curves=[];costs=[];preference=[]
     for spec in specs:
         run=root/'runs'/spec.name;history=[json.loads(x) for x in (run/'log.jsonl').read_text().splitlines()]
@@ -177,5 +173,6 @@ def aggregate(root,data,c,specs):
         training_monitor_steps=sum(int(r['evaluation_steps']) for r in costs),offline_replay_steps=sum(int(r['replay_steps']) for r in exact.values())))
     inputs={k:digest(root/k) for k in [*(v['file'] for v in manifest['outputs'].values()),'exact.csv','latency.csv']}
     outputs={p.name:digest(p) for p in root.glob('*.csv') if p.name not in inputs}
-    atomic_json(root/'statistics_manifest.json',dict(inputs=inputs,outputs=outputs,seed=c['experiment']['statistics_seed'],
-        bootstrap='resample whole training-seed vectors; no resampling of fixed cases',comparison='conditional component effects; no factorial interaction'))
+    atomic_json(root/'statistics_manifest.json',dict(inputs=inputs,outputs=outputs,seed=seed,
+        bootstrap='resample whole training-seed vectors; no resampling of fixed cases',comparison='conditional component effects; no factorial interaction',
+        primary='seed-vector bootstrap intervals and paired per-cell effects',secondary='unadjusted paired Wilcoxon p-values in tests.csv'))

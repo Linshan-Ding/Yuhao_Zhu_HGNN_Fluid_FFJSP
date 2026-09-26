@@ -1,0 +1,16 @@
+# Text files are stored and checked out with LF on every platform, so that content
+# identities (data/instances/fixed/manifest.json, docs/acceptance.json) reproduce anywhere.
+* text=auto eol=lf
+*.py text eol=lf
+*.csv text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
+*.pt binary
+*.gz binary
+*.zip binary
+*.pdf binary
+*.png binary
+*.svg text eol=lf

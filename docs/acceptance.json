@@ -1,21 +1,22 @@
 {
   "date": "2026-09-25",
-  "tests_passed": 31,
+  "tests_passed": 33,
   "engineering_interactions": 44222,
   "engineering_limit": 50000,
-  "training_source": "9e49c83e66c75b679c379b3e3678f05c826c3e8293b481b1a2afdb09804413ac",
-  "evaluation_source": "25d78cf3369afd3a359857ffc53c6765a97b5ed8f7d3cb68a632baeb6e1d8aa3",
+  "training_source": "da4a82857d634b8c00166d70d5499088b66e64af0c982f2a8249ee05b00717e0",
+  "evaluation_source": "2915bfc77431e3c06181026401eaf31b1afe9068db1f048854ec872acd5144a1",
   "formal_jobs": 73,
   "formal_budget": 64000000,
   "formal_interactions": 0,
   "fixed_unique_cases": 50,
-  "data_manifest_sha256": "008825e12e77dd8741ca8a99cef7f025c96c7fc41ef71dd3a0dfab941c7f52a0",
-  "smoke_identity": "969337739d727da312acfddfeb86e191235ccfde1af7be4229655d55b2f1d980",
+  "data_manifest_sha256": "d7520d6916b644d520d7f60f9e5191f4aced2534e43528a47b5a78a7f35bbb20",
+  "smoke_identity": "a89f316f05d223cb89fbf8a6d599e110417d5a2b19e49fbd5070ffcafd43483f",
   "smoke_seconds": 115.10447319998639,
   "migration": {
     "policies": 11,
     "max_error": 0,
     "transition_steps": 12
   },
-  "scope": "code repository only"
+  "scope": "code repository only",
+  "revision": "2026-09-26 cross-platform identities (line-ending normalized); see docs/ACCEPTANCE.md"
 }

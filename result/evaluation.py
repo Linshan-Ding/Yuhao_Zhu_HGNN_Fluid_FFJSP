@@ -2,19 +2,20 @@
 from dataclasses import asdict
 from pathlib import Path
 import json
-import hashlib
 import time
 import numpy as np
 import torch
 from agent.observation import observe
 from agent.rules import RulePolicy
 from agent.model import Policy
-from configs.experiment import environment_config, identity, ALL_RULES
+from configs.experiment import environment_config, identity, uses_demo, ALL_RULES
 from data.benchmark import fixtures, prepare
 from environment.public import SchedulingEnv
 from result.recording import Recorder, PHASES, phase_at, split_time, verify
-from result.storage import atomic_json, digest, object_hash, write_csv, read_csv, atomic_torch_save
+from result.storage import atomic_json, digest, object_hash, write_csv, atomic_torch_save, state_hash
 from result.provenance import source_hash, evaluation_hash
+
+PANEL_RULE='SPT'  # rule whose test-split trajectories supply the shared-state timing panel
 
 
 @torch.no_grad()
@@ -34,9 +35,9 @@ def evaluate_instances(policy, instances, c, recorder=None, kind='evaluation', p
         if recorder: env.attach_recorder(recorder,kind=kind)
         phases={p:dict(steps=0,waits=0,held_machine_time=0.,capacity_time=0.) for p in PHASES}
         timings=[];steps=waits=0;seen=set();build_total=infer_total=environment_total=0.
-        last=float(inst.arrival_times[-1]);phase_snapshots={}
+        last=float(inst.arrival_times[-1]);startup=c['recording']['phase_startup_fraction']
         while not env.done:
-            phase=phase_at(env.now,last);start=time.perf_counter();obs=observe(env);build=time.perf_counter()-start
+            phase=phase_at(env.now,last,startup);start=time.perf_counter();obs=observe(env);build=time.perf_counter()-start
             start=time.perf_counter();a,out=infer(policy,obs,details=recorder is not None);inference=time.perf_counter()-start
             first=phase not in seen;seen.add(phase)
             if panel is not None and first: panel.append(dict(instance_id=inst.instance_id,phase=phase,observation=obs))
@@ -55,16 +56,13 @@ def evaluate_instances(policy, instances, c, recorder=None, kind='evaluation', p
                     key=recorder.artifact(dict(public_state=env.public_state(),observation=obs,action=a,model=scores,
                          representations=out.representations.detach() if out is not None else None),'mechanisms')
                     recorder.emit('mechanisms',dict(episode_id=env._record_id,instance_id=inst.instance_id,phase=phase,artifact=key))
-                    phase_snapshots[phase]=key
-            now=env.now;held=env.stats.held_time;start=time.perf_counter()
-            env.step(obs.actions.actions[a]);elapsed=time.perf_counter()-start
-            env_seconds=env.last_step_seconds
+            now=env.now;env.step(obs.actions.actions[a]);env_seconds=env.last_step_seconds
             wait=obs.candidate[a,0]<0;steps+=1;waits+=int(wait)
             phases[phase]['steps']+=1;phases[phase]['waits']+=int(wait)
-            for ph,dt in split_time(now,env.now,last): phases[ph]['capacity_time']+=dt*inst.machine_count
+            for ph,dt in split_time(now,env.now,last,startup): phases[ph]['capacity_time']+=dt*inst.machine_count
             for event in env.recorded_events():
                 if event['kind']=='wait':
-                    for ph,dt in split_time(event['time'],event['end'],last): phases[ph]['held_machine_time']+=dt*len(event['machines'])
+                    for ph,dt in split_time(event['time'],event['end'],last,startup): phases[ph]['held_machine_time']+=dt*len(event['machines'])
             timings.append(inference+build);build_total+=build;infer_total+=inference;environment_total+=env_seconds
         if env.truncated: raise RuntimeError(f'Evaluation truncated: {inst.instance_id}')
         if np.any(env.order_outcome<0): raise AssertionError('Unresolved evaluation orders')
@@ -94,12 +92,8 @@ def load_policy(path, spec):
 
 def policy_identity(state):
     """The deployed function, independent of checkpoint filename or validation metadata."""
-    c=state['cfg'];h=hashlib.sha256(json.dumps(dict(method=c['method'],network=c['network'],
-         classic_width=c['classic']['width']),sort_keys=True).encode())
-    for name,value in sorted(state['model'].items()):
-        a=value.detach().cpu().contiguous().numpy()
-        h.update(name.encode());h.update(str((a.dtype,a.shape)).encode());h.update(a.tobytes())
-    return h.hexdigest()
+    c=state['cfg']
+    return state_hash(state['model'],json.dumps(dict(method=c['method'],network=c['network'],classic_width=c['classic']['width']),sort_keys=True).encode())
 
 
 def cached_case(root, inst, policy, model_id, c, instance_sha, panel=False):
@@ -126,46 +120,50 @@ def cached_case(root, inst, policy, model_id, c, instance_sha, panel=False):
     return record
 
 
+def milestone_points(c,core):
+    """Intermediate core checkpoints that are evaluated on the main split (fixed-budget learning curves)."""
+    start=c['experiment']['evaluate_milestones_from']
+    return sorted({x for s in core for x in s.config['training']['milestones'] if start<=x<s.budget})
+
+
+def variant_name(spec):
+    return spec.name.rsplit('_s',1)[0] if spec.group=='sensitivity' else spec.method
+
+
+def evaluation_plan(c,specs):
+    """Every planned evaluation table: name, fixed split, (job, checkpoint file) pairs and rule policies.
+    evaluate_matrix runs this plan and statistics.validate checks the persisted tables against the same plan."""
+    e=c['experiment'];core=[s for s in specs if s.group!='sensitivity'];final=lambda s:f'checkpoint_{s.budget}.pt'
+    plan=[dict(name=split,split=split,models=[(s,final(s)) for s in core],rules=ALL_RULES,panel=PANEL_RULE)
+          for split in ('main','small','long_stream','large_shop')]
+    plan+=[dict(name=f'main_{p}',split='main',models=[(s,f'checkpoint_{p}.pt') for s in core],rules=(),panel=None) for p in milestone_points(c,core)]
+    plan.append(dict(name='main_best',split='main',models=[(s,'checkpoint_best.pt') for s in core],rules=(),panel=None))
+    plan.append(dict(name='initialization',split='validation',models=[(s,'checkpoint_initialization.pt') for s in core if uses_demo(s.method)],
+                     rules=(c['teacher'],),panel=None))
+    changed=[(s,final(s)) for s in specs if s.group=='sensitivity']
+    defaults=[(s,f"checkpoint_{e['sensitivity_budget']}.pt") for s in core if s.method=='full' and s.seed in e['sensitivity_seeds']]
+    plan.append(dict(name='sensitivity',split='sensitivity',models=changed+defaults,rules=(),panel=None))
+    return plan
+
+
 def evaluate_matrix(root,data,c,specs):
-    root=Path(root); manifest=prepare(c,data);case_index={r['instance_id']:r for r in manifest['cases']}
-    core=[s for s in specs if s.group!='sensitivity'];outputs={};costs=[]
-    def evaluate_set(name,split,selected,checkpoint,include_rules=True):
-        rows=[];instances=fixtures(c,data,split)
-        for spec in selected:
-            path=root/'runs'/spec.name/(checkpoint(spec) if callable(checkpoint) else checkpoint)
+    root=Path(root);manifest=prepare(c,data);case_index={r['instance_id']:r for r in manifest['cases']};outputs={};costs=[]
+    for item in evaluation_plan(c,specs):
+        rows=[];instances=fixtures(c,data,item['split'])
+        for spec,filename in item['models']:
+            path=root/'runs'/spec.name/filename
             policy,state=load_policy(path,spec);cp_hash=digest(path);model_id=policy_identity(state)
             for inst in instances:
-                start=time.perf_counter();item=cached_case(root,inst,policy,model_id,c,case_index[inst.instance_id]['sha256'])
-                rows.append(dict(variant=spec.name.rsplit('_s',1)[0] if spec.group=='sensitivity' else spec.method,
-                    run=spec.name,seed=spec.seed,budget=state['steps'],checkpoint_sha256=cp_hash,policy_sha256=model_id,
-                    evaluation_key=object_hash(item['identity'])[:24],**item['row']))
-                costs.append(dict(run=spec.name,split=name,lookup_wall_seconds=time.perf_counter()-start))
-        if include_rules:
-            for rule in ALL_RULES:
-                for inst in instances:
-                    item=cached_case(root,inst,RulePolicy(rule),'rule:'+rule,c,case_index[inst.instance_id]['sha256'],panel=rule=='SPT')
-                    rows.append(dict(variant=rule,run=rule,seed=0,budget=0,checkpoint_sha256='',evaluation_key=object_hash(item['identity'])[:24],**item['row']))
-        write_csv(root/f'{name}.csv',rows);outputs[name]=dict(file=f'{name}.csv',sha256=digest(root/f'{name}.csv'),rows=len(rows))
-    for split in ('main','small','long_stream','large_shop'):
-        evaluate_set(split,split,core,lambda s:f'checkpoint_{s.budget}.pt')
-    points=sorted(set(x for s in core for x in s.config['training']['milestones'] if x<s.budget and x>= (64 if c['purpose']=='engineering-smoke' else 100000)))
-    for point in points: evaluate_set(f'main_{point}','main',core,f'checkpoint_{point}.pt',False)
-    evaluate_set('main_best','main',core,'checkpoint_best.pt',False)
-    from configs.experiment import uses_demo
-    evaluate_set('initialization','validation',[s for s in core if uses_demo(s.method)],'checkpoint_initialization.pt',False)
-    teacher=[]
-    for inst in fixtures(c,data,'validation'):
-        item=cached_case(root,inst,RulePolicy(c['teacher']),'rule:'+c['teacher'],c,case_index[inst.instance_id]['sha256'])
-        teacher.append(dict(variant=c['teacher'],run=c['teacher'],seed=0,budget=0,checkpoint_sha256='',
-                            evaluation_key=object_hash(item['identity'])[:24],**item['row']))
-    initial=read_csv(root/'initialization.csv')+teacher;write_csv(root/'initialization.csv',initial)
-    outputs['initialization']=dict(file='initialization.csv',sha256=digest(root/'initialization.csv'),rows=len(initial))
-    sens=[s for s in specs if s.group=='sensitivity']
-    evaluate_set('sensitivity_changes','sensitivity',sens,lambda s:f'checkpoint_{s.budget}.pt',False)
-    defaults=[s for s in core if s.method=='full' and s.seed in c['experiment']['sensitivity_seeds']]
-    evaluate_set('sensitivity_default','sensitivity',defaults,f"checkpoint_{c['experiment']['sensitivity_budget']}.pt",False)
-    sensitive=read_csv(root/'sensitivity_changes.csv')+read_csv(root/'sensitivity_default.csv');write_csv(root/'sensitivity.csv',sensitive)
-    outputs['sensitivity']=dict(file='sensitivity.csv',sha256=digest(root/'sensitivity.csv'),rows=len(sensitive))
+                start=time.perf_counter();entry=cached_case(root,inst,policy,model_id,c,case_index[inst.instance_id]['sha256'])
+                rows.append(dict(variant=variant_name(spec),run=spec.name,seed=spec.seed,budget=state['steps'],checkpoint_sha256=cp_hash,
+                    policy_sha256=model_id,evaluation_key=object_hash(entry['identity'])[:24],**entry['row']))
+                costs.append(dict(run=spec.name,split=item['name'],lookup_wall_seconds=time.perf_counter()-start))
+        for rule in item['rules']:
+            for inst in instances:
+                entry=cached_case(root,inst,RulePolicy(rule),'rule:'+rule,c,case_index[inst.instance_id]['sha256'],panel=rule==item['panel'])
+                rows.append(dict(variant=rule,run=rule,seed=0,budget=0,checkpoint_sha256='',evaluation_key=object_hash(entry['identity'])[:24],**entry['row']))
+        write_csv(root/f"{item['name']}.csv",rows)
+        outputs[item['name']]=dict(file=f"{item['name']}.csv",sha256=digest(root/f"{item['name']}.csv"),rows=len(rows))
     write_csv(root/'evaluation_lookups.csv',costs)
     atomic_json(root/'evaluation_manifest.json',dict(outputs=outputs,data=digest(Path(data)/'manifest.json'),evaluation=evaluation_hash()))
     return outputs
@@ -175,7 +173,7 @@ def latency(root,c,specs):
     root=Path(root);target=root/'latency.csv';panels=[]
     for p in sorted((root/'evaluations').glob('*/complete.json')):
         r=json.loads(p.read_text())
-        if r['identity']['evaluation']==evaluation_hash() and r['identity']['model']=='rule:SPT' and r['panel']:
+        if r['identity']['evaluation']==evaluation_hash() and r['identity']['model']=='rule:'+PANEL_RULE and r['panel']:
             if digest(p.parent/r['panel'])!=r['panel_sha256']:raise ValueError('Timing panel changed')
             panels.append((p.parent/r['panel'],r['panel_sha256']))
     identity_value=dict(evaluation=evaluation_hash(),panels=[sha for _,sha in panels],
@@ -188,11 +186,11 @@ def latency(root,c,specs):
         return
     panel=[]
     for path,_ in panels:panel.extend(torch.load(path,weights_only=False))
-    if not panel: raise ValueError('Missing SPT timing panel')
+    if not panel: raise ValueError(f'Missing {PANEL_RULE} timing panel')
     models=[]
     for s in specs:
         if s.group!='sensitivity':models.append((s.name,s.seed,load_policy(root/'runs'/s.name/f'checkpoint_{s.budget}.pt',s)[0]))
-    models.extend((r,0,RulePolicy(r)) for r in ALL_RULES);rows=[];torch.set_num_threads(1)
+    models.extend((r,0,RulePolicy(r)) for r in ALL_RULES);rows=[];threads=c['runtime']['threads'];torch.set_num_threads(threads)
     for name,seed,policy in models:
         for state in panel:
             o=state['observation']
@@ -201,4 +199,4 @@ def latency(root,c,specs):
                 start=time.perf_counter();infer(policy,o);seconds=time.perf_counter()-start
                 rows.append(dict(run=name,seed=seed,instance_id=state['instance_id'],phase=state['phase'],repeat=repeat,
                                  inference_seconds=seconds,candidates=len(o.candidate),orders=len(o.order),operations=len(o.operation),machines=len(o.machine)))
-    write_csv(target,rows);atomic_json(marker,dict(identity=identity_value,sha256=digest(target),rows=len(rows),threads=1))
+    write_csv(target,rows);atomic_json(marker,dict(identity=identity_value,sha256=digest(target),rows=len(rows),threads=threads))

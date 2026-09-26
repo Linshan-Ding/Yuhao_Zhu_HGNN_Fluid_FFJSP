@@ -5,7 +5,6 @@ import math
 import numpy as np
 import torch
 from torch import nn
-from agent.graph import ORDER_DIM, OP_DIM, MACHINE_DIM, EDGE_DIM, ACTION_DIM, GLOBAL_DIM
 
 def mlp(i, h, o):
     return nn.Sequential(nn.Linear(i,h), nn.SiLU(), nn.Linear(h,o))

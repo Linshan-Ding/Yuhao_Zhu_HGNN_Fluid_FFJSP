@@ -1,10 +1,6 @@
-"""Frequency-conditioned online generation and immutable, indexed evaluation cohorts."""
-import csv
+"""Frequency-conditioned online instance generation for training (evaluation cases are fixed in data.benchmark)."""
 import hashlib
-import json
-from pathlib import Path
-import numpy as np
-from data.generator import Instance, build_instance, sample_arrivals, load_metrics, save_instance_csv, load_instance_csv
+from data.generator import Instance, build_instance, sample_arrivals, load_metrics, route_minimum, deadlines, stream_meta
 
 def sample(cfg, rng, name='training', tier='train', iota=None, due_factor=None):
     d=cfg['data']
@@ -21,15 +17,13 @@ def sample(cfg, rng, name='training', tier='train', iota=None, due_factor=None):
         count=int(rng.integers(d['orders'][0],d['orders'][1]+1))
         products=rng.integers(0,d['products'],size=count)
         arrivals=sample_arrivals(rng,count,1/lam)
-        minimum=np.where(catalog.proc_times>0,catalog.proc_times,np.inf).min(1).reshape(d['products'],d['stages']).sum(1)
+        route=route_minimum(catalog.proc_times,d['products'],d['stages'])
         due=float(rng.uniform(*d['due_factor'])) if due_factor is None else float(due_factor)
-        deadlines=arrivals+minimum[products]*due*rng.uniform(.9,1.1,count)
-        meta={'DDT':float(minimum.mean()),'mean_interarrival':1/lam,'arrival_process':'poisson',
-              'due_factor':due,'iota_target':intensity,'schema_version':cfg['schema_version'],
-              'sampling_attempts':attempt,'sampling_regime':regime['name'] if regime else 'fixed',
-              'catalog_sha256':hashlib.sha256(catalog.proc_times.tobytes()).hexdigest()}
+        due_dates=deadlines(arrivals,route,products,due,rng.uniform(*d['due_jitter'],count))
+        meta=stream_meta(cfg,route,lam,due,intensity,sampling_attempts=attempt,sampling_regime=regime['name'] if regime else 'fixed',
+                         catalog_sha256=hashlib.sha256(catalog.proc_times.tobytes()).hexdigest())
         inst=Instance(name,tier,d['products'],d['stages'],catalog.machines_per_stage,catalog.proc_times,
-                      products,arrivals,deadlines,meta)
+                      products,arrivals,due_dates,meta)
         inst.meta.update(load_metrics(inst))
         return inst
     raise ValueError(f'No admissible frequency/load combination after {d["max_attempts"]} attempts: {regime or iota}')

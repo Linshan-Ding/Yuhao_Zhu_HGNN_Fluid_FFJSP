@@ -1,11 +1,11 @@
 """Future generation from public catalogues and visible history only."""
 import numpy as np
-from data.generator import capacity_unit_load
+from data.generator import capacity_unit_load, route_minimum
 
 class FutureGenerator:
     def __init__(self,cfg,seed):
         self.cfg=cfg; self.rng=np.random.default_rng(seed); self.calls=0
-        self.last_cost=1024
+        self.last_cost=cfg['scenario']['minimum_query_cost']  # cost of the last complete query, used for reservations
 
     def state_dict(self):
         return {"rng":self.rng.bit_generator.state,"calls":self.calls,"last_cost":self.last_cost}
@@ -15,7 +15,7 @@ class FutureGenerator:
 
     def future(self,snapshot):
         i=snapshot.instance; c=self.cfg["scenario"]
-        minimum=np.where(i.proc_times>0,i.proc_times,np.inf).min(1).reshape(i.product_count,i.stage_count).sum(1)
+        minimum=route_minimum(i.proc_times,i.product_count,i.stage_count)
         prior=float(c["prior_count"])
         rate_prior=1.0/capacity_unit_load(i.proc_times,i.product_count,i.stage_count)
         elapsed=max(snapshot.now-float(i.arrival_times.min()),0.0)

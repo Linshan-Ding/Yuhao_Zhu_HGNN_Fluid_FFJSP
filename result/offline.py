@@ -1,8 +1,7 @@
 """Persist full clairvoyant CP-SAT reference results; never an online comparator."""
 from pathlib import Path
 import json
-from dataclasses import asdict
-from agent.offline import solve_cpsat, replay_check
+from environment.offline_cpsat import solve_cpsat, replay_check
 from environment.problem import Problem
 from configs.experiment import environment_config
 from data.benchmark import fixtures, prepare

@@ -19,15 +19,31 @@ def plain(value):
     raise TypeError(type(value).__name__)
 
 
+TEXT_SUFFIXES = ('.csv', '.json', '.jsonl', '.md', '.yaml', '.yml', '.py', '.txt', '.tex', '.bib')
+
+
+def normalized_bytes(path):
+    """File bytes with CRLF folded to LF for text files, so identities do not depend on the platform
+    or on git's end-of-line conversion. Binary files (.pt, .gz, .zip, .pdf, ...) are returned as is."""
+    data = Path(path).read_bytes()
+    return data.replace(b'\r\n', b'\n') if Path(path).suffix.lower() in TEXT_SUFFIXES else data
+
+
 def digest(path):
-    h = hashlib.sha256()
-    with Path(path).open('rb') as f:
-        for block in iter(lambda: f.read(1024 * 1024), b''): h.update(block)
-    return h.hexdigest()
+    return hashlib.sha256(normalized_bytes(path)).hexdigest()
 
 
 def object_hash(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=plain).encode()).hexdigest()
+
+
+def state_hash(state, prefix=b''):
+    """Identity of a network state dict: parameter names, dtypes, shapes and bytes, after an optional prefix."""
+    h = hashlib.sha256(prefix)
+    for name, value in sorted(state.items()):
+        a = value.detach().cpu().contiguous().numpy()
+        h.update(name.encode()); h.update(str((a.dtype, a.shape)).encode()); h.update(a.tobytes())
+    return h.hexdigest()
 
 
 def atomic_json(path, value):
@@ -52,7 +68,7 @@ def write_csv(path, rows, fields=None):
     fields = fields or list(dict.fromkeys(k for r in rows for k in r))
     t = p.with_name(p.name + '.tmp')
     with t.open('w', newline='', encoding='utf-8') as f:
-        w = csv.DictWriter(f, fieldnames=fields); w.writeheader(); w.writerows(rows)
+        w = csv.DictWriter(f, fieldnames=fields, lineterminator='\n'); w.writeheader(); w.writerows(rows)
     os.replace(t, p)
 
 

@@ -13,7 +13,7 @@ from agent.observation import observe
 from agent.model import Policy
 from agent.rules import RulePolicy
 from result.recording import Recorder, records, verify, split_time
-from result.storage import run_lock, digest, atomic_json
+from result.storage import run_lock, digest
 
 
 def test_formal_matrix_and_one_factor_sensitivity():
@@ -73,7 +73,7 @@ def test_nonpreemption_wait_and_public_isolation():
 
 
 def test_phase_time_is_split_at_boundaries():
-    assert split_time(1,12,10)==[('startup',1.),('arrivals',8.),('drain',2.)]
+    assert split_time(1,12,10,.2)==[('startup',1.),('arrivals',8.),('drain',2.)]
 
 
 def test_raw_corruption_and_lock(tmp_path):
@@ -140,3 +140,18 @@ def test_identical_policy_reuses_despite_checkpoint_metadata():
     assert policy_identity(state)==policy_identity(other)
     other['model']['actor.bias']+=1
     assert policy_identity(state)!=policy_identity(other)
+
+
+def test_hash_is_line_ending_invariant(tmp_path):
+    from result.provenance import hash_files
+    from configs.experiment import ROOT
+    lf=tmp_path/'a.csv';crlf=tmp_path/'b.csv';lf.write_bytes(b'x,y\n1,2\n');crlf.write_bytes(b'x,y\r\n1,2\r\n')
+    assert digest(lf)==digest(crlf)
+    binary=tmp_path/'a.pt';binary.write_bytes(b'\r\n');other=tmp_path/'b.pt';other.write_bytes(b'\n')
+    assert digest(binary)!=digest(other)
+    src=ROOT/'.pytest_tmp'/'eol_probe';src.mkdir(parents=True,exist_ok=True)
+    try:
+        (src/'m.py').write_bytes(b'x=1\r\n');a=hash_files([src/'m.py']);(src/'m.py').write_bytes(b'x=1\n')
+        assert hash_files([src/'m.py'])==a
+    finally:
+        (src/'m.py').unlink();src.rmdir()

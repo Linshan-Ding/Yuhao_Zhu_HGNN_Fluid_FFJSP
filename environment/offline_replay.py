@@ -1,8 +1,11 @@
 """Environment-owned physical replay for a clairvoyant offline schedule."""
 from __future__ import annotations
 import numpy as np
-from typing import Tuple, List
+from typing import Dict, Tuple, List
 from environment.problem import Problem
+
+Schedule = Dict[Tuple[int, int], Tuple[int, float, float]]   # (order, stage) -> (machine, start, end)
+
 
 def _replay_in_env(problem: Problem, assignment: Schedule, cfg, tol: float) -> Tuple[int, List[str]]:
     """Physical schedule replay; this is NOT a test of the online policy action set.
@@ -11,7 +14,7 @@ def _replay_in_env(problem: Problem, assignment: Schedule, cfg, tol: float) -> T
     The environment still validates dispatches and retains all spent processing time.
     """
     from configs.config import Config
-    from environment.env import NOOP, WAITING
+    from environment.env import WAITING
     from environment.public import SchedulingEnv
 
     env = SchedulingEnv(problem.inst, Config(cfg.to_dict()))

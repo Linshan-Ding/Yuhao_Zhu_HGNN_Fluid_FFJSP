@@ -4,7 +4,7 @@ from dataclasses import dataclass, asdict
 import numpy as np
 from configs.config import Config
 from data.generator import Instance
-from environment.env import SchedulingEnv as BaseEnv, NOT_ARRIVED, WAITING, IN_PROCESS, StepStats
+from environment.env import SchedulingEnv as BaseEnv, NOT_ARRIVED, StepStats
 from environment.problem import Problem
 from environment.interfaces import Dispatch, Wait
 
@@ -36,15 +36,6 @@ class DecisionObservation:
         for name in self.__dataclass_fields__:
             x=getattr(self,name)
             if isinstance(x,np.ndarray): object.__setattr__(self,name,readonly(x))
-
-@dataclass(frozen=True)
-class ActionConditionedGraph:
-    action: np.ndarray
-    operation: np.ndarray
-    order: np.ndarray
-    machine: np.ndarray
-    edge: np.ndarray
-    condition: np.ndarray
 
 @dataclass(frozen=True)
 class PublicSchedulingState:
@@ -96,7 +87,7 @@ class PublicSchedulingState:
         env.machine_busy_time=self.machine_busy_time.copy();env.order_outcome[:n]=self.outcomes
         env.order_outcome[n:]=-1;env.n_completed=self.completed;env.n_discarded=self.discarded
         env.done=False;env.truncated=False;env.step_count=0;env.stats=StepStats()
-        env._consecutive_noop=0;env._cand_stamp=-1;env._events=[]
+        env._cand_stamp=-1;env._events=[]
         return env
 
     def graph_view(self):
@@ -132,7 +123,7 @@ class SchedulingEnv(BaseEnv):
 
     def state_dict(self):
         names=('now','status','stage','machine_free_at','machine_busy_with','machine_busy_time','n_completed',
-               'n_discarded','step_count','done','truncated','order_outcome','_consecutive_noop')
+               'n_discarded','step_count','done','truncated','order_outcome')
         return {'schema':'schedule-data-1','instance':asdict(self.inst),'config':deepcopy(self.cfg.raw),
                 'dynamic':{k:deepcopy(getattr(self,k)) for k in names},'stats':asdict(self.stats),
                 'record_id':getattr(self,'_record_id',None)}

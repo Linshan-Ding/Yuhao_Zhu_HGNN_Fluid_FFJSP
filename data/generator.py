@@ -6,9 +6,8 @@
 from __future__ import annotations
 
 import csv
-import math
 from functools import lru_cache
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
@@ -92,12 +91,27 @@ def load_metrics(inst: Instance) -> Dict[str, float]:
     }
 
 
+def route_minimum(proc, product_count, stage_count):
+    """Per product, the sum over its stages of the fastest eligible processing time (shortest possible route)."""
+    return np.where(proc > 0, proc, np.inf).min(1).reshape(product_count, stage_count).sum(1)
+
+
+def deadlines(arrivals, route, products, due_factor, jitter):
+    """Order deadlines: arrival + due_factor x jitter x shortest route of the order's product."""
+    return arrivals + route[products] * due_factor * jitter
+
+
+def stream_meta(cfg, route, lam, due_factor, iota, **extra):
+    """Common metadata of a Poisson order stream (online training and fixed benchmark cells)."""
+    return dict(DDT=float(route.mean()), mean_interarrival=1 / lam, arrival_process='poisson', due_factor=due_factor,
+                iota_target=iota, schema_version=cfg['schema_version'], **extra)
+
+
 def capacity_unit_load(proc, products, stages, proportions=None):
     """Fractional routing LP: min max machine workload per unit arrival rate.
 
     This is an asymptotic capacity diagnostic, not a finite-instance fulfillment bound.
     """
-    from scipy.optimize import linprog
     pi = np.full(products, 1.0 / products) if proportions is None else np.asarray(proportions)
     array = np.ascontiguousarray(proc,dtype=np.float64)
     return _capacity_cached(array.tobytes(),array.shape,products,stages,tuple(pi))
@@ -192,7 +206,7 @@ def build_instance(rng: np.random.Generator, *, instance_id: str, tier: str,
         if target_rho <= 0:
             raise ValueError("target_rho must be positive")
         mean_interarrival = capacity_unit_load(proc, product_count, stage_count) / target_rho
-    route = np.where(proc > 0, proc, np.inf).min(1).reshape(product_count, stage_count).sum(1)
+    route = route_minimum(proc, product_count, stage_count)
     if due_factor is not None:
         ddt = float(route.mean() * due_factor)
     order_product = rng.integers(0, product_count, size=order_count)
@@ -226,7 +240,7 @@ def save_instance_csv(inst: Instance, path: str | Path) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["kind", "i", "j", "value", "extra"])
         writer.writerow(["header", inst.product_count, inst.stage_count, inst.machine_count, inst.order_count])
         for j, m in enumerate(inst.machines_per_stage):

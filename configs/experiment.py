@@ -15,18 +15,22 @@ METHODS = ('full', *CLASSIC, 'hgnn', 'dual_attention', *ABLATIONS)
 
 
 def config(micro=False):
+    """The single configuration; `micro` applies the engineering-smoke reductions (budget from smoke.budget)."""
     c = yaml.safe_load((ROOT / 'configs/experiment.yaml').read_text(encoding='utf-8'))
+    if c['runtime']['device'] != 'cpu':
+        raise ValueError(f"runtime.device must be 'cpu' (this study runs CPU-only); got {c['runtime']['device']!r}")
     if micro:
+        b = c['smoke']['budget']
         c['purpose'] = 'engineering-smoke'
         c['data'].update(orders=[6, 8])
         c['network'].update(width=16, layers=1, action_layers=1, candidate_chunk=16)
         c['demonstration'].update(steps=32, epochs=2, minibatch=16)
         c['training'].update(rollout_steps=32, minibatch=16, epochs=1, environments=2,
-                             milestones=[64, 128], evaluate_every=128)
-        c['scenario'].update(warmup_real_steps=16, teacher_interval=256, replay_batch=4)
+                             milestones=[b // 2, b], evaluate_every=b)
+        c['scenario'].update(warmup_real_steps=16, frozen_interval=256, replay_batch=4)
         c['classic'].update(width=32, start=16, batch=8, replay_size=512, a2c_rollout=32)
-        c['experiment'].update(seeds=[1], budget=128, sensitivity_seeds=[1], sensitivity_budget=128,
-                               latency_warmup=1, latency_repeats=2)
+        c['experiment'].update(seeds=[1], budget=b, sensitivity_seeds=[1], sensitivity_budget=b,
+                               evaluate_milestones_from=b // 2, latency_warmup=1, latency_repeats=2)
         c['experiment']['exact'].update(wall_seconds=2, deterministic_seconds=1)
     return c
 
@@ -40,8 +44,10 @@ def identity(c):
 
 def environment_config(c):
     from configs.config import Config
-    return Config({'action_space': {'allow_noop': True, 'wait_interval': c['environment']['wait_interval']},
-                   'episode': {'max_decision_steps': c['environment']['max_steps']}})
+    e = c['environment']
+    return Config({'action_space': {'allow_noop': True, 'wait_interval': e['wait_interval'],
+                                    'exposure': e['exposure'], 'exposure_threshold': e['exposure_threshold']},
+                   'episode': {'max_decision_steps': e['max_steps']}})
 
 
 def uses_demo(method):

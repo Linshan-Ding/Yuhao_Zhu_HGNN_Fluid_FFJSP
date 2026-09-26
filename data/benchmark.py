@@ -1,9 +1,8 @@
 """One immutable realization per physical parameter cell, shared across all methods."""
-from copy import deepcopy
 from pathlib import Path
 import json
 import numpy as np
-from data.generator import Instance, build_instance, load_metrics, save_instance_csv, load_instance_csv
+from data.generator import Instance, build_instance, load_metrics, save_instance_csv, load_instance_csv, route_minimum, deadlines, stream_meta
 from result.storage import atomic_json, digest, object_hash, write_csv
 
 SPLITS = ('validation', 'main', 'small', 'long_stream', 'large_shop', 'sensitivity')
@@ -71,8 +70,8 @@ def prepare(c, root):
         streams = [np.random.default_rng(np.random.SeedSequence([seed, i])) for i in (1, 2, 3)]
         products = streams[0].integers(0, catalog.product_count, maximum)
         gaps = streams[1].exponential(1., maximum); gaps[0] = 0.
-        jitter = streams[2].uniform(.9, 1.1, maximum)
-        minimum = np.where(catalog.proc_times > 0, catalog.proc_times, np.inf).min(1).reshape(catalog.product_count, catalog.stage_count).sum(1)
+        jitter = streams[2].uniform(*c['data']['due_jitter'], maximum)
+        route = route_minimum(catalog.proc_times, catalog.product_count, catalog.stage_count)
         families[family] = dict(seed=seed, attempts=attempt, iota=intensities, rho=loads,
                                streams={'catalog':0,'products':1,'unit_interarrival':2,'deadline_jitter':3},
                                catalog=object_hash(catalog.proc_times), maximum_orders=maximum)
@@ -83,13 +82,11 @@ def prepare(c, root):
                     if any(r['parameter_hash'] == cell for r in entries): raise ValueError('Duplicate parameter configuration')
                     n = s['orders']; lam = iota / catalog.meta['p_bar']
                     arrivals = np.cumsum(gaps[:n]) / lam
-                    deadlines = arrivals + minimum[products[:n]] * due * jitter[:n]
-                    meta = dict(DDT=float(minimum.mean()), mean_interarrival=1/lam, arrival_process='poisson',
-                                due_factor=due, iota_target=iota, schema_version=c['schema_version'],
-                                family=family, family_seed=seed, sampling_attempts=attempt, sampling_regime='joint_fixed_grid',
-                                catalog_sha256=families[family]['catalog'], parameter_hash=cell)
+                    due_dates = deadlines(arrivals, route, products[:n], due, jitter[:n])
+                    meta = stream_meta(c, route, lam, due, iota, family=family, family_seed=seed, sampling_attempts=attempt,
+                                       sampling_regime='joint_fixed_grid', catalog_sha256=families[family]['catalog'], parameter_hash=cell)
                     inst = Instance(name, s['role'], catalog.product_count, catalog.stage_count, catalog.machines_per_stage,
-                                    catalog.proc_times.copy(), products[:n].copy(), arrivals, deadlines, meta)
+                                    catalog.proc_times.copy(), products[:n].copy(), arrivals, due_dates, meta)
                     inst.meta.update(load_metrics(inst)); path = root / 'cases' / f'{name}.csv'
                     # An interrupted preparation may leave identical files; never replace conflicting data.
                     if path.exists():

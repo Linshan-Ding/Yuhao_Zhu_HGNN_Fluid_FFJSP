@@ -38,9 +38,14 @@ def export(root,data,c,specs):
     lookup={(r['group'],r['variant']):r for r in main}
     table('comparison',['Method','All (%)','Frequent (%)','Infrequent (%)'],
         [[m,*[f"{100*float(lookup[g,m]['eta']):.2f}" if (g,m) in lookup else '--' for g in ('all','frequent','infrequent')]] for m in methods])
-    selected=[r for r in read_csv(root/'effects.csv') if r['split']=='main' and r['group']=='all' and r['contrast'].split()[-1] in ('no_graph','no_scenario','no_demo','impact_only')]
-    table('components',['Conditional contrast','Difference (pp)','Lower','Upper'],
-          [[r['contrast'],*[f'{100*float(r[k]):.3f}' if r[k] else '--' for k in ('difference','ci_low','ci_high')]] for r in selected])
+    ablations=('no_graph','no_scenario','no_demo','impact_only')
+    selected=[r for r in read_csv(root/'effects.csv') if r['split']=='main' and r['group']=='all' and r['contrast'].split()[-1] in ablations]
+    table('components',['Conditional contrast','Difference (pp)','Lower','Upper','Positive seeds','Cells won/tied/lost'],
+          [[r['contrast'],*[f'{100*float(r[k]):.3f}' if r[k] else '--' for k in ('difference','ci_low','ci_high')],
+            f"{r['positive_seeds']}/{r['seeds']}",f"{r['wins']}/{r['ties']}/{r['losses']}"] for r in selected])
+    # Appendix reference only: unadjusted paired Wilcoxon p-values on the main split.
+    table('tests',['Group','Contrast','Seeds','Wilcoxon p (unadjusted)'],
+          [[r['group'],r['comparison'],r['seeds'],f"{float(r['p']):.4f}"] for r in read_csv(root/'tests.csv') if r['split']=='main'])
     for name,splits in [('sensitivity',('sensitivity',)),('generalization',('long_stream','large_shop')),('initialization',('initialization',)),('validation_best',('main_best',))]:
         rr=[r for r in summaries if r['split'] in splits and r['group']=='all']
         table(name,['Dataset / method','Fulfillment (%)','Seed SD (pp)'],
@@ -49,6 +54,16 @@ def export(root,data,c,specs):
     fig,ax=plt.subplots(figsize=(11,4));ax.bar([r['variant'] for r in rr],[100*float(r['eta']) for r in rr],
         yerr=[100*float(r['seed_sd']) if r['seed_sd'] else 0 for r in rr]);ax.set_ylabel('On-time fulfillment (%)');ax.tick_params(axis='x',rotation=65);save(fig,'fulfillment')
     fig,ax=plt.subplots(figsize=(8,4));ax.barh([r['contrast'] for r in selected],[100*float(r['difference']) for r in selected]);ax.axvline(0,color='black',lw=.8);ax.set_xlabel('Conditional mean difference (percentage points)');save(fig,'components')
+    # Paired per-cell effects on the main split, one marker per fixed cell with its seed-vector interval.
+    cells=[r for r in read_csv(root/'case_effects.csv') if r['split']=='main' and r['contrast'].split()[-1] in ablations]
+    fig,ax=plt.subplots(figsize=(11,4));contrasts=sorted({r['contrast'] for r in cells})
+    for k,contrast in enumerate(contrasts):
+        rr=sorted([r for r in cells if r['contrast']==contrast],key=lambda r:r['instance_id']);xs=np.arange(len(rr))+(k-(len(contrasts)-1)/2)*.15
+        ys=[100*float(r['difference']) for r in rr]
+        err=[[100*(float(r['difference'])-float(r['ci_low'])) if r['ci_low'] else 0 for r in rr],[100*(float(r['ci_high'])-float(r['difference'])) if r['ci_high'] else 0 for r in rr]]
+        ax.errorbar(xs,ys,yerr=err,fmt='o',ms=3,lw=.8,capsize=2,label=contrast)
+        ax.set_xticks(np.arange(len(rr)),[r['instance_id'].replace('case_','')[:6] for r in rr],rotation=60,fontsize=7)
+    ax.axhline(0,color='black',lw=.8);ax.set(xlabel='Main-test cell',ylabel='Paired difference (pp)');ax.legend(fontsize=7,ncol=2);save(fig,'case_effects')
     pc=read_csv(root/'per_case.csv');fig,axes=plt.subplots(1,2,figsize=(10,4))
     for method in ('full','SPT','hgnn','dual_attention','dqn','ddqn','a2c','ppo'):
         rr=[r for r in pc if r['split']=='main' and r['variant']==method]
