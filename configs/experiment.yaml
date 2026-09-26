@@ -210,7 +210,6 @@ recording:
   keep_recovery_copies: 2
   phase_startup_fraction: 0.2
 smoke:
-  interaction_limit: 50000
   budget: 128
   scenario_probe_budget: 4096
   probe_due_factor:

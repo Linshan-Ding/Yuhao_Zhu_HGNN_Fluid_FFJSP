@@ -7,5 +7,5 @@ if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 os.chdir(ROOT)
 import yaml  # noqa: E402
 THREADS=str(yaml.safe_load((ROOT/'configs/experiment.yaml').read_text(encoding='utf-8'))['runtime']['threads'])
-os.environ.setdefault('OMP_NUM_THREADS',THREADS)
-os.environ.setdefault('MKL_NUM_THREADS',THREADS)
+os.environ['OMP_NUM_THREADS']=THREADS
+os.environ['MKL_NUM_THREADS']=THREADS

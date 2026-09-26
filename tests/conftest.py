@@ -1,4 +1,4 @@
-"""Tests charge simulator calls to the bounded engineering ledger."""
+"""Tests persist simulator calls without a cumulative engineering limit."""
 from pathlib import Path
 import time
 
@@ -12,7 +12,7 @@ def pytest_configure(config):
 def pytest_sessionstart(session):
     from environment.accounting import install
     from result.engineering import InteractionCounter
-    session.counter=InteractionCounter();install(session.counter)
+    session.counter=InteractionCounter(label='pytest');install(session.counter)
 
 def pytest_sessionfinish(session,exitstatus):
     from environment.accounting import install

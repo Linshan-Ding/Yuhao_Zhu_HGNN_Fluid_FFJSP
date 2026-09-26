@@ -36,7 +36,11 @@ def evaluate(policy, instances, c, recorder=None, kind='evaluation'):
     return evaluate_instances(policy, instances, c, recorder=recorder, kind=kind)
 
 
-def _train(c,run,seed,budget,data,holders):
+class TrainingInterrupted(RuntimeError):
+    """Another job failed; this job stopped at a durable checkpoint boundary."""
+
+
+def _train(c,run,seed,budget,data,holders,stop_requested=None):
     run=Path(run);run.mkdir(parents=True,exist_ok=True);torch.set_num_threads(c['runtime']['threads'])
     torch.manual_seed(seed);torch.use_deterministic_algorithms(True);sc=c['scenario']
     policy=Policy(c);optimizer=torch.optim.Adam(policy.parameters(),lr=c['training']['learning_rate'])
@@ -49,7 +53,7 @@ def _train(c,run,seed,budget,data,holders):
     real=branch=lost=epoch=demo_epoch=q_steps=eval_steps=0;elapsed_offset=0.;next_eval=0;best=-1.
     labels=failed=0;next_scenario=0;frozen_version=0;next_frozen=sc['frozen_interval'];demo_finished=not uses_demo(c['method'])
     cp=run/'checkpoint_last.pt';code=source_hash();fp=identity(c);ledger=run/'budget.json';log=run/'log.jsonl'
-    history=[];monitor=fixtures(c,data,'monitor');began=time.perf_counter();scenario_seconds=0.
+    history=[];monitor=fixtures(c,data,'monitor');began=time.perf_counter();scenario_seconds=0.;best_checkpoint=None
     recorder_state=None
     if cp.exists():
         s=torch.load(cp,weights_only=False,map_location='cpu')
@@ -62,10 +66,19 @@ def _train(c,run,seed,budget,data,holders):
         envs=[SchedulingEnv.from_state_dict(e) if e else None for e in s['environments']];next_obs=s['next_observations']
         scenario.load_state_dict(s['scenario_state']);pref=s['preferences'];replay=s['replay'];elapsed_offset=s['elapsed_seconds']
         best=s['best'];next_eval=s['next_eval'];labels=s['labels'];failed=s['failed_labels'];next_scenario=s['next_scenario']
+        best_checkpoint=s['best_checkpoint']
         frozen_version=s['frozen_version'];next_frozen=s['next_frozen'];history=s['history'];scenario_seconds=s['scenario_seconds']
         recorder_state=s['recorder']
         reserved=json.loads(ledger.read_text())['charged_upper_bound'] if ledger.exists() else s['steps']
         lost+=max(0,reserved-s['steps'])
+        # Lightweight files can be published just before a crash, ahead of the durable state.
+        for p in run.glob('checkpoint_*.pt'):
+            point=p.stem.removeprefix('checkpoint_')
+            if point.isdigit() and int(point)>s['steps']:
+                p.rename(run/f'uncommitted_{time.time_ns()}_{p.name}')
+        best_path=run/'checkpoint_best.pt'
+        if best_path.exists():best_path.rename(run/f'uncommitted_{time.time_ns()}_{best_path.name}')
+        if best_checkpoint is not None:atomic_torch_save(best_checkpoint,best_path)
         if log.exists():
             lines=log.read_text(encoding='utf-8').splitlines();keep=[x for x in lines if json.loads(x)['epoch']<=epoch]
             if len(keep)!=len(lines):
@@ -93,7 +106,7 @@ def _train(c,run,seed,budget,data,holders):
             instance_rng=irng.bit_generator.state,action_rng=arng.bit_generator.state,update_rng=ur.bit_generator.state,torch_rng=torch.get_rng_state(),
             demonstrations=demo,demo_finished=demo_finished,demo_environment=demo_env.state_dict() if demo_env else None,
             environments=[e.state_dict() if e else None for e in envs],next_observations=next_obs,scenario_state=scenario.state_dict(),
-            preferences=pref,replay=replay,elapsed_seconds=elapsed_offset+time.perf_counter()-began,best=best,next_eval=next_eval,labels=labels,
+            preferences=pref,replay=replay,elapsed_seconds=elapsed_offset+time.perf_counter()-began,best=best,best_checkpoint=best_checkpoint,next_eval=next_eval,labels=labels,
             failed_labels=failed,next_scenario=next_scenario,frozen_version=frozen_version,next_frozen=next_frozen,history=history,scenario_seconds=scenario_seconds,recorder=recorder.snapshot())
     keep=int(c['recording']['keep_recovery_copies'])
     if keep<1:raise ValueError('recording.keep_recovery_copies must be at least 1')
@@ -105,10 +118,16 @@ def _train(c,run,seed,budget,data,holders):
         for older,newer in zip(reversed(copies[:-1]),reversed(copies[1:])):
             if older.exists(): shutil.copy2(older,newer)
         atomic_torch_save(current,cp);recorder.commit(current['recorder']);reserve(total())
+        if stop_requested is not None and stop_requested():
+            raise TrainingInterrupted('Batch stopped; recovery checkpoint committed')
     def lightweight(path,**extra):
-        atomic_torch_save(dict(schema_version='schedule-data-1',cfg=c,model=policy.state_dict(),seed=seed,steps=total(),source_hash=code,identity=fp,**extra),path)
+        value=dict(schema_version='schedule-data-1',cfg=c,model=policy.state_dict(),seed=seed,steps=total(),source_hash=code,identity=fp,**extra)
+        atomic_torch_save(value,path)
+        return value
     if total()>=budget and demo_finished:
+        if total()>budget:raise ValueError('Recovered charge exceeds job budget')
         if not (run/f'checkpoint_{budget}.pt').exists():lightweight(run/f'checkpoint_{budget}.pt')
+        save()
         return dict(status='complete',steps=total(),real=real,scenario=branch,demonstration=demo.steps,lost=lost)
     if demo_finished and total() in c['training']['milestones'] and not (run/f'checkpoint_{total()}.pt').exists():
         # A recovered reservation charged as lost can land exactly on a milestone; the milestone checkpoint is still owed.
@@ -194,7 +213,8 @@ def _train(c,run,seed,budget,data,holders):
         if total()>=next_eval or total() in c['training']['milestones'] or total()>=budget:
             values=evaluate(policy,monitor,c,recorder,'monitor');eval_steps+=sum(v['steps'] for v in values);eta=float(np.mean([v['eta'] for v in values]));next_eval=total()+c['training']['evaluate_every']
             atomic_json(run/f'monitor_{total()}.json',dict(rows=values))
-            if eta>best:best=eta;lightweight(run/'checkpoint_best.pt',eta_validation=eta)
+            if eta>best:
+                best=eta;best_checkpoint=deepcopy(lightweight(run/'checkpoint_best.pt',eta_validation=eta))
         row=dict(epoch=epoch,total_steps=total(),real_steps=real,scenario_steps=branch,demonstration_steps=demo.steps,lost_upper_bound=lost,
             eta_validation=eta,labels=labels,failed_labels=failed,frozen_version=frozen_version,evaluation_steps=eval_steps,
             elapsed_seconds=elapsed_offset+time.perf_counter()-began,scenario_seconds=scenario_seconds,recording_seconds=recorder.io_seconds,**metrics)
@@ -210,10 +230,10 @@ def _train(c,run,seed,budget,data,holders):
     return dict(status='complete',steps=total(),real=real,scenario=branch,demonstration=demo.steps,lost=lost)
 
 
-def train(c,run,seed,budget,data):
+def train(c,run,seed,budget,data,stop_requested=None):
     holders=[]
     try:
-        return _train(c,run,seed,budget,data,holders)
+        return _train(c,run,seed,budget,data,holders,stop_requested)
     except BaseException:
         for recorder in holders:
             try:atomic_json(Path(run)/f'failed_raw_{time.time_ns()}.json',recorder.snapshot())

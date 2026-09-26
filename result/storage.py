@@ -46,12 +46,25 @@ def state_hash(state, prefix=b''):
     return h.hexdigest()
 
 
+def replace_file(source, destination):
+    """Windows readers briefly deny delete-sharing; retry only that transient failure."""
+    deadline=time.monotonic()+2.
+    while True:
+        try:
+            os.replace(source,destination)
+            return
+        except PermissionError as exc:
+            if os.name!='nt' or getattr(exc,'winerror',None) not in (5,32,33) or time.monotonic()>=deadline:
+                raise
+            time.sleep(.02)
+
+
 def atomic_json(path, value):
     p = Path(path); p.parent.mkdir(parents=True, exist_ok=True)
     t = p.with_name(p.name + '.' + uuid.uuid4().hex + '.tmp')
     with t.open('w', encoding='utf-8') as f:
         json.dump(value, f, ensure_ascii=False, indent=2, default=plain); f.flush(); os.fsync(f.fileno())
-    os.replace(t, p)
+    replace_file(t, p)
 
 
 def atomic_torch_save(value, path):
@@ -60,7 +73,7 @@ def atomic_torch_save(value, path):
     t = p.with_name(p.name + '.' + uuid.uuid4().hex + '.tmp')
     with t.open('wb') as f:
         torch.save(value, f); f.flush(); os.fsync(f.fileno())
-    os.replace(t, p)
+    replace_file(t, p)
 
 
 def write_csv(path, rows, fields=None):
@@ -69,7 +82,7 @@ def write_csv(path, rows, fields=None):
     t = p.with_name(p.name + '.tmp')
     with t.open('w', newline='', encoding='utf-8') as f:
         w = csv.DictWriter(f, fieldnames=fields, lineterminator='\n'); w.writeheader(); w.writerows(rows)
-    os.replace(t, p)
+    replace_file(t, p)
 
 
 def read_csv(path):
@@ -110,16 +123,31 @@ def _pid_alive(pid):
 def run_lock(directory):
     p = Path(directory); p.mkdir(parents=True, exist_ok=True); lock = p / '.lock'
     record = dict(pid=os.getpid(), host=socket.gethostname(), token=uuid.uuid4().hex, started=time.time())
-    for _ in range(2):
+    for attempt in range(50):
         try:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             with os.fdopen(fd, 'w', encoding='utf-8') as f: json.dump(record, f)
             break
         except FileExistsError:
-            old = json.loads(lock.read_text(encoding='utf-8'))
+            try:old = json.loads(lock.read_text(encoding='utf-8'))
+            except FileNotFoundError:continue
+            except json.JSONDecodeError:
+                # The exclusive creator may not have finished writing its ownership record.
+                if attempt==49:raise RuntimeError('Incomplete lock ownership record; refusing to steal it')
+                time.sleep(.02);continue
             if old['host'] != record['host'] or _pid_alive(old['pid']):
                 raise RuntimeError(f'Run is owned by another process: {old}')
-            os.replace(lock, p / f'abandoned_lock_{old["token"]}.json')
+            guard=p/'.lock.recovery'
+            try:guard_fd=os.open(guard,os.O_CREAT|os.O_EXCL|os.O_WRONLY)
+            except FileExistsError:
+                time.sleep(.02);continue
+            try:
+                # A second stale-lock contender must not rename a newly acquired live lock.
+                try:current=json.loads(lock.read_text(encoding='utf-8'))
+                except FileNotFoundError:continue
+                if current==old:os.replace(lock,p/f'abandoned_lock_{old["token"]}.json')
+            finally:
+                os.close(guard_fd);guard.unlink()
     else: raise RuntimeError('Cannot acquire run lock')
     try: yield
     finally:

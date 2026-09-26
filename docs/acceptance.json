@@ -1,22 +1,89 @@
 {
-  "date": "2026-09-25",
-  "tests_passed": 33,
-  "engineering_interactions": 44222,
-  "engineering_limit": 50000,
-  "training_source": "da4a82857d634b8c00166d70d5499088b66e64af0c982f2a8249ee05b00717e0",
-  "evaluation_source": "2915bfc77431e3c06181026401eaf31b1afe9068db1f048854ec872acd5144a1",
+  "date": "2026-09-26",
+  "completed_utc": "2026-09-26T07:18:34.520439+00:00",
+  "status": "ready_with_concurrency_1",
+  "tests_passed": 47,
+  "tests_seconds": 49.802,
+  "tests_skipped": 0,
+  "engineering_interactions": 109274,
+  "engineering_committed": 109018,
+  "engineering_limit": null,
+  "historical_engineering_charged": 46124,
+  "final_smoke_interactions": 29779,
+  "smoke_seconds": 370.7584017999998,
+  "training_source": "95fcbb0ac457f5c4f30a6176cd0fdfeffaa72142f1ec83d49a35d16141bbb07d",
+  "evaluation_source": "7e6c0cfb1fe986a265b05a321a74f2e92db238470d019b70dc9ab0346223cfde",
+  "smoke_identity": "c98332cbdc160653d350ef6c3e49f5024d24d488642b80db9c98c3b456159a8c",
+  "data_manifest_sha256": "d7520d6916b644d520d7f60f9e5191f4aced2534e43528a47b5a78a7f35bbb20",
+  "fixed_unique_cases": 50,
   "formal_jobs": 73,
   "formal_budget": 64000000,
   "formal_interactions": 0,
-  "fixed_unique_cases": 50,
-  "data_manifest_sha256": "d7520d6916b644d520d7f60f9e5191f4aced2534e43528a47b5a78a7f35bbb20",
-  "smoke_identity": "a89f316f05d223cb89fbf8a6d599e110417d5a2b19e49fbd5070ffcafd43483f",
-  "smoke_seconds": 115.10447319998639,
-  "migration": {
-    "policies": 11,
-    "max_error": 0,
-    "transition_steps": 12
+  "formal_training_started": false,
+  "validated_parallel_jobs": 8,
+  "observed_parallel_overlap": 8,
+  "parallel_serial_jobs_compared": 17,
+  "formal_shape_methods": 11,
+  "recommended_formal_jobs": 1,
+  "peak_worker_memory_bytes": 6349561856,
+  "memory_preflight": {
+    "jobs": 1,
+    "available_bytes": 14775459840,
+    "required_bytes": 12231919616,
+    "per_worker_bytes": 7936952320,
+    "recommended_jobs": 1
   },
-  "scope": "code repository only",
-  "revision": "2026-09-26 cross-platform identities (line-ending normalized); see docs/ACCEPTANCE.md"
+  "storage_preflight": {
+    "free_bytes": 264991997952,
+    "estimated_bytes": 183966854864,
+    "components_before_headroom": {
+      "trajectory": 67594274760.383385,
+      "checkpoints_and_buffers": 22344892019,
+      "evaluation_and_reports": 2044260652.9411764
+    },
+    "explanation": "Measured full-capacity formal buffer/checkpoint sizes plus projected trajectories/evaluation, with configured headroom; not a measured full-run size."
+  },
+  "exported_assets": 83,
+  "complete_scenario_labels": 11,
+  "nonzero_preference_updates": 72,
+  "reuse_seconds": 23.704825300001175,
+  "reuse_new_interactions": 0,
+  "engineering_root": "result/engineering/c98332cbdc16/c266972e/jobs_8",
+  "runtime": {
+    "python": "3.13.7",
+    "executable": "E:\\anaconda3\\envs\\python3.13\\python.exe",
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "AMD64 Family 25 Model 97 Stepping 2, AuthenticAMD",
+    "logical_cpus": 32,
+    "torch_threads": 1,
+    "cuda": true,
+    "packages": {
+      "torch": "2.11.0+cu128",
+      "numpy": "2.3.3",
+      "scipy": "1.16.2",
+      "PyYAML": "6.0.3",
+      "matplotlib": "3.10.6",
+      "ortools": "9.15.6755",
+      "pytest": "9.1.1"
+    },
+    "git_commit": "c552dfdffd2ae16bb47d07c648400fab4c4dd00e"
+  },
+  "evidence": {
+    "smoke_completion": "f583161fbeeb35f9544f7ff1bfd3d1931de8f62745e9f977177505e17cd0ed4b",
+    "pytest": "4afa62f008c00d18f064d3725958b9fbd0d589ea7a56cbc90d87056e694911f8",
+    "parallel": "a0c44ea19afa64c16e387ef6502d0ce038005ecbb601f6441012d848ec155334",
+    "deterministic_state_audit": "703f5d8bf04e93516784a4a1636e49da59559c12553efae4407eaa0d6e5fdb8a",
+    "resources": "3f97b1558f9594d160deac13fed7850c8781f56ce9737b1650ab7b699f39b2ad",
+    "reuse": "1323d053d6a783b96832b2197db816ca2a05e78e2a2171efbb355f68d7ca4221",
+    "assets": "9c4977a7c7c420441b778461c73d376f24193e422ba7ffb94fcb023932f9396c",
+    "formal_freeze": "97e04b79b249894229354d41b3f902709a4a97e0107830fd9b88495c436096f6"
+  },
+  "startup_command": "& 'E:\\anaconda3\\envs\\python3.13\\python.exe' scripts/run_formal_all.py 1",
+  "scope": "This code repository only; engineering tests and formal data preparation; no formal training.",
+  "limitations": [
+    "Windows CPU acceptance; other environments require their own smoke.",
+    "Formal-shape resource probes use synthetic rewards/preferences and do not establish algorithm performance.",
+    "Full 64-million-interaction duration and resource growth have not been measured."
+  ],
+  "history": "acceptance-history.json"
 }

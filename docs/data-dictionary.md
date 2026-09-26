@@ -37,6 +37,10 @@ DQN/DDQN的scores是Q值，probabilities和value为空；规则没有神经分�
 
 训练total_steps=real_steps+scenario_steps+demonstration_steps+lost_upper_bound。记录器steps还包括该运行中的验证评测，不能直接当训练预算。预留账本在执行前持久化，恢复时未提交预留保守计费；未提交块和failed_raw清单保留但不混入已提交轨迹。
 
+工程账本采用 engineering-accounting-2：`limit=null` 表示无累计硬上限，`historical_charged` 是原样保留的旧账本基数；`accounting/sessions/*.json` 每个进程独立写入 committed 与 charged_upper_bound，未正常结束的预留保守保留。汇总账本不会覆盖其他进程的消耗。该计数包含自检中的训练、监测、失败尝试和离线回放，不能当作正式训练预算。
+
+完成作业的 completion_manifest.json 列出检查点、配置、源码包、日志、预算和 raw manifest 的哈希；复用前再核验原始块与对象。工程验收另记录 pytest.xml、进程 PID／执行区间、串并行模型比对和正式规模资源探针。资源探针中的合成奖励与偏好仅用于检查张量规模和更新路径，不进入正式统计。
+
 训练checkpoint包含记录器提交点、环境、RNG、优化器、经验/标签缓冲、冻结策略与DQN目标网络；恢复检查点保留recording.keep_recovery_copies份（checkpoint_last、checkpoint_previous）。只有完整身份一致才可续训。校验失败不会覆盖已有数据。里程碑检查点checkpoint_里程碑.pt在training.milestones处写出（示范结束恰在1万时也写出）；崩溃恢复中按上界计费的预留恰落在里程碑时同样补写。
 
 ## 指标

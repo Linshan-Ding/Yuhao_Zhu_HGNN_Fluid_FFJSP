@@ -60,7 +60,15 @@ def grouped(rows,group):
 def seed_values(rows,method):
     selected=[r for r in rows if r['variant']==method];seeds=sorted({int(r['seed']) for r in selected})
     ids=sorted({r['instance_id'] for r in selected});lookup={(int(r['seed']),r['instance_id']):float(r['eta']) for r in selected}
+    if len(lookup)!=len(selected):raise ValueError('Duplicate seed/case statistics cell')
+    if not seeds or set(lookup)!={(s,i) for s in seeds for i in ids}:raise ValueError('Missing seed/case statistics cell')
     return seeds,ids,np.asarray([[lookup[s,i] for i in ids] for s in seeds])
+
+
+def paired_values(rows,first,second):
+    seeds,ids,a=seed_values(rows,first);other,other_ids,b=seed_values(rows,second)
+    if ids!=other_ids or (other!=[0] and other!=seeds):raise ValueError('Unmatched paired comparison')
+    return seeds,ids,a,b
 
 
 def interval(values,rng,repeats):
@@ -95,8 +103,7 @@ def aggregate(root,data,c,specs):
             ss,ids,av=seed_values(sub,'full')
             for method in methods:
                 if method=='full':continue
-                bs,bids,bv=seed_values(sub,method)
-                if ids!=bids or (bs!=[0] and bs!=ss): raise ValueError('Unmatched paired comparison')
+                ss,ids,av,bv=paired_values(sub,'full',method)
                 diff=av-bv;means=diff.mean(1);lo,hi=interval(means,rng,repeats);per_case=diff.mean(0)
                 effects.append(dict(split=split,group=group,contrast='full minus '+method,difference=float(means.mean()),ci_low=lo,ci_high=hi,
                     positive_seeds=int((means>1e-9).sum()),seeds=len(ss),instances=len(ids),wins=int((per_case>1e-9).sum()),
