@@ -1,0 +1,9 @@
+{
+  "label": "formal-shape:no_scenario",
+  "pid": 19208,
+  "started": 1790486066.3395617,
+  "ended": 1790486077.2454531,
+  "closed": true,
+  "charged_upper_bound": 1024,
+  "committed": 1024
+}

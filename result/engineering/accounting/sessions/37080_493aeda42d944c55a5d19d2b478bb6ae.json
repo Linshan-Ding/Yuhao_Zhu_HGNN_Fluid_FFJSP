@@ -1,0 +1,9 @@
+{
+  "label": "worker:hgnn_s1",
+  "pid": 37080,
+  "started": 1790485935.1171389,
+  "ended": 1790485936.2361057,
+  "closed": true,
+  "charged_upper_bound": 252,
+  "committed": 252
+}

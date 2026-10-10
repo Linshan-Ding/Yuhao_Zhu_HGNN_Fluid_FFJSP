@@ -1,0 +1,10 @@
+{
+  "free_bytes": 461840564224,
+  "estimated_bytes": 184079061129,
+  "components_before_headroom": {
+    "trajectory": 67646261980.83068,
+    "checkpoints_and_buffers": 22344892019,
+    "evaluation_and_reports": 2048376564.7058823
+  },
+  "explanation": "Measured full-capacity formal buffer/checkpoint sizes plus projected trajectories/evaluation, with configured headroom; not a measured full-run size."
+}

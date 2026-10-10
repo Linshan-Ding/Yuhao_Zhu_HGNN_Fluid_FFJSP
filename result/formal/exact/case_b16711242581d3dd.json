@@ -1,0 +1,301 @@
+{
+  "identity": "2ddd31327a5ed3b78fc37ffd12689a523c9aaefeae8b7b3b29b44d0dd34b37b9",
+  "instance_id": "case_b16711242581d3dd",
+  "status": "OPTIMAL",
+  "eta": 1.0,
+  "upper": 1.0,
+  "seconds": 0.019941300037316978,
+  "assignment": [
+    {
+      "order": 0,
+      "stage": 0,
+      "machine": 0,
+      "start": 0.0,
+      "end": 6.0
+    },
+    {
+      "order": 0,
+      "stage": 1,
+      "machine": 2,
+      "start": 6.0,
+      "end": 31.0
+    },
+    {
+      "order": 0,
+      "stage": 2,
+      "machine": 4,
+      "start": 31.0,
+      "end": 56.0
+    },
+    {
+      "order": 1,
+      "stage": 0,
+      "machine": 0,
+      "start": 126.13095442096474,
+      "end": 132.13095442096474
+    },
+    {
+      "order": 1,
+      "stage": 1,
+      "machine": 2,
+      "start": 132.13095442096474,
+      "end": 157.13095442096474
+    },
+    {
+      "order": 2,
+      "stage": 0,
+      "machine": 1,
+      "start": 136.42320560720754,
+      "end": 156.42320560720754
+    },
+    {
+      "order": 1,
+      "stage": 2,
+      "machine": 4,
+      "start": 157.13095442096474,
+      "end": 182.13095442096474
+    },
+    {
+      "order": 2,
+      "stage": 1,
+      "machine": 2,
+      "start": 157.13095442096474,
+      "end": 181.13095442096474
+    },
+    {
+      "order": 2,
+      "stage": 2,
+      "machine": 4,
+      "start": 182.13095442096474,
+      "end": 201.13095442096474
+    },
+    {
+      "order": 3,
+      "stage": 0,
+      "machine": 0,
+      "start": 202.796298360486,
+      "end": 208.796298360486
+    },
+    {
+      "order": 3,
+      "stage": 1,
+      "machine": 2,
+      "start": 208.796298360486,
+      "end": 233.796298360486
+    },
+    {
+      "order": 3,
+      "stage": 2,
+      "machine": 4,
+      "start": 233.796298360486,
+      "end": 258.796298360486
+    },
+    {
+      "order": 4,
+      "stage": 0,
+      "machine": 0,
+      "start": 268.3952188618407,
+      "end": 286.3952188618407
+    },
+    {
+      "order": 4,
+      "stage": 1,
+      "machine": 2,
+      "start": 286.3952188618407,
+      "end": 312.3952188618407
+    },
+    {
+      "order": 4,
+      "stage": 2,
+      "machine": 4,
+      "start": 312.3952188618407,
+      "end": 335.3952188618407
+    },
+    {
+      "order": 5,
+      "stage": 0,
+      "machine": 0,
+      "start": 390.6298028460465,
+      "end": 408.6298028460465
+    },
+    {
+      "order": 5,
+      "stage": 1,
+      "machine": 2,
+      "start": 408.6298028460465,
+      "end": 434.6298028460465
+    },
+    {
+      "order": 6,
+      "stage": 0,
+      "machine": 1,
+      "start": 428.6320260872736,
+      "end": 448.6320260872736
+    },
+    {
+      "order": 5,
+      "stage": 2,
+      "machine": 4,
+      "start": 434.6298028460465,
+      "end": 457.6298028460465
+    },
+    {
+      "order": 6,
+      "stage": 1,
+      "machine": 2,
+      "start": 448.6320260872736,
+      "end": 472.6320260872736
+    },
+    {
+      "order": 6,
+      "stage": 2,
+      "machine": 4,
+      "start": 472.6320260872736,
+      "end": 491.6320260872736
+    },
+    {
+      "order": 7,
+      "stage": 0,
+      "machine": 0,
+      "start": 493.8144505948159,
+      "end": 499.8144505948159
+    },
+    {
+      "order": 7,
+      "stage": 1,
+      "machine": 2,
+      "start": 499.8144505948159,
+      "end": 524.814450594816
+    },
+    {
+      "order": 8,
+      "stage": 0,
+      "machine": 1,
+      "start": 501.21103646777607,
+      "end": 521.211036467776
+    },
+    {
+      "order": 10,
+      "stage": 0,
+      "machine": 1,
+      "start": 521.211036467776,
+      "end": 541.211036467776
+    },
+    {
+      "order": 7,
+      "stage": 2,
+      "machine": 4,
+      "start": 524.814450594816,
+      "end": 549.814450594816
+    },
+    {
+      "order": 8,
+      "stage": 1,
+      "machine": 2,
+      "start": 524.814450594816,
+      "end": 548.814450594816
+    },
+    {
+      "order": 9,
+      "stage": 0,
+      "machine": 1,
+      "start": 541.211036467776,
+      "end": 561.211036467776
+    },
+    {
+      "order": 10,
+      "stage": 1,
+      "machine": 2,
+      "start": 548.814450594816,
+      "end": 572.814450594816
+    },
+    {
+      "order": 8,
+      "stage": 2,
+      "machine": 4,
+      "start": 549.814450594816,
+      "end": 568.814450594816
+    },
+    {
+      "order": 11,
+      "stage": 0,
+      "machine": 1,
+      "start": 561.211036467776,
+      "end": 581.211036467776
+    },
+    {
+      "order": 9,
+      "stage": 1,
+      "machine": 2,
+      "start": 572.814450594816,
+      "end": 596.814450594816
+    },
+    {
+      "order": 10,
+      "stage": 2,
+      "machine": 4,
+      "start": 572.814450594816,
+      "end": 591.814450594816
+    },
+    {
+      "order": 9,
+      "stage": 2,
+      "machine": 4,
+      "start": 596.814450594816,
+      "end": 615.814450594816
+    },
+    {
+      "order": 11,
+      "stage": 1,
+      "machine": 2,
+      "start": 596.814450594816,
+      "end": 620.814450594816
+    },
+    {
+      "order": 11,
+      "stage": 2,
+      "machine": 4,
+      "start": 620.814450594816,
+      "end": 639.814450594816
+    }
+  ],
+  "replay": {
+    "eta_solver": 1.0,
+    "eta_replay": 1.0,
+    "n_orders_checked": 12,
+    "replay_scope": "physical_schedule_not_online_policy_reachability",
+    "eta_env": 1.0,
+    "match": true,
+    "n_issues": 0,
+    "issues": []
+  },
+  "parameters": {
+    "wall_seconds": 300,
+    "deterministic_seconds": 60,
+    "workers": 1
+  },
+  "replay_steps": 36,
+  "metadata": {
+    "response": "CpSolverResponse summary:\nstatus: OPTIMAL\nobjective: 12\nbest_bound: 12\nintegers: 85\nbooleans: 164\nconflicts: 0\nbranches: 334\npropagations: 1548\ninteger_propagations: 2103\nrestarts: 0\nlp_iterations: 14\nwalltime: 0.0178136\nusertime: 0.0178137\ndeterministic_time: 0.00168175\ngap_integral: 0\nsolution_fingerprint: 0xae1f5fe38574ddb8\n",
+    "response_proto": "status: OPTIMAL\nsolution: 1\nsolution: 0\nsolution: 72\nsolution: 1\nsolution: 0\nsolution: 72\nsolution: 372\nsolution: 1\nsolution: 0\nsolution: 372\nsolution: 672\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 1513\nsolution: 1585\nsolution: 1\nsolution: 0\nsolution: 1585\nsolution: 1885\nsolution: 1\nsolution: 0\nsolution: 1885\nsolution: 2185\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 1636\nsolution: 1876\nsolution: 1\nsolution: 1885\nsolution: 2173\nsolution: 1\nsolution: 0\nsolution: 2185\nsolution: 2413\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 2432\nsolution: 2504\nsolution: 1\nsolution: 0\nsolution: 2504\nsolution: 2804\nsolution: 1\nsolution: 0\nsolution: 2804\nsolution: 3104\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 3219\nsolution: 3435\nsolution: 1\nsolution: 0\nsolution: 3435\nsolution: 3747\nsolution: 1\nsolution: 0\nsolution: 3747\nsolution: 4023\nsolution: 1\nsolution: 1\nsolution: 4685\nsolution: 4901\nsolution: 1\nsolution: 0\nsolution: 4901\nsolution: 5213\nsolution: 1\nsolution: 0\nsolution: 5213\nsolution: 5489\nsolution: 1\nsolution: 1\nsolution: 5142\nsolution: 5382\nsolution: 1\nsolution: 5382\nsolution: 5670\nsolution: 1\nsolution: 0\nsolution: 5670\nsolution: 5898\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 5925\nsolution: 5997\nsolution: 1\nsolution: 0\nsolution: 5997\nsolution: 6297\nsolution: 1\nsolution: 0\nsolution: 6297\nsolution: 6597\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 6014\nsolution: 6254\nsolution: 1\nsolution: 6297\nsolution: 6585\nsolution: 1\nsolution: 0\nsolution: 6597\nsolution: 6825\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 6494\nsolution: 6734\nsolution: 1\nsolution: 6873\nsolution: 7161\nsolution: 1\nsolution: 0\nsolution: 7161\nsolution: 7389\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 6254\nsolution: 6494\nsolution: 1\nsolution: 6585\nsolution: 6873\nsolution: 1\nsolution: 0\nsolution: 6873\nsolution: 7101\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 6734\nsolution: 6974\nsolution: 1\nsolution: 7161\nsolution: 7449\nsolution: 1\nsolution: 0\nsolution: 7449\nsolution: 7677\nsolution: 1\nsolution: 0\nobjective_value: 12\nbest_objective_bound: 12\nnum_booleans: 164\nnum_branches: 334\nnum_binary_propagations: 1548\nnum_integer_propagations: 2103\nwall_time: 0.017813600000000002\nuser_time: 0.017813700000000002\ndeterministic_time: 0.0016817457999999882\nsolution_info: \"main\"\nnum_lp_iterations: 14\ninner_objective_lower_bound: -12\nnum_integers: 85",
+    "parameters": "max_time_in_seconds: 300\nmax_deterministic_time: 60\nnum_workers: 1",
+    "time_scale": {
+      "K": 12,
+      "fractions": [
+        0.0,
+        0.1309544209647413,
+        0.21103646777606855,
+        0.39521886184070354,
+        0.4232056072075352,
+        0.6298028460465162,
+        0.632026087273573,
+        0.7044352801534615,
+        0.7962983604859915,
+        0.8144505948159235,
+        0.8817708800223727,
+        0.9101980335177586
+      ]
+    }
+  },
+  "interpretation": "clairvoyant offline reference; only OPTIMAL proves optimality"
+}

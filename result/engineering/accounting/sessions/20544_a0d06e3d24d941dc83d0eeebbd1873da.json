@@ -1,0 +1,9 @@
+{
+  "label": "worker:no_scenario_s1",
+  "pid": 20544,
+  "started": 1790485885.2442071,
+  "ended": 1790485886.6072488,
+  "closed": true,
+  "charged_upper_bound": 182,
+  "committed": 182
+}

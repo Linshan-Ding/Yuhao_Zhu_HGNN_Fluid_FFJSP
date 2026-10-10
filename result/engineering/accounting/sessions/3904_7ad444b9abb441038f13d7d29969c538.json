@@ -1,0 +1,9 @@
+{
+  "label": "fault-injection:terminated-child",
+  "pid": 3904,
+  "started": 1790485868.94505,
+  "ended": null,
+  "closed": false,
+  "charged_upper_bound": 128,
+  "committed": 0
+}

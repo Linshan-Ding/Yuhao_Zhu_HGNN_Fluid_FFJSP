@@ -1,0 +1,9 @@
+{
+  "label": "worker:impact_only_s1",
+  "pid": 37080,
+  "started": 1790485940.9049935,
+  "ended": 1790485942.0536702,
+  "closed": true,
+  "charged_upper_bound": 182,
+  "committed": 182
+}

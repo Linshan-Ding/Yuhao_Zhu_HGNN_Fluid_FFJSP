@@ -1,0 +1,46 @@
+{
+  "outputs": {
+    "main": {
+      "file": "main.csv",
+      "sha256": "c8a95ac5f60ae0fd4d4ac1941b7be5e57e447314fe9c2a9601c5d1dc382f2471",
+      "rows": 18
+    },
+    "small": {
+      "file": "small.csv",
+      "sha256": "82d8f433a60d0139cd4b5c4cccbd7c4459f7332b18eb30df1221a267c1bfba90",
+      "rows": 18
+    },
+    "long_stream": {
+      "file": "long_stream.csv",
+      "sha256": "493954eccfca5a355b50ade44028d5934d75200e7997ef8bfd499830ae347f3c",
+      "rows": 18
+    },
+    "large_shop": {
+      "file": "large_shop.csv",
+      "sha256": "6c2960efea3bf396aa5072632f837763e9fe485bac538a703aba7fae9103a910",
+      "rows": 36
+    },
+    "main_64": {
+      "file": "main_64.csv",
+      "sha256": "37c08c6d90b9dce48d5a3395fcd5599a3cc838cddcb89f02198f80b3f5b92089",
+      "rows": 11
+    },
+    "main_best": {
+      "file": "main_best.csv",
+      "sha256": "7f4e4be03c16aa31379623740bbae2e926df71c7b30c6042c9bae84900c7d69f",
+      "rows": 11
+    },
+    "initialization": {
+      "file": "initialization.csv",
+      "sha256": "a3319cac6cb32e86e280606d6b4b463b4f64b0a4edd3dd32f9e33572dbced931",
+      "rows": 5
+    },
+    "sensitivity": {
+      "file": "sensitivity.csv",
+      "sha256": "91b20f4fa1d3ea88d950f855f94233cfe2a0a378931eab1e538b009ca1ebb013",
+      "rows": 7
+    }
+  },
+  "data": "082d9116b4fbc80e628cb99911793487048e25cacaa7031c416f1bfd3b0a86a9",
+  "evaluation": "7e6c0cfb1fe986a265b05a321a74f2e92db238470d019b70dc9ab0346223cfde"
+}

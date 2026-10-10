@@ -1,0 +1,591 @@
+{
+  "format": "study-freeze-2",
+  "training_source": "95fcbb0ac457f5c4f30a6176cd0fdfeffaa72142f1ec83d49a35d16141bbb07d",
+  "jobs": [
+    {
+      "name": "full_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "main",
+      "config_identity": "2b09c5cbed20002f9e2c254380d065145887d315206d3b7b9e450b551915c09e"
+    },
+    {
+      "name": "full_s2",
+      "method": "full",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "main",
+      "config_identity": "2b09c5cbed20002f9e2c254380d065145887d315206d3b7b9e450b551915c09e"
+    },
+    {
+      "name": "full_s3",
+      "method": "full",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "main",
+      "config_identity": "2b09c5cbed20002f9e2c254380d065145887d315206d3b7b9e450b551915c09e"
+    },
+    {
+      "name": "full_s4",
+      "method": "full",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "main",
+      "config_identity": "2b09c5cbed20002f9e2c254380d065145887d315206d3b7b9e450b551915c09e"
+    },
+    {
+      "name": "full_s5",
+      "method": "full",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "main",
+      "config_identity": "2b09c5cbed20002f9e2c254380d065145887d315206d3b7b9e450b551915c09e"
+    },
+    {
+      "name": "dqn_s1",
+      "method": "dqn",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "731328531511edfd0ec9121ed6ba4be574e3f9c3a63267a666dee3f046286636"
+    },
+    {
+      "name": "dqn_s2",
+      "method": "dqn",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "731328531511edfd0ec9121ed6ba4be574e3f9c3a63267a666dee3f046286636"
+    },
+    {
+      "name": "dqn_s3",
+      "method": "dqn",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "731328531511edfd0ec9121ed6ba4be574e3f9c3a63267a666dee3f046286636"
+    },
+    {
+      "name": "dqn_s4",
+      "method": "dqn",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "731328531511edfd0ec9121ed6ba4be574e3f9c3a63267a666dee3f046286636"
+    },
+    {
+      "name": "dqn_s5",
+      "method": "dqn",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "731328531511edfd0ec9121ed6ba4be574e3f9c3a63267a666dee3f046286636"
+    },
+    {
+      "name": "ddqn_s1",
+      "method": "ddqn",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "f319e1ceafb3585a7146a63cc70d43a332ad7c2ed733231d9135cd1dee964393"
+    },
+    {
+      "name": "ddqn_s2",
+      "method": "ddqn",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "f319e1ceafb3585a7146a63cc70d43a332ad7c2ed733231d9135cd1dee964393"
+    },
+    {
+      "name": "ddqn_s3",
+      "method": "ddqn",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "f319e1ceafb3585a7146a63cc70d43a332ad7c2ed733231d9135cd1dee964393"
+    },
+    {
+      "name": "ddqn_s4",
+      "method": "ddqn",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "f319e1ceafb3585a7146a63cc70d43a332ad7c2ed733231d9135cd1dee964393"
+    },
+    {
+      "name": "ddqn_s5",
+      "method": "ddqn",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "f319e1ceafb3585a7146a63cc70d43a332ad7c2ed733231d9135cd1dee964393"
+    },
+    {
+      "name": "a2c_s1",
+      "method": "a2c",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "928a135a9e6e4ac0a2c4ca1361a6dc7300ee70a5e32891ee00e3e916bf478f2d"
+    },
+    {
+      "name": "a2c_s2",
+      "method": "a2c",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "928a135a9e6e4ac0a2c4ca1361a6dc7300ee70a5e32891ee00e3e916bf478f2d"
+    },
+    {
+      "name": "a2c_s3",
+      "method": "a2c",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "928a135a9e6e4ac0a2c4ca1361a6dc7300ee70a5e32891ee00e3e916bf478f2d"
+    },
+    {
+      "name": "a2c_s4",
+      "method": "a2c",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "928a135a9e6e4ac0a2c4ca1361a6dc7300ee70a5e32891ee00e3e916bf478f2d"
+    },
+    {
+      "name": "a2c_s5",
+      "method": "a2c",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "928a135a9e6e4ac0a2c4ca1361a6dc7300ee70a5e32891ee00e3e916bf478f2d"
+    },
+    {
+      "name": "ppo_s1",
+      "method": "ppo",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "14c071fb8b0418e65ff6d1785ea40d2220b474e84feead8674372092d03564f1"
+    },
+    {
+      "name": "ppo_s2",
+      "method": "ppo",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "14c071fb8b0418e65ff6d1785ea40d2220b474e84feead8674372092d03564f1"
+    },
+    {
+      "name": "ppo_s3",
+      "method": "ppo",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "14c071fb8b0418e65ff6d1785ea40d2220b474e84feead8674372092d03564f1"
+    },
+    {
+      "name": "ppo_s4",
+      "method": "ppo",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "14c071fb8b0418e65ff6d1785ea40d2220b474e84feead8674372092d03564f1"
+    },
+    {
+      "name": "ppo_s5",
+      "method": "ppo",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "14c071fb8b0418e65ff6d1785ea40d2220b474e84feead8674372092d03564f1"
+    },
+    {
+      "name": "hgnn_s1",
+      "method": "hgnn",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0ebe715da88ac8eaf13117ffb6ff861eedd0bf69955670a427166647c61cd201"
+    },
+    {
+      "name": "hgnn_s2",
+      "method": "hgnn",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0ebe715da88ac8eaf13117ffb6ff861eedd0bf69955670a427166647c61cd201"
+    },
+    {
+      "name": "hgnn_s3",
+      "method": "hgnn",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0ebe715da88ac8eaf13117ffb6ff861eedd0bf69955670a427166647c61cd201"
+    },
+    {
+      "name": "hgnn_s4",
+      "method": "hgnn",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0ebe715da88ac8eaf13117ffb6ff861eedd0bf69955670a427166647c61cd201"
+    },
+    {
+      "name": "hgnn_s5",
+      "method": "hgnn",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0ebe715da88ac8eaf13117ffb6ff861eedd0bf69955670a427166647c61cd201"
+    },
+    {
+      "name": "dual_attention_s1",
+      "method": "dual_attention",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d436956db7bdcb4b32aa68daa366d909e49175d3b42ac60c2e1e843a1cd7c288"
+    },
+    {
+      "name": "dual_attention_s2",
+      "method": "dual_attention",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d436956db7bdcb4b32aa68daa366d909e49175d3b42ac60c2e1e843a1cd7c288"
+    },
+    {
+      "name": "dual_attention_s3",
+      "method": "dual_attention",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d436956db7bdcb4b32aa68daa366d909e49175d3b42ac60c2e1e843a1cd7c288"
+    },
+    {
+      "name": "dual_attention_s4",
+      "method": "dual_attention",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d436956db7bdcb4b32aa68daa366d909e49175d3b42ac60c2e1e843a1cd7c288"
+    },
+    {
+      "name": "dual_attention_s5",
+      "method": "dual_attention",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d436956db7bdcb4b32aa68daa366d909e49175d3b42ac60c2e1e843a1cd7c288"
+    },
+    {
+      "name": "no_graph_s1",
+      "method": "no_graph",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "99ca1112d555a5321d167f9fb25f4735cabf54078e341109e205df281e53c5d1"
+    },
+    {
+      "name": "no_graph_s2",
+      "method": "no_graph",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "99ca1112d555a5321d167f9fb25f4735cabf54078e341109e205df281e53c5d1"
+    },
+    {
+      "name": "no_graph_s3",
+      "method": "no_graph",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "99ca1112d555a5321d167f9fb25f4735cabf54078e341109e205df281e53c5d1"
+    },
+    {
+      "name": "no_graph_s4",
+      "method": "no_graph",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "99ca1112d555a5321d167f9fb25f4735cabf54078e341109e205df281e53c5d1"
+    },
+    {
+      "name": "no_graph_s5",
+      "method": "no_graph",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "99ca1112d555a5321d167f9fb25f4735cabf54078e341109e205df281e53c5d1"
+    },
+    {
+      "name": "no_scenario_s1",
+      "method": "no_scenario",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d8ea37a0f440f688f5ab8379677c9ed5d7dda1ad98c063acaa97e90b0f89fe11"
+    },
+    {
+      "name": "no_scenario_s2",
+      "method": "no_scenario",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d8ea37a0f440f688f5ab8379677c9ed5d7dda1ad98c063acaa97e90b0f89fe11"
+    },
+    {
+      "name": "no_scenario_s3",
+      "method": "no_scenario",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d8ea37a0f440f688f5ab8379677c9ed5d7dda1ad98c063acaa97e90b0f89fe11"
+    },
+    {
+      "name": "no_scenario_s4",
+      "method": "no_scenario",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d8ea37a0f440f688f5ab8379677c9ed5d7dda1ad98c063acaa97e90b0f89fe11"
+    },
+    {
+      "name": "no_scenario_s5",
+      "method": "no_scenario",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "d8ea37a0f440f688f5ab8379677c9ed5d7dda1ad98c063acaa97e90b0f89fe11"
+    },
+    {
+      "name": "no_demo_s1",
+      "method": "no_demo",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0fdd770d925acdde867d1063ca48a0ad75ac201de1b22121e1e947b5d7dc5f4c"
+    },
+    {
+      "name": "no_demo_s2",
+      "method": "no_demo",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0fdd770d925acdde867d1063ca48a0ad75ac201de1b22121e1e947b5d7dc5f4c"
+    },
+    {
+      "name": "no_demo_s3",
+      "method": "no_demo",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0fdd770d925acdde867d1063ca48a0ad75ac201de1b22121e1e947b5d7dc5f4c"
+    },
+    {
+      "name": "no_demo_s4",
+      "method": "no_demo",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0fdd770d925acdde867d1063ca48a0ad75ac201de1b22121e1e947b5d7dc5f4c"
+    },
+    {
+      "name": "no_demo_s5",
+      "method": "no_demo",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "0fdd770d925acdde867d1063ca48a0ad75ac201de1b22121e1e947b5d7dc5f4c"
+    },
+    {
+      "name": "impact_only_s1",
+      "method": "impact_only",
+      "seed": 1,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "8cca1abcfc9d13b37e96a8f5f247f99b85b394d682d8948ff7cff87b2ae0158f"
+    },
+    {
+      "name": "impact_only_s2",
+      "method": "impact_only",
+      "seed": 2,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "8cca1abcfc9d13b37e96a8f5f247f99b85b394d682d8948ff7cff87b2ae0158f"
+    },
+    {
+      "name": "impact_only_s3",
+      "method": "impact_only",
+      "seed": 3,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "8cca1abcfc9d13b37e96a8f5f247f99b85b394d682d8948ff7cff87b2ae0158f"
+    },
+    {
+      "name": "impact_only_s4",
+      "method": "impact_only",
+      "seed": 4,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "8cca1abcfc9d13b37e96a8f5f247f99b85b394d682d8948ff7cff87b2ae0158f"
+    },
+    {
+      "name": "impact_only_s5",
+      "method": "impact_only",
+      "seed": 5,
+      "budget": 1000000,
+      "group": "comparators",
+      "config_identity": "8cca1abcfc9d13b37e96a8f5f247f99b85b394d682d8948ff7cff87b2ae0158f"
+    },
+    {
+      "name": "sensitivity_k1_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "6e77f8d8281d0b83fd0fa9a8e51e49919bddebe62a37e79f02ac37f5b0574fd2"
+    },
+    {
+      "name": "sensitivity_k1_s2",
+      "method": "full",
+      "seed": 2,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "6e77f8d8281d0b83fd0fa9a8e51e49919bddebe62a37e79f02ac37f5b0574fd2"
+    },
+    {
+      "name": "sensitivity_k1_s3",
+      "method": "full",
+      "seed": 3,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "6e77f8d8281d0b83fd0fa9a8e51e49919bddebe62a37e79f02ac37f5b0574fd2"
+    },
+    {
+      "name": "sensitivity_k4_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "5c741be9927f4e354aacc177fc2b5a3de4c492e8bdadbc47c7be2da5ffedd42b"
+    },
+    {
+      "name": "sensitivity_k4_s2",
+      "method": "full",
+      "seed": 2,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "5c741be9927f4e354aacc177fc2b5a3de4c492e8bdadbc47c7be2da5ffedd42b"
+    },
+    {
+      "name": "sensitivity_k4_s3",
+      "method": "full",
+      "seed": 3,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "5c741be9927f4e354aacc177fc2b5a3de4c492e8bdadbc47c7be2da5ffedd42b"
+    },
+    {
+      "name": "sensitivity_w003_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "aa88d20b63dd8285c2632007ca07e3f0e59c54ea3d60cf706be3d4a5f2ee00ce"
+    },
+    {
+      "name": "sensitivity_w003_s2",
+      "method": "full",
+      "seed": 2,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "aa88d20b63dd8285c2632007ca07e3f0e59c54ea3d60cf706be3d4a5f2ee00ce"
+    },
+    {
+      "name": "sensitivity_w003_s3",
+      "method": "full",
+      "seed": 3,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "aa88d20b63dd8285c2632007ca07e3f0e59c54ea3d60cf706be3d4a5f2ee00ce"
+    },
+    {
+      "name": "sensitivity_w03_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "a79f06030fe15bc43f33c878ec69aecf0fb4dfea2540d1bedd302064e66849df"
+    },
+    {
+      "name": "sensitivity_w03_s2",
+      "method": "full",
+      "seed": 2,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "a79f06030fe15bc43f33c878ec69aecf0fb4dfea2540d1bedd302064e66849df"
+    },
+    {
+      "name": "sensitivity_w03_s3",
+      "method": "full",
+      "seed": 3,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "a79f06030fe15bc43f33c878ec69aecf0fb4dfea2540d1bedd302064e66849df"
+    },
+    {
+      "name": "sensitivity_h1_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "1202e0997723add47d4d57cdc59519cff1b1a15f9c57a1732a5123204e938f64"
+    },
+    {
+      "name": "sensitivity_h1_s2",
+      "method": "full",
+      "seed": 2,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "1202e0997723add47d4d57cdc59519cff1b1a15f9c57a1732a5123204e938f64"
+    },
+    {
+      "name": "sensitivity_h1_s3",
+      "method": "full",
+      "seed": 3,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "1202e0997723add47d4d57cdc59519cff1b1a15f9c57a1732a5123204e938f64"
+    },
+    {
+      "name": "sensitivity_h4_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "b10777569986be0ded477cd8b2a0248f1a08ee9b3be3ae869d5195e682941a0e"
+    },
+    {
+      "name": "sensitivity_h4_s2",
+      "method": "full",
+      "seed": 2,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "b10777569986be0ded477cd8b2a0248f1a08ee9b3be3ae869d5195e682941a0e"
+    },
+    {
+      "name": "sensitivity_h4_s3",
+      "method": "full",
+      "seed": 3,
+      "budget": 500000,
+      "group": "sensitivity",
+      "config_identity": "b10777569986be0ded477cd8b2a0248f1a08ee9b3be3ae869d5195e682941a0e"
+    }
+  ],
+  "data": "99d475c2d86db47f48cac2b5dd72fb6d5128825e44a7c1386d6869c51d55cfa3"
+}

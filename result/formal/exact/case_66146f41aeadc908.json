@@ -1,0 +1,280 @@
+{
+  "identity": "7bbb3e1b974966b7c46ba90751b206aba4406c1662a1dda1bf98d8b4c22f8b55",
+  "instance_id": "case_66146f41aeadc908",
+  "status": "OPTIMAL",
+  "eta": 0.9166666666666666,
+  "upper": 0.9166666666666666,
+  "seconds": 0.02033189998473972,
+  "assignment": [
+    {
+      "order": 0,
+      "stage": 0,
+      "machine": 0,
+      "start": 0.0,
+      "end": 6.0
+    },
+    {
+      "order": 0,
+      "stage": 1,
+      "machine": 2,
+      "start": 6.0,
+      "end": 31.0
+    },
+    {
+      "order": 0,
+      "stage": 2,
+      "machine": 5,
+      "start": 31.0,
+      "end": 54.0
+    },
+    {
+      "order": 1,
+      "stage": 0,
+      "machine": 0,
+      "start": 50.4523817683859,
+      "end": 56.4523817683859
+    },
+    {
+      "order": 2,
+      "stage": 0,
+      "machine": 1,
+      "start": 54.56928224288302,
+      "end": 74.56928224288302
+    },
+    {
+      "order": 1,
+      "stage": 1,
+      "machine": 2,
+      "start": 56.4523817683859,
+      "end": 81.45238176838589
+    },
+    {
+      "order": 2,
+      "stage": 1,
+      "machine": 3,
+      "start": 74.56928224288302,
+      "end": 93.56928224288302
+    },
+    {
+      "order": 3,
+      "stage": 0,
+      "machine": 0,
+      "start": 81.1185193441944,
+      "end": 87.1185193441944
+    },
+    {
+      "order": 1,
+      "stage": 2,
+      "machine": 5,
+      "start": 81.45238176838589,
+      "end": 104.45238176838589
+    },
+    {
+      "order": 3,
+      "stage": 1,
+      "machine": 2,
+      "start": 87.1185193441944,
+      "end": 112.1185193441944
+    },
+    {
+      "order": 2,
+      "stage": 2,
+      "machine": 4,
+      "start": 93.56928224288302,
+      "end": 112.56928224288302
+    },
+    {
+      "order": 4,
+      "stage": 0,
+      "machine": 0,
+      "start": 107.35808754473628,
+      "end": 125.35808754473628
+    },
+    {
+      "order": 3,
+      "stage": 2,
+      "machine": 4,
+      "start": 112.56928224288302,
+      "end": 137.56928224288302
+    },
+    {
+      "order": 4,
+      "stage": 1,
+      "machine": 2,
+      "start": 125.35808754473628,
+      "end": 151.3580875447363
+    },
+    {
+      "order": 4,
+      "stage": 2,
+      "machine": 4,
+      "start": 151.3580875447363,
+      "end": 174.3580875447363
+    },
+    {
+      "order": 5,
+      "stage": 0,
+      "machine": 0,
+      "start": 156.25192113841862,
+      "end": 174.25192113841862
+    },
+    {
+      "order": 6,
+      "stage": 0,
+      "machine": 1,
+      "start": 171.45281043490942,
+      "end": 191.45281043490942
+    },
+    {
+      "order": 5,
+      "stage": 1,
+      "machine": 2,
+      "start": 174.25192113841862,
+      "end": 200.25192113841862
+    },
+    {
+      "order": 7,
+      "stage": 0,
+      "machine": 0,
+      "start": 197.52578023792637,
+      "end": 203.52578023792637
+    },
+    {
+      "order": 5,
+      "stage": 2,
+      "machine": 4,
+      "start": 200.25192113841862,
+      "end": 223.25192113841862
+    },
+    {
+      "order": 6,
+      "stage": 1,
+      "machine": 2,
+      "start": 200.25192113841862,
+      "end": 224.25192113841862
+    },
+    {
+      "order": 9,
+      "stage": 0,
+      "machine": 1,
+      "start": 203.15270835200894,
+      "end": 223.15270835200894
+    },
+    {
+      "order": 7,
+      "stage": 1,
+      "machine": 3,
+      "start": 203.52578023792637,
+      "end": 219.52578023792637
+    },
+    {
+      "order": 9,
+      "stage": 1,
+      "machine": 3,
+      "start": 223.15270835200894,
+      "end": 242.15270835200894
+    },
+    {
+      "order": 10,
+      "stage": 0,
+      "machine": 1,
+      "start": 223.15270835200894,
+      "end": 243.15270835200894
+    },
+    {
+      "order": 7,
+      "stage": 2,
+      "machine": 4,
+      "start": 223.25192113841862,
+      "end": 248.25192113841862
+    },
+    {
+      "order": 6,
+      "stage": 2,
+      "machine": 5,
+      "start": 224.25192113841862,
+      "end": 245.25192113841862
+    },
+    {
+      "order": 10,
+      "stage": 1,
+      "machine": 2,
+      "start": 243.15270835200894,
+      "end": 267.152708352009
+    },
+    {
+      "order": 11,
+      "stage": 0,
+      "machine": 1,
+      "start": 243.15270835200894,
+      "end": 263.152708352009
+    },
+    {
+      "order": 9,
+      "stage": 2,
+      "machine": 4,
+      "start": 248.25192113841862,
+      "end": 267.25192113841865
+    },
+    {
+      "order": 11,
+      "stage": 1,
+      "machine": 3,
+      "start": 263.152708352009,
+      "end": 282.152708352009
+    },
+    {
+      "order": 10,
+      "stage": 2,
+      "machine": 4,
+      "start": 267.25192113841865,
+      "end": 286.25192113841865
+    },
+    {
+      "order": 11,
+      "stage": 2,
+      "machine": 4,
+      "start": 286.25192113841865,
+      "end": 305.25192113841865
+    }
+  ],
+  "replay": {
+    "eta_solver": 0.9166666666666666,
+    "eta_replay": 0.9166666666666666,
+    "n_orders_checked": 11,
+    "replay_scope": "physical_schedule_not_online_policy_reachability",
+    "eta_env": 0.9166666666666666,
+    "match": true,
+    "n_issues": 0,
+    "issues": []
+  },
+  "parameters": {
+    "wall_seconds": 300,
+    "deterministic_seconds": 60,
+    "workers": 1
+  },
+  "replay_steps": 33,
+  "metadata": {
+    "response": "CpSolverResponse summary:\nstatus: OPTIMAL\nobjective: 11\nbest_bound: 11\nintegers: 85\nbooleans: 161\nconflicts: 1\nbranches: 317\npropagations: 1645\ninteger_propagations: 2147\nrestarts: 0\nlp_iterations: 13\nwalltime: 0.0184883\nusertime: 0.0184883\ndeterministic_time: 0.0016833\ngap_integral: 0\nsolution_fingerprint: 0x921ffc34cc0eeac6\n",
+    "response_proto": "status: OPTIMAL\nsolution: 1\nsolution: 0\nsolution: 72\nsolution: 1\nsolution: 0\nsolution: 72\nsolution: 372\nsolution: 1\nsolution: 0\nsolution: 372\nsolution: 648\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 606\nsolution: 678\nsolution: 1\nsolution: 0\nsolution: 678\nsolution: 978\nsolution: 1\nsolution: 0\nsolution: 978\nsolution: 1254\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 659\nsolution: 899\nsolution: 1\nsolution: 899\nsolution: 1127\nsolution: 0\nsolution: 1\nsolution: 1127\nsolution: 1355\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 973\nsolution: 1045\nsolution: 1\nsolution: 0\nsolution: 1045\nsolution: 1345\nsolution: 1\nsolution: 0\nsolution: 1355\nsolution: 1655\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 1289\nsolution: 1505\nsolution: 1\nsolution: 0\nsolution: 1505\nsolution: 1817\nsolution: 1\nsolution: 0\nsolution: 1817\nsolution: 2093\nsolution: 1\nsolution: 1\nsolution: 1876\nsolution: 2092\nsolution: 1\nsolution: 0\nsolution: 2092\nsolution: 2404\nsolution: 1\nsolution: 0\nsolution: 2404\nsolution: 2680\nsolution: 1\nsolution: 1\nsolution: 2059\nsolution: 2299\nsolution: 1\nsolution: 2404\nsolution: 2692\nsolution: 1\nsolution: 0\nsolution: 2692\nsolution: 2944\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 2374\nsolution: 2446\nsolution: 1\nsolution: 0\nsolution: 2446\nsolution: 2638\nsolution: 0\nsolution: 1\nsolution: 2680\nsolution: 2980\nsolution: 1\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 1\nsolution: 2438\nsolution: 2678\nsolution: 1\nsolution: 2678\nsolution: 2906\nsolution: 0\nsolution: 1\nsolution: 2980\nsolution: 3208\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 2678\nsolution: 2918\nsolution: 1\nsolution: 2918\nsolution: 3206\nsolution: 1\nsolution: 0\nsolution: 3208\nsolution: 3436\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 2918\nsolution: 3158\nsolution: 1\nsolution: 3158\nsolution: 3386\nsolution: 0\nsolution: 1\nsolution: 3436\nsolution: 3664\nsolution: 1\nsolution: 0\nobjective_value: 11\nbest_objective_bound: 11\nnum_booleans: 161\nnum_conflicts: 1\nnum_branches: 317\nnum_binary_propagations: 1645\nnum_integer_propagations: 2147\nwall_time: 0.018488300000000003\nuser_time: 0.018488300000000003\ndeterministic_time: 0.0016832967999999828\nsolution_info: \"main\"\nnum_lp_iterations: 13\ninner_objective_lower_bound: -11\nnum_integers: 85\nnum_fixed_booleans: 72",
+    "parameters": "max_time_in_seconds: 300\nmax_deterministic_time: 60\nnum_workers: 1",
+    "time_scale": {
+      "K": 12,
+      "fractions": [
+        0.0,
+        0.11851934419439658,
+        0.1527083520089434,
+        0.16407921340709208,
+        0.2519211384186235,
+        0.3580875447362786,
+        0.45238176838589794,
+        0.4528104349094235,
+        0.4817741120613732,
+        0.48441458711042173,
+        0.5257802379263694,
+        0.5692822428830198
+      ]
+    }
+  },
+  "interpretation": "clairvoyant offline reference; only OPTIMAL proves optimality"
+}

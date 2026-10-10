@@ -1,0 +1,9 @@
+{
+  "label": "worker:full_s1",
+  "pid": 18136,
+  "started": 1790485863.3868027,
+  "ended": 1790485865.2535534,
+  "closed": true,
+  "charged_upper_bound": 150,
+  "committed": 150
+}

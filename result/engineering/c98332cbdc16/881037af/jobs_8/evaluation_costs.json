@@ -1,0 +1,9 @@
+{
+  "unique_complete_evaluations": 110,
+  "steps": 3831,
+  "failed_attempt_steps": 0,
+  "failed_attempts": [],
+  "seconds": 10.252133599802619,
+  "training_monitor_steps": 1148,
+  "offline_replay_steps": 12
+}

@@ -1,0 +1,125 @@
+{
+  "planned": 2176,
+  "charged": 2176,
+  "jobs": [
+    {
+      "run": "full_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "dqn_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "ddqn_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "a2c_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "ppo_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "hgnn_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "dual_attention_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "no_graph_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "no_scenario_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "no_demo_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "impact_only_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k1_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k4_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w003_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w03_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h1_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h4_s1",
+      "budget": 128,
+      "charged": 128,
+      "committed": 128,
+      "status": "complete"
+    }
+  ]
+}

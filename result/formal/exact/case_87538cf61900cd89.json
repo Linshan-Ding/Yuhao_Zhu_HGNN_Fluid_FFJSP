@@ -1,0 +1,565 @@
+{
+  "identity": "0426ce7d200893de88c869ede9c49621dc004442745d6c738c1253a2eff7d3b8",
+  "instance_id": "case_87538cf61900cd89",
+  "status": "OPTIMAL",
+  "eta": 1.0,
+  "upper": 1.0,
+  "seconds": 0.04134739999426529,
+  "assignment": [
+    {
+      "order": 0,
+      "stage": 0,
+      "machine": 0,
+      "start": 0.0,
+      "end": 6.0
+    },
+    {
+      "order": 0,
+      "stage": 1,
+      "machine": 2,
+      "start": 6.0,
+      "end": 31.0
+    },
+    {
+      "order": 0,
+      "stage": 2,
+      "machine": 4,
+      "start": 31.0,
+      "end": 56.0
+    },
+    {
+      "order": 1,
+      "stage": 0,
+      "machine": 0,
+      "start": 50.4523817683859,
+      "end": 56.4523817683859
+    },
+    {
+      "order": 2,
+      "stage": 0,
+      "machine": 1,
+      "start": 54.56928224288302,
+      "end": 74.56928224288302
+    },
+    {
+      "order": 1,
+      "stage": 1,
+      "machine": 2,
+      "start": 56.4523817683859,
+      "end": 81.45238176838589
+    },
+    {
+      "order": 3,
+      "stage": 0,
+      "machine": 0,
+      "start": 81.1185193441944,
+      "end": 87.1185193441944
+    },
+    {
+      "order": 1,
+      "stage": 2,
+      "machine": 4,
+      "start": 81.45238176838589,
+      "end": 106.45238176838589
+    },
+    {
+      "order": 2,
+      "stage": 1,
+      "machine": 2,
+      "start": 81.45238176838589,
+      "end": 105.45238176838589
+    },
+    {
+      "order": 3,
+      "stage": 1,
+      "machine": 2,
+      "start": 105.45238176838589,
+      "end": 130.4523817683859
+    },
+    {
+      "order": 2,
+      "stage": 2,
+      "machine": 4,
+      "start": 106.45238176838589,
+      "end": 125.45238176838589
+    },
+    {
+      "order": 4,
+      "stage": 0,
+      "machine": 0,
+      "start": 107.35808754473628,
+      "end": 125.35808754473628
+    },
+    {
+      "order": 3,
+      "stage": 2,
+      "machine": 4,
+      "start": 130.4523817683859,
+      "end": 155.4523817683859
+    },
+    {
+      "order": 4,
+      "stage": 1,
+      "machine": 2,
+      "start": 130.4523817683859,
+      "end": 156.4523817683859
+    },
+    {
+      "order": 5,
+      "stage": 0,
+      "machine": 0,
+      "start": 156.25192113841862,
+      "end": 174.25192113841862
+    },
+    {
+      "order": 4,
+      "stage": 2,
+      "machine": 4,
+      "start": 156.4523817683859,
+      "end": 179.4523817683859
+    },
+    {
+      "order": 6,
+      "stage": 0,
+      "machine": 1,
+      "start": 171.45281043490942,
+      "end": 191.45281043490942
+    },
+    {
+      "order": 5,
+      "stage": 1,
+      "machine": 2,
+      "start": 174.25192113841862,
+      "end": 200.25192113841862
+    },
+    {
+      "order": 6,
+      "stage": 1,
+      "machine": 3,
+      "start": 191.45281043490942,
+      "end": 210.45281043490942
+    },
+    {
+      "order": 7,
+      "stage": 0,
+      "machine": 0,
+      "start": 197.52578023792637,
+      "end": 203.52578023792637
+    },
+    {
+      "order": 5,
+      "stage": 2,
+      "machine": 4,
+      "start": 200.25192113841862,
+      "end": 223.25192113841862
+    },
+    {
+      "order": 8,
+      "stage": 0,
+      "machine": 1,
+      "start": 200.48441458711042,
+      "end": 220.48441458711042
+    },
+    {
+      "order": 7,
+      "stage": 1,
+      "machine": 2,
+      "start": 203.52578023792637,
+      "end": 228.52578023792637
+    },
+    {
+      "order": 6,
+      "stage": 2,
+      "machine": 5,
+      "start": 210.45281043490942,
+      "end": 231.45281043490942
+    },
+    {
+      "order": 8,
+      "stage": 1,
+      "machine": 3,
+      "start": 220.48441458711042,
+      "end": 239.48441458711042
+    },
+    {
+      "order": 10,
+      "stage": 0,
+      "machine": 1,
+      "start": 220.48441458711042,
+      "end": 240.48441458711042
+    },
+    {
+      "order": 7,
+      "stage": 2,
+      "machine": 4,
+      "start": 228.52578023792637,
+      "end": 253.52578023792637
+    },
+    {
+      "order": 13,
+      "stage": 0,
+      "machine": 0,
+      "start": 233.01885659521946,
+      "end": 239.01885659521946
+    },
+    {
+      "order": 12,
+      "stage": 0,
+      "machine": 0,
+      "start": 239.01885659521946,
+      "end": 257.01885659521946
+    },
+    {
+      "order": 13,
+      "stage": 1,
+      "machine": 2,
+      "start": 239.01885659521946,
+      "end": 264.01885659521946
+    },
+    {
+      "order": 11,
+      "stage": 0,
+      "machine": 1,
+      "start": 240.48441458711042,
+      "end": 260.48441458711045
+    },
+    {
+      "order": 8,
+      "stage": 2,
+      "machine": 4,
+      "start": 253.52578023792637,
+      "end": 272.52578023792637
+    },
+    {
+      "order": 9,
+      "stage": 0,
+      "machine": 1,
+      "start": 260.48441458711045,
+      "end": 280.48441458711045
+    },
+    {
+      "order": 15,
+      "stage": 0,
+      "machine": 0,
+      "start": 263.5280575211596,
+      "end": 281.5280575211596
+    },
+    {
+      "order": 10,
+      "stage": 1,
+      "machine": 2,
+      "start": 264.01885659521946,
+      "end": 288.01885659521946
+    },
+    {
+      "order": 13,
+      "stage": 2,
+      "machine": 4,
+      "start": 272.52578023792637,
+      "end": 297.52578023792637
+    },
+    {
+      "order": 14,
+      "stage": 0,
+      "machine": 1,
+      "start": 280.48441458711045,
+      "end": 300.48441458711045
+    },
+    {
+      "order": 11,
+      "stage": 1,
+      "machine": 2,
+      "start": 288.01885659521946,
+      "end": 312.01885659521946
+    },
+    {
+      "order": 10,
+      "stage": 2,
+      "machine": 4,
+      "start": 297.52578023792637,
+      "end": 316.52578023792637
+    },
+    {
+      "order": 9,
+      "stage": 1,
+      "machine": 2,
+      "start": 312.01885659521946,
+      "end": 336.01885659521946
+    },
+    {
+      "order": 11,
+      "stage": 2,
+      "machine": 4,
+      "start": 316.52578023792637,
+      "end": 335.52578023792637
+    },
+    {
+      "order": 9,
+      "stage": 2,
+      "machine": 4,
+      "start": 336.01885659521946,
+      "end": 355.01885659521946
+    },
+    {
+      "order": 12,
+      "stage": 1,
+      "machine": 2,
+      "start": 336.01885659521946,
+      "end": 362.01885659521946
+    },
+    {
+      "order": 16,
+      "stage": 0,
+      "machine": 0,
+      "start": 338.35792291117747,
+      "end": 344.35792291117747
+    },
+    {
+      "order": 17,
+      "stage": 0,
+      "machine": 0,
+      "start": 356.175595155919,
+      "end": 374.175595155919
+    },
+    {
+      "order": 12,
+      "stage": 2,
+      "machine": 4,
+      "start": 362.01885659521946,
+      "end": 385.01885659521946
+    },
+    {
+      "order": 14,
+      "stage": 1,
+      "machine": 2,
+      "start": 362.01885659521946,
+      "end": 386.01885659521946
+    },
+    {
+      "order": 18,
+      "stage": 0,
+      "machine": 0,
+      "start": 374.175595155919,
+      "end": 392.175595155919
+    },
+    {
+      "order": 14,
+      "stage": 2,
+      "machine": 4,
+      "start": 386.01885659521946,
+      "end": 405.01885659521946
+    },
+    {
+      "order": 16,
+      "stage": 1,
+      "machine": 2,
+      "start": 386.01885659521946,
+      "end": 411.01885659521946
+    },
+    {
+      "order": 19,
+      "stage": 0,
+      "machine": 0,
+      "start": 407.7366570752747,
+      "end": 425.7366570752747
+    },
+    {
+      "order": 15,
+      "stage": 1,
+      "machine": 2,
+      "start": 411.01885659521946,
+      "end": 437.01885659521946
+    },
+    {
+      "order": 16,
+      "stage": 2,
+      "machine": 4,
+      "start": 411.01885659521946,
+      "end": 436.01885659521946
+    },
+    {
+      "order": 20,
+      "stage": 0,
+      "machine": 1,
+      "start": 436.76537065759453,
+      "end": 456.76537065759453
+    },
+    {
+      "order": 15,
+      "stage": 2,
+      "machine": 4,
+      "start": 437.01885659521946,
+      "end": 460.01885659521946
+    },
+    {
+      "order": 18,
+      "stage": 1,
+      "machine": 2,
+      "start": 437.01885659521946,
+      "end": 463.01885659521946
+    },
+    {
+      "order": 21,
+      "stage": 0,
+      "machine": 1,
+      "start": 459.33762751301776,
+      "end": 479.33762751301776
+    },
+    {
+      "order": 22,
+      "stage": 0,
+      "machine": 0,
+      "start": 462.3255700380225,
+      "end": 480.3255700380225
+    },
+    {
+      "order": 17,
+      "stage": 1,
+      "machine": 2,
+      "start": 463.01885659521946,
+      "end": 489.01885659521946
+    },
+    {
+      "order": 18,
+      "stage": 2,
+      "machine": 4,
+      "start": 463.01885659521946,
+      "end": 486.01885659521946
+    },
+    {
+      "order": 17,
+      "stage": 2,
+      "machine": 4,
+      "start": 489.01885659521946,
+      "end": 512.0188565952194
+    },
+    {
+      "order": 19,
+      "stage": 1,
+      "machine": 2,
+      "start": 489.01885659521946,
+      "end": 515.0188565952194
+    },
+    {
+      "order": 23,
+      "stage": 0,
+      "machine": 0,
+      "start": 498.46623664143993,
+      "end": 504.46623664143993
+    },
+    {
+      "order": 19,
+      "stage": 2,
+      "machine": 4,
+      "start": 515.0188565952194,
+      "end": 538.0188565952194
+    },
+    {
+      "order": 23,
+      "stage": 1,
+      "machine": 2,
+      "start": 515.0188565952194,
+      "end": 540.0188565952194
+    },
+    {
+      "order": 20,
+      "stage": 1,
+      "machine": 2,
+      "start": 540.0188565952194,
+      "end": 564.0188565952194
+    },
+    {
+      "order": 23,
+      "stage": 2,
+      "machine": 4,
+      "start": 540.0188565952194,
+      "end": 565.0188565952194
+    },
+    {
+      "order": 21,
+      "stage": 1,
+      "machine": 2,
+      "start": 564.0188565952194,
+      "end": 588.0188565952194
+    },
+    {
+      "order": 20,
+      "stage": 2,
+      "machine": 4,
+      "start": 565.0188565952194,
+      "end": 584.0188565952194
+    },
+    {
+      "order": 21,
+      "stage": 2,
+      "machine": 4,
+      "start": 588.0188565952194,
+      "end": 607.0188565952194
+    },
+    {
+      "order": 22,
+      "stage": 1,
+      "machine": 2,
+      "start": 588.0188565952194,
+      "end": 614.0188565952194
+    },
+    {
+      "order": 22,
+      "stage": 2,
+      "machine": 4,
+      "start": 614.0188565952194,
+      "end": 637.0188565952194
+    }
+  ],
+  "replay": {
+    "eta_solver": 1.0,
+    "eta_replay": 1.0,
+    "n_orders_checked": 24,
+    "replay_scope": "physical_schedule_not_online_policy_reachability",
+    "eta_env": 1.0,
+    "match": true,
+    "n_issues": 0,
+    "issues": []
+  },
+  "parameters": {
+    "wall_seconds": 300,
+    "deterministic_seconds": 60,
+    "workers": 1
+  },
+  "replay_steps": 72,
+  "metadata": {
+    "response": "CpSolverResponse summary:\nstatus: OPTIMAL\nobjective: 24\nbest_bound: 24\nintegers: 169\nbooleans: 326\nconflicts: 0\nbranches: 657\npropagations: 3061\ninteger_propagations: 4431\nrestarts: 0\nlp_iterations: 29\nwalltime: 0.038089\nusertime: 0.038089\ndeterministic_time: 0.00338093\ngap_integral: 0\nsolution_fingerprint: 0x2260fa10a474b69f\n",
+    "response_proto": "status: OPTIMAL\nsolution: 1\nsolution: 0\nsolution: 144\nsolution: 1\nsolution: 0\nsolution: 144\nsolution: 744\nsolution: 1\nsolution: 0\nsolution: 744\nsolution: 1344\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 1213\nsolution: 1357\nsolution: 1\nsolution: 0\nsolution: 1357\nsolution: 1957\nsolution: 1\nsolution: 0\nsolution: 1957\nsolution: 2557\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 1316\nsolution: 1796\nsolution: 1\nsolution: 1957\nsolution: 2533\nsolution: 1\nsolution: 0\nsolution: 2557\nsolution: 3013\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 1946\nsolution: 2090\nsolution: 1\nsolution: 0\nsolution: 2533\nsolution: 3133\nsolution: 1\nsolution: 0\nsolution: 3133\nsolution: 3733\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 2579\nsolution: 3011\nsolution: 1\nsolution: 0\nsolution: 3133\nsolution: 3757\nsolution: 1\nsolution: 0\nsolution: 3757\nsolution: 4309\nsolution: 1\nsolution: 1\nsolution: 3750\nsolution: 4182\nsolution: 1\nsolution: 0\nsolution: 4182\nsolution: 4806\nsolution: 1\nsolution: 0\nsolution: 4806\nsolution: 5358\nsolution: 1\nsolution: 1\nsolution: 4118\nsolution: 4598\nsolution: 1\nsolution: 4598\nsolution: 5054\nsolution: 0\nsolution: 1\nsolution: 5054\nsolution: 5558\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 4746\nsolution: 4890\nsolution: 1\nsolution: 0\nsolution: 4890\nsolution: 5490\nsolution: 1\nsolution: 0\nsolution: 5490\nsolution: 6090\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 4817\nsolution: 5297\nsolution: 1\nsolution: 5297\nsolution: 5753\nsolution: 0\nsolution: 1\nsolution: 6090\nsolution: 6546\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 6257\nsolution: 6737\nsolution: 1\nsolution: 7489\nsolution: 8065\nsolution: 1\nsolution: 0\nsolution: 8065\nsolution: 8521\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 5297\nsolution: 5777\nsolution: 1\nsolution: 6337\nsolution: 6913\nsolution: 1\nsolution: 0\nsolution: 7146\nsolution: 7602\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 5777\nsolution: 6257\nsolution: 1\nsolution: 6913\nsolution: 7489\nsolution: 1\nsolution: 0\nsolution: 7602\nsolution: 8058\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 5737\nsolution: 6169\nsolution: 1\nsolution: 0\nsolution: 8065\nsolution: 8689\nsolution: 1\nsolution: 0\nsolution: 8689\nsolution: 9241\nsolution: 1\nsolution: 1\nsolution: 5593\nsolution: 5737\nsolution: 1\nsolution: 0\nsolution: 5737\nsolution: 6337\nsolution: 1\nsolution: 0\nsolution: 6546\nsolution: 7146\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 6737\nsolution: 7217\nsolution: 1\nsolution: 8689\nsolution: 9265\nsolution: 1\nsolution: 0\nsolution: 9265\nsolution: 9721\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 6331\nsolution: 6763\nsolution: 1\nsolution: 0\nsolution: 9865\nsolution: 10489\nsolution: 1\nsolution: 0\nsolution: 10489\nsolution: 11041\nsolution: 1\nsolution: 1\nsolution: 8122\nsolution: 8266\nsolution: 1\nsolution: 0\nsolution: 9265\nsolution: 9865\nsolution: 1\nsolution: 0\nsolution: 9865\nsolution: 10465\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 8549\nsolution: 8981\nsolution: 1\nsolution: 0\nsolution: 11113\nsolution: 11737\nsolution: 1\nsolution: 0\nsolution: 11737\nsolution: 12289\nsolution: 1\nsolution: 1\nsolution: 8981\nsolution: 9413\nsolution: 1\nsolution: 0\nsolution: 10489\nsolution: 11113\nsolution: 1\nsolution: 0\nsolution: 11113\nsolution: 11665\nsolution: 1\nsolution: 1\nsolution: 9790\nsolution: 10222\nsolution: 1\nsolution: 0\nsolution: 11737\nsolution: 12361\nsolution: 1\nsolution: 0\nsolution: 12361\nsolution: 12913\nsolution: 1\nsolution: 1\nsolution: 10487\nsolution: 10967\nsolution: 1\nsolution: 12961\nsolution: 13537\nsolution: 1\nsolution: 0\nsolution: 13561\nsolution: 14017\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 11025\nsolution: 11505\nsolution: 1\nsolution: 13537\nsolution: 14113\nsolution: 1\nsolution: 0\nsolution: 14113\nsolution: 14569\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 11095\nsolution: 11527\nsolution: 1\nsolution: 0\nsolution: 14113\nsolution: 14737\nsolution: 1\nsolution: 0\nsolution: 14737\nsolution: 15289\nsolution: 1\nsolution: 1\nsolution: 11967\nsolution: 12111\nsolution: 1\nsolution: 0\nsolution: 12361\nsolution: 12961\nsolution: 1\nsolution: 0\nsolution: 12961\nsolution: 13561\nsolution: 1\nsolution: 0\nobjective_value: 24\nbest_objective_bound: 24\nnum_booleans: 326\nnum_branches: 657\nnum_binary_propagations: 3061\nnum_integer_propagations: 4431\nwall_time: 0.038089000000000005\nuser_time: 0.038089000000000005\ndeterministic_time: 0.0033809278000000833\nsolution_info: \"main\"\nnum_lp_iterations: 29\ninner_objective_lower_bound: -24\nnum_integers: 169",
+    "parameters": "max_time_in_seconds: 300\nmax_deterministic_time: 60\nnum_workers: 1",
+    "time_scale": {
+      "K": 24,
+      "fractions": [
+        0.0,
+        0.018856595219460814,
+        0.11851934419439658,
+        0.1527083520089434,
+        0.16407921340709208,
+        0.1755951559189839,
+        0.2519211384186235,
+        0.32557003802247664,
+        0.32946051799947895,
+        0.3376275130177646,
+        0.357922911177468,
+        0.3580875447362786,
+        0.3924569505593922,
+        0.45238176838589794,
+        0.4528104349094235,
+        0.4662366414399344,
+        0.4817741120613732,
+        0.48441458711042173,
+        0.5257802379263694,
+        0.5280575211596101,
+        0.5692822428830198,
+        0.5864786205145833,
+        0.7366570752747066,
+        0.7653706575945307
+      ]
+    }
+  },
+  "interpretation": "clairvoyant offline reference; only OPTIMAL proves optimality"
+}

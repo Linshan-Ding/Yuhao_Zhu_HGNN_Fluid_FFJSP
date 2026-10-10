@@ -1,0 +1,15 @@
+{
+  "status": "complete",
+  "steps": 1000000,
+  "real": 1000000,
+  "scenario": 0,
+  "demonstration": 0,
+  "lost": 0,
+  "run": "dual_attention_s5",
+  "seconds": 3908.2317193000345,
+  "reused": false,
+  "pid": 29128,
+  "started": 1790621268.6376562,
+  "ended": 1790625176.8716211,
+  "threads": 1
+}

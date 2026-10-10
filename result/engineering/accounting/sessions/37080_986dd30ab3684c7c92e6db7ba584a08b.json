@@ -1,0 +1,9 @@
+{
+  "label": "worker:no_graph_s1",
+  "pid": 37080,
+  "started": 1790485937.418983,
+  "ended": 1790485938.4297915,
+  "closed": true,
+  "charged_upper_bound": 182,
+  "committed": 182
+}

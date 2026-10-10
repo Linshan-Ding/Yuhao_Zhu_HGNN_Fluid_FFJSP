@@ -14,3 +14,6 @@
 *.pdf binary
 *.png binary
 *.svg text eol=lf
+
+# Preserve experiment manifests, logs and source fingerprints byte-for-byte.
+result/** -text

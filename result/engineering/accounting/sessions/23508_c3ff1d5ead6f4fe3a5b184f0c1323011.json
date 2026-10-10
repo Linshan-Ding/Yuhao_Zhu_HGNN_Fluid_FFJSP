@@ -1,0 +1,9 @@
+{
+  "label": "worker:dual_attention_s1",
+  "pid": 23508,
+  "started": 1790485882.8456087,
+  "ended": 1790485885.3760054,
+  "closed": true,
+  "charged_upper_bound": 238,
+  "committed": 238
+}

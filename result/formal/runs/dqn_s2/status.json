@@ -1,0 +1,15 @@
+{
+  "status": "complete",
+  "steps": 1000000,
+  "real": 1000000,
+  "scenario": 0,
+  "demonstration": 0,
+  "lost": 0,
+  "run": "dqn_s2",
+  "seconds": 6526.341189300001,
+  "reused": false,
+  "pid": 29128,
+  "started": 1790511796.9907203,
+  "ended": 1790518323.3342762,
+  "threads": 1
+}

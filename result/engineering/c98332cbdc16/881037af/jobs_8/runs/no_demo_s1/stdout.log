@@ -1,0 +1,3 @@
+[no_demo s1] 32/128 eta=0.3333 labels=0 real=32 branch=0
+[no_demo s1] 64/128 eta=0.6667 labels=0 real=64 branch=0
+[no_demo s1] 128/128 eta=0.8333 labels=0 real=128 branch=0

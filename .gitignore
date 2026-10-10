@@ -7,8 +7,36 @@ __pycache__/
 .pytest_cache/
 .pytest_tmp/
 .refactor/
-/result/*
+# Ignore result contents by default
+result/*
+
+# Keep Python source files under result/
 !/result/*.py
+
+# Keep formal experimental results
+!/result/formal/
+!/result/formal/**
+
+# Keep engineering experimental results
+!/result/engineering/
+!/result/engineering/**
+
+# Do not upload model checkpoints
+result/formal/**/*.pt
+result/engineering/**/*.pt
+
+# Published results exclude raw trajectories and trained model artifacts.
+/result/**/raw/
+/result/**/*.pth
+/result/**/*.ckpt
+/result/**/*.safetensors
+/result/**/*.onnx
+/result/**/*.h5
+/result/**/*.hdf5
+/result/**/*.pkl
+/result/**/*.pickle
+/result/**/*.joblib
+
 /data/instances/*
 !/data/instances/fixed/
 !/data/instances/fixed/**

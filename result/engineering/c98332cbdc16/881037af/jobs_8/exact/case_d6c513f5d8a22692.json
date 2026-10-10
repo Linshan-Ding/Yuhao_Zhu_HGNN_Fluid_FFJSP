@@ -1,0 +1,125 @@
+{
+  "identity": "002b51f2e235836c5488aa209805c089b3f4f8e20d28e33a0fd5ec57a901a08c",
+  "instance_id": "case_d6c513f5d8a22692",
+  "status": "OPTIMAL",
+  "eta": 1.0,
+  "upper": 1.0,
+  "seconds": 0.00990900001488626,
+  "assignment": [
+    {
+      "order": 0,
+      "stage": 0,
+      "machine": 1,
+      "start": 0.0,
+      "end": 19.0
+    },
+    {
+      "order": 0,
+      "stage": 1,
+      "machine": 2,
+      "start": 19.0,
+      "end": 23.0
+    },
+    {
+      "order": 0,
+      "stage": 2,
+      "machine": 5,
+      "start": 23.0,
+      "end": 44.0
+    },
+    {
+      "order": 1,
+      "stage": 0,
+      "machine": 1,
+      "start": 38.23759460340826,
+      "end": 57.23759460340826
+    },
+    {
+      "order": 1,
+      "stage": 1,
+      "machine": 2,
+      "start": 57.23759460340826,
+      "end": 61.23759460340826
+    },
+    {
+      "order": 2,
+      "stage": 0,
+      "machine": 1,
+      "start": 57.23759460340826,
+      "end": 82.23759460340827
+    },
+    {
+      "order": 1,
+      "stage": 2,
+      "machine": 5,
+      "start": 61.23759460340826,
+      "end": 82.23759460340827
+    },
+    {
+      "order": 2,
+      "stage": 1,
+      "machine": 2,
+      "start": 82.23759460340827,
+      "end": 103.23759460340827
+    },
+    {
+      "order": 3,
+      "stage": 0,
+      "machine": 1,
+      "start": 82.23759460340827,
+      "end": 101.23759460340827
+    },
+    {
+      "order": 2,
+      "stage": 2,
+      "machine": 4,
+      "start": 103.23759460340827,
+      "end": 111.23759460340827
+    },
+    {
+      "order": 3,
+      "stage": 1,
+      "machine": 2,
+      "start": 103.23759460340827,
+      "end": 107.23759460340827
+    },
+    {
+      "order": 3,
+      "stage": 2,
+      "machine": 5,
+      "start": 107.23759460340827,
+      "end": 128.23759460340827
+    }
+  ],
+  "replay": {
+    "eta_solver": 1.0,
+    "eta_replay": 1.0,
+    "n_orders_checked": 4,
+    "replay_scope": "physical_schedule_not_online_policy_reachability",
+    "eta_env": 1.0,
+    "match": true,
+    "n_issues": 0,
+    "issues": []
+  },
+  "parameters": {
+    "wall_seconds": 2,
+    "deterministic_seconds": 1,
+    "workers": 1
+  },
+  "replay_steps": 12,
+  "metadata": {
+    "response": "CpSolverResponse summary:\nstatus: OPTIMAL\nobjective: 4\nbest_bound: 4\nintegers: 29\nbooleans: 44\nconflicts: 0\nbranches: 86\npropagations: 380\ninteger_propagations: 542\nrestarts: 0\nlp_iterations: 5\nwalltime: 0.0078002\nusertime: 0.0078002\ndeterministic_time: 0.000395456\ngap_integral: 0\nsolution_fingerprint: 0xb95e14d7b1d0f44\n",
+    "response_proto": "status: OPTIMAL\nsolution: 1\nsolution: 0\nsolution: 76\nsolution: 1\nsolution: 76\nsolution: 92\nsolution: 1\nsolution: 0\nsolution: 92\nsolution: 176\nsolution: 1\nsolution: 1\nsolution: 153\nsolution: 229\nsolution: 1\nsolution: 229\nsolution: 245\nsolution: 1\nsolution: 0\nsolution: 245\nsolution: 329\nsolution: 1\nsolution: 1\nsolution: 229\nsolution: 329\nsolution: 1\nsolution: 329\nsolution: 413\nsolution: 1\nsolution: 0\nsolution: 413\nsolution: 445\nsolution: 1\nsolution: 1\nsolution: 329\nsolution: 405\nsolution: 1\nsolution: 413\nsolution: 429\nsolution: 1\nsolution: 0\nsolution: 429\nsolution: 513\nsolution: 1\nobjective_value: 4\nbest_objective_bound: 4\nnum_booleans: 44\nnum_branches: 86\nnum_binary_propagations: 380\nnum_integer_propagations: 542\nwall_time: 0.0078002\nuser_time: 0.0078002\ndeterministic_time: 0.00039545640000000179\nsolution_info: \"main\"\nnum_lp_iterations: 5\ninner_objective_lower_bound: -4\nnum_integers: 29",
+    "parameters": "max_time_in_seconds: 2\nmax_deterministic_time: 1\nnum_workers: 1",
+    "time_scale": {
+      "K": 4,
+      "fractions": [
+        0.0,
+        0.23759460340826166,
+        0.35777180513239415,
+        0.47929887138943883
+      ]
+    }
+  },
+  "interpretation": "clairvoyant offline reference; only OPTIMAL proves optimality"
+}

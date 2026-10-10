@@ -1,0 +1,9 @@
+{
+  "label": "worker:no_demo_s1",
+  "pid": 37080,
+  "started": 1790485939.6157506,
+  "ended": 1790485940.8852868,
+  "closed": true,
+  "charged_upper_bound": 247,
+  "committed": 247
+}

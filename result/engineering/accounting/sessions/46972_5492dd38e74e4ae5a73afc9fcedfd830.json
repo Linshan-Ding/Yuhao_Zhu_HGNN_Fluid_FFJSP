@@ -1,0 +1,9 @@
+{
+  "label": "formal-shape:hgnn",
+  "pid": 46972,
+  "started": 1790486037.0716386,
+  "ended": 1790486043.5337653,
+  "closed": true,
+  "charged_upper_bound": 1024,
+  "committed": 1024
+}

@@ -1,0 +1,9 @@
+{
+  "label": "formal-shape:dual_attention",
+  "pid": 9176,
+  "started": 1790486045.0684521,
+  "ended": 1790486052.8732545,
+  "closed": true,
+  "charged_upper_bound": 1024,
+  "committed": 1024
+}

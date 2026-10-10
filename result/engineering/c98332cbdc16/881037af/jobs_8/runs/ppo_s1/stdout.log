@@ -1,0 +1,3 @@
+[ppo s1] 32/128 eta=1.0000 labels=0 real=32 branch=0
+[ppo s1] 64/128 eta=1.0000 labels=0 real=64 branch=0
+[ppo s1] 128/128 eta=1.0000 labels=0 real=128 branch=0

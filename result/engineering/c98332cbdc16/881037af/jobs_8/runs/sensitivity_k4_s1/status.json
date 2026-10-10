@@ -1,0 +1,15 @@
+{
+  "status": "complete",
+  "steps": 128,
+  "real": 96,
+  "scenario": 0,
+  "demonstration": 32,
+  "lost": 0,
+  "run": "sensitivity_k4_s1",
+  "seconds": 1.2785072000115179,
+  "reused": false,
+  "pid": 25508,
+  "started": 1790485885.3749819,
+  "ended": 1790485886.6585398,
+  "threads": 1
+}

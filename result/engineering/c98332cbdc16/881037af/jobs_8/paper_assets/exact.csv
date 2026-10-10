@@ -1,0 +1,2 @@
+identity,instance_id,status,eta,upper,seconds,replay_steps,interpretation
+002b51f2e235836c5488aa209805c089b3f4f8e20d28e33a0fd5ec57a901a08c,case_d6c513f5d8a22692,OPTIMAL,1.0,1.0,0.00990900001488626,12,clairvoyant offline reference; only OPTIMAL proves optimality

@@ -1,0 +1,9 @@
+{
+  "label": "formal-shape:impact_only",
+  "pid": 17736,
+  "started": 1790486091.0827026,
+  "ended": 1790486104.0229075,
+  "closed": true,
+  "charged_upper_bound": 1252,
+  "committed": 1252
+}

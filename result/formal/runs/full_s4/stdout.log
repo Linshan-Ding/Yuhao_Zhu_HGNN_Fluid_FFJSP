@@ -1,0 +1,31 @@
+demo epoch=1 loss=0.5531
+demo epoch=2 loss=0.1663
+demo epoch=3 loss=0.0903
+demo epoch=4 loss=0.0652
+demo epoch=5 loss=0.0586
+demo epoch=6 loss=0.0495
+demo epoch=7 loss=0.0425
+demo epoch=8 loss=0.0478
+demo epoch=9 loss=0.0420
+demo epoch=10 loss=0.0326
+[full s4] 11024/1000000 eta=0.8426 labels=0 real=1024 branch=0
+[full s4] 61081/1000000 eta=0.7778 labels=118 real=38912 branch=12169
+[full s4] 100000/1000000 eta=0.7060 labels=166 real=70102 branch=19898
+[full s4] 151218/1000000 eta=0.7731 labels=216 real=111062 branch=30156
+[full s4] 202275/1000000 eta=0.8171 labels=283 real=152022 branch=40253
+[full s4] 252418/1000000 eta=0.8148 labels=353 real=191958 branch=50460
+[full s4] 300000/1000000 eta=0.8403 labels=418 real=230142 branch=59858
+[full s4] 350074/1000000 eta=0.8449 labels=492 real=270078 branch=69996
+[full s4] 401111/1000000 eta=0.8426 labels=565 real=311038 branch=80073
+[full s4] 452461/1000000 eta=0.8333 labels=630 real=351998 branch=90463
+[full s4] 500000/1000000 eta=0.8449 labels=697 real=390019 branch=99981
+[full s4] 551127/1000000 eta=0.8472 labels=761 real=430979 branch=110148
+[full s4] 602309/1000000 eta=0.8403 labels=823 real=471939 branch=120370
+[full s4] 653523/1000000 eta=0.8380 labels=895 real=512899 branch=130624
+[full s4] 704814/1000000 eta=0.8449 labels=973 real=553859 branch=140955
+[full s4] 755925/1000000 eta=0.8426 labels=1053 real=594819 branch=151106
+[full s4] 807144/1000000 eta=0.8287 labels=1114 real=635779 branch=161365
+[full s4] 858324/1000000 eta=0.8495 labels=1191 real=676739 branch=171585
+[full s4] 909588/1000000 eta=0.7593 labels=1251 real=717699 branch=181889
+[full s4] 960760/1000000 eta=0.8218 labels=1311 real=758659 branch=192101
+[full s4] 1000000/1000000 eta=0.8194 labels=1365 real=790230 branch=199770

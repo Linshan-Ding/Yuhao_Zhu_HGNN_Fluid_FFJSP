@@ -1,0 +1,56 @@
+{
+  "outputs": {
+    "main": {
+      "file": "main.csv",
+      "sha256": "55bb608f61827a99935ed8ca0022dd9f7df85610a1c62ff056a1b38b25e85612",
+      "rows": 744
+    },
+    "small": {
+      "file": "small.csv",
+      "sha256": "571f631cca95dbaedee86ee7ee60234ac78a637b26491f9f1b435cf35fcad0a2",
+      "rows": 744
+    },
+    "long_stream": {
+      "file": "long_stream.csv",
+      "sha256": "74a1ae3260568ba3cf5afb69b26c825d30f6485da0db5d438437464e1e4e12ba",
+      "rows": 744
+    },
+    "large_shop": {
+      "file": "large_shop.csv",
+      "sha256": "6dddab5e646f8b97e3a45eadfa91e806c745b7e7b13a5efa51b2ec00225fd0b2",
+      "rows": 496
+    },
+    "main_100000": {
+      "file": "main_100000.csv",
+      "sha256": "934ef780d0900599b99960b5d64cd7b2045292e2002f06b9033bff7da3d61592",
+      "rows": 660
+    },
+    "main_300000": {
+      "file": "main_300000.csv",
+      "sha256": "3d52d8389acd251175d8659f6a641fd47621b80fde1e9a280de26b8728d0ad5a",
+      "rows": 660
+    },
+    "main_500000": {
+      "file": "main_500000.csv",
+      "sha256": "72b3b6d408e403416645b07768148cdafb91c3c34062a5bfe35aee39e8baf674",
+      "rows": 660
+    },
+    "main_best": {
+      "file": "main_best.csv",
+      "sha256": "a706a9c6f8e8bc387002e09e1ec73df229faec1503203d35aceac97636b20681",
+      "rows": 660
+    },
+    "initialization": {
+      "file": "initialization.csv",
+      "sha256": "6f2b74801adac678ebb1b483643f2f6a990f65197bdd8de6b80b95168f24d300",
+      "rows": 126
+    },
+    "sensitivity": {
+      "file": "sensitivity.csv",
+      "sha256": "1f5fdd2812de3b793ed4f408f047aef3d107cca38b01c4b756658a3b1ccda990",
+      "rows": 252
+    }
+  },
+  "data": "d7520d6916b644d520d7f60f9e5191f4aced2534e43528a47b5a78a7f35bbb20",
+  "evaluation": "7e6c0cfb1fe986a265b05a321a74f2e92db238470d019b70dc9ab0346223cfde"
+}

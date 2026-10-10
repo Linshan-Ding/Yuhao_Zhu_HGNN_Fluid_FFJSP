@@ -1,0 +1,15 @@
+{
+  "status": "complete",
+  "steps": 1000000,
+  "real": 1000000,
+  "scenario": 0,
+  "demonstration": 0,
+  "lost": 0,
+  "run": "hgnn_s5",
+  "seconds": 3234.795206699986,
+  "reused": false,
+  "pid": 29128,
+  "started": 1790602241.843463,
+  "ended": 1790605476.6428077,
+  "threads": 1
+}

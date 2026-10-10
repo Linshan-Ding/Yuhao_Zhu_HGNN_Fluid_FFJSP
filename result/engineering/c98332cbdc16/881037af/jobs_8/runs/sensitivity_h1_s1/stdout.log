@@ -1,0 +1,4 @@
+demo epoch=1 loss=0.9349
+demo epoch=2 loss=0.9325
+[full s1] 64/128 eta=1.0000 labels=0 real=32 branch=0
+[full s1] 128/128 eta=1.0000 labels=0 real=96 branch=0

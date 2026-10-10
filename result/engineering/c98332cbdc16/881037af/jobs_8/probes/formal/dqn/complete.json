@@ -1,0 +1,311 @@
+{
+  "method": "dqn",
+  "seconds": 28.419242400006624,
+  "peak_memory_bytes": 5688774656,
+  "formal_config": {
+    "schema_version": "schedule-data-1",
+    "purpose": "formal",
+    "network": {
+      "width": 64,
+      "layers": 3,
+      "action_layers": 2,
+      "candidate_chunk": 128,
+      "path_capacity": true,
+      "path_delivery": true
+    },
+    "environment": {
+      "wait_interval": 0.0,
+      "max_steps": 20000,
+      "exposure": "hopeful_first",
+      "exposure_threshold": 1.5
+    },
+    "data": {
+      "products": 3,
+      "stages": 3,
+      "machines_per_stage": 2,
+      "orders": [
+        48,
+        96
+      ],
+      "processing": [
+        4,
+        30
+      ],
+      "due_factor": [
+        1.5,
+        3.0
+      ],
+      "due_jitter": [
+        0.9,
+        1.1
+      ],
+      "eligibility_probability": 0.8,
+      "max_attempts": 1000,
+      "regimes": [
+        {
+          "name": "frequent_overload",
+          "weight": 0.5,
+          "iota": [
+            1.0,
+            3.0
+          ],
+          "rho": [
+            1.0,
+            1.8
+          ],
+          "upper_open": false
+        },
+        {
+          "name": "frequent_underload",
+          "weight": 0.25,
+          "iota": [
+            1.0,
+            3.0
+          ],
+          "rho": [
+            0.3,
+            1.0
+          ],
+          "upper_open": true
+        },
+        {
+          "name": "infrequent_underload",
+          "weight": 0.25,
+          "iota": [
+            0.4,
+            1.0
+          ],
+          "rho": [
+            0.3,
+            1.0
+          ],
+          "upper_open": true
+        }
+      ],
+      "grid_iota": [
+        0.6,
+        1.5,
+        2.5
+      ],
+      "grid_due": [
+        1.5,
+        3.0
+      ],
+      "fixed_rho": [
+        0.3,
+        1.8
+      ]
+    },
+    "training": {
+      "environments": 8,
+      "learning_rate": 0.0003,
+      "rollout_steps": 1024,
+      "minibatch": 128,
+      "epochs": 3,
+      "clip": 0.2,
+      "gamma": 1.0,
+      "gae_lambda": 0.95,
+      "entropy": 0.01,
+      "value_weight": 0.5,
+      "max_grad_norm": 0.5,
+      "target_kl": 0.03,
+      "evaluate_every": 50000,
+      "milestones": [
+        10000,
+        100000,
+        300000,
+        500000,
+        1000000
+      ]
+    },
+    "scenario": {
+      "count": 2,
+      "interval": 32,
+      "warmup_real_steps": 2048,
+      "horizon_routes": 2.0,
+      "max_branch_steps": 5000,
+      "auxiliary_weight": 0.1,
+      "prior_count": 3.0,
+      "budget_fraction": 0.2,
+      "replay_size": 4096,
+      "replay_batches": 4,
+      "replay_batch": 32,
+      "versions": 2,
+      "frozen_interval": 8192,
+      "reliability_floor": 0.01,
+      "max_preference": 2.0,
+      "kl": 0.01,
+      "minimum_query_cost": 64,
+      "reservation_floor": 4096,
+      "reservation_multiplier": 2,
+      "wait_probe_interval": 4
+    },
+    "runtime": {
+      "device": "cpu",
+      "jobs": 8,
+      "threads": 1
+    },
+    "method": "dqn",
+    "teacher": "SPT",
+    "demonstration": {
+      "steps": 10000,
+      "epochs": 10,
+      "minibatch": 256,
+      "learning_rate": 0.001,
+      "max_grad_norm": 0.5
+    },
+    "classic": {
+      "width": 128,
+      "replay_size": 50000,
+      "batch": 128,
+      "start": 2048,
+      "train_every": 4,
+      "target_every": 1000,
+      "epsilon_steps": 50000,
+      "epsilon_final": 0.05,
+      "a2c_rollout": 256,
+      "learning_rates": {
+        "dqn": 0.0003,
+        "ddqn": 0.0003,
+        "a2c": 0.0003,
+        "ppo": 0.0001
+      }
+    },
+    "experiment": {
+      "seeds": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "budget": 1000000,
+      "sensitivity_seeds": [
+        1,
+        2,
+        3
+      ],
+      "sensitivity_budget": 500000,
+      "total_budget": 64000000,
+      "sensitivity_changes": {
+        "k1": {
+          "count": 1
+        },
+        "k4": {
+          "count": 4
+        },
+        "w003": {
+          "auxiliary_weight": 0.03
+        },
+        "w03": {
+          "auxiliary_weight": 0.3
+        },
+        "h1": {
+          "horizon_routes": 1.0
+        },
+        "h4": {
+          "horizon_routes": 4.0
+        }
+      },
+      "exact": {
+        "wall_seconds": 300,
+        "deterministic_seconds": 60,
+        "workers": 1
+      },
+      "evaluate_milestones_from": 100000,
+      "bootstrap_repeats": 2000,
+      "statistics_seed": 5691001,
+      "latency_warmup": 10,
+      "latency_repeats": 30
+    },
+    "benchmark": {
+      "seeds": {
+        "validation": 1711001,
+        "standard": 1944001,
+        "large5": 2166001,
+        "large7": 2166002
+      },
+      "validation_orders": [
+        72
+      ],
+      "main_orders": [
+        48,
+        96
+      ],
+      "small_orders": [
+        12,
+        24
+      ],
+      "long_stream_orders": [
+        128,
+        192
+      ],
+      "large_designs": [
+        {
+          "family": "large5",
+          "products": 6,
+          "stages": 5,
+          "machines_per_stage": 3,
+          "orders": 128
+        },
+        {
+          "family": "large7",
+          "products": 6,
+          "stages": 7,
+          "machines_per_stage": 3,
+          "orders": 192
+        }
+      ],
+      "large_iota": [
+        1.5,
+        2.5
+      ]
+    },
+    "recording": {
+      "chunk_rows": 1024,
+      "minimum_free_gb": 5.0,
+      "preflight_headroom": 2.0,
+      "keep_recovery_copies": 2,
+      "phase_startup_fraction": 0.2
+    },
+    "smoke": {
+      "budget": 128,
+      "scenario_probe_budget": 4096,
+      "probe_due_factor": [
+        1.0,
+        1.3
+      ]
+    }
+  },
+  "orders": 96,
+  "rollout": 1024,
+  "metrics": {
+    "q_loss": 7.854076829971746e-05,
+    "q_gradient": 0.011225472204387188
+  },
+  "largest_orders": 192,
+  "largest_stages": 7,
+  "largest_candidates": 515,
+  "recovery_bytes": 755952747,
+  "inference_bytes": 970319,
+  "demonstration_bytes": 0,
+  "raw_bytes_per_interaction": 138.1611328125,
+  "files": {
+    "inference.pt": "56e0176e5e59d99d38ccee3f021ff683aa37a1b18396d20dc957db98af9d05fd",
+    "recovery.pt": "d4ce632628a277c506cef7c4b7a92b070d08dfb89239bb42e11029a3ad72e3c3",
+    "raw/manifest.json": "67088bd9c52db98590992d01c2d7ae10d7076a91d6cf0a1935d79038fd3c0a4f",
+    "raw/instances/4c/4ca9604a0b5a25df2d5941e8aa1d6d8f.csv": "771eec3ede74c70a16754f39c7f2ba79f5664059f90b647b35623c7c04318e1a",
+    "raw/instances/6b/6b5749f0cfb68365d8c180b93a78283d.csv": "66abcdf6d9843ecce3c2e00631247bdc783db0db5739626fdf9ca7c0a020c7a4",
+    "raw/instances/77/770a779218c892b0823727ed1f955400.csv": "50e2301e5293268af45a89ece3d75ffe76c509f6310242b4280f26d73de408d9",
+    "raw/instances/c5/c517ccb373f38249d5c4d5a67df37558.csv": "6d372678513008b45dcb8b8ac1c4fb6462b92dad929a092ae05d9eadebda2e23",
+    "raw/instances/dc/dcfa0543864ea3d80b222c5424de425b.csv": "7ebaa36d6cb7a0b38d009c78e2c4c012b978318c4f4f855cf080395f4d0b1cf7",
+    "raw/chunks/decisions/00000002_6bfaa81d30774069.jsonl.gz": "52ba9f6a67ab6654e283c996b196c0e117bae2a87d0d62c98cc0f844ee37f526",
+    "raw/chunks/episodes/00000003_8c9aa2e55d3e4fdb.jsonl.gz": "600481f8cf97fc5672aaa8047fe24eba5d7fbbe44d15d7b06f5f7ef3840ec643",
+    "raw/chunks/events/00000000_934335ae46a2476f.jsonl.gz": "470581a9562c57c29e044d5d261450a10dcfd72cbe4e9c8449fd2b87adc20bb4",
+    "raw/chunks/events/00000001_849e794ba7bf4db8.jsonl.gz": "ac2499e2163859972948b748ac74aaf7caba93c9bbdcbf37b19b3972f4b480f9",
+    "raw/chunks/events/00000004_26324ae0f72e4c64.jsonl.gz": "9d916c0a1f1f5dac05fed97585580bfed4d5663c5da59b15d8018370fddcd878",
+    "raw/chunks/orders/00000005_243d9a80ca59453c.jsonl.gz": "8182313463c436ee62fc2be0cf121cc8228f2341227659ba2d32e75c28d6446c"
+  },
+  "synthetic_rewards": true,
+  "interpretation": "Engineering size/update fixture, not training or performance evidence."
+}

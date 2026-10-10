@@ -1,0 +1,9 @@
+{
+  "label": "formal-shape:a2c",
+  "pid": 3148,
+  "started": 1790486027.0923371,
+  "ended": 1790486030.2255862,
+  "closed": true,
+  "charged_upper_bound": 1024,
+  "committed": 1024
+}

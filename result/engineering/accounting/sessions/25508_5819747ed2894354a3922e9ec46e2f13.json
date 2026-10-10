@@ -1,0 +1,9 @@
+{
+  "label": "worker:sensitivity_k4_s1",
+  "pid": 25508,
+  "started": 1790485885.3719523,
+  "ended": 1790485886.6664376,
+  "closed": true,
+  "charged_upper_bound": 182,
+  "committed": 182
+}

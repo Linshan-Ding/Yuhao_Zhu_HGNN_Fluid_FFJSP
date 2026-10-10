@@ -1,0 +1,6 @@
+{
+  "free_bytes": 464015843328,
+  "estimated_bytes": 0,
+  "components_before_headroom": {},
+  "explanation": "Measured full-capacity formal buffer/checkpoint sizes plus projected trajectories/evaluation, with configured headroom; not a measured full-run size."
+}

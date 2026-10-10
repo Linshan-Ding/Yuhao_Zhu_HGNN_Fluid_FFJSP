@@ -1,0 +1,5 @@
+{
+  "charged_upper_bound": 4096,
+  "committed": 4096,
+  "limit": 4096
+}

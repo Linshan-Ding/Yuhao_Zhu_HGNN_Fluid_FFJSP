@@ -1,0 +1,588 @@
+{
+  "schema": "engineering-accounting-2",
+  "limit": null,
+  "legacy_file": "accounting/legacy.json",
+  "legacy_sha256": "2069fb00cf861a54bbbcde7cb515862b7a1e826e10ad6349b13f4b205e326221",
+  "historical_charged": 0,
+  "committed": 32467,
+  "charged_upper_bound": 32723,
+  "uncommitted_upper_bound": 256,
+  "sessions": [
+    {
+      "label": "formal-shape:dqn",
+      "pid": 10520,
+      "started": 1790485965.9487412,
+      "ended": 1790485995.081263,
+      "closed": true,
+      "charged_upper_bound": 1024,
+      "committed": 1024
+    },
+    {
+      "label": "formal-shape:impact_only",
+      "pid": 17736,
+      "started": 1790486091.0827026,
+      "ended": 1790486104.0229075,
+      "closed": true,
+      "charged_upper_bound": 1252,
+      "committed": 1252
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 18136,
+      "started": 1790485863.3868027,
+      "ended": 1790485865.2535534,
+      "closed": true,
+      "charged_upper_bound": 150,
+      "committed": 150
+    },
+    {
+      "label": "formal-shape:no_scenario",
+      "pid": 19208,
+      "started": 1790486066.3395617,
+      "ended": 1790486077.2454531,
+      "closed": true,
+      "charged_upper_bound": 1024,
+      "committed": 1024
+    },
+    {
+      "label": "worker:no_scenario_s1",
+      "pid": 20544,
+      "started": 1790485885.2442071,
+      "ended": 1790485886.6072488,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:a2c_s1",
+      "pid": 20544,
+      "started": 1790485882.8262782,
+      "ended": 1790485885.1244628,
+      "closed": true,
+      "charged_upper_bound": 193,
+      "committed": 193
+    },
+    {
+      "label": "worker:dqn_s1",
+      "pid": 20628,
+      "started": 1790485863.3869371,
+      "ended": 1790485865.2362013,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:ddqn_s1",
+      "pid": 20628,
+      "started": 1790485865.266259,
+      "ended": 1790485865.9828858,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 22964,
+      "started": 1790486208.632389,
+      "ended": 1790486210.0886176,
+      "closed": true,
+      "charged_upper_bound": 32,
+      "committed": 32
+    },
+    {
+      "label": "worker:ddqn_s1",
+      "pid": 23344,
+      "started": 1790485882.8159156,
+      "ended": 1790485885.2445164,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:impact_only_s1",
+      "pid": 23344,
+      "started": 1790485885.2875638,
+      "ended": 1790485886.5324826,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_h4_s1",
+      "pid": 23344,
+      "started": 1790485886.6082897,
+      "ended": 1790485887.5833666,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_w03_s1",
+      "pid": 23508,
+      "started": 1790485885.4056563,
+      "ended": 1790485886.7109394,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:dual_attention_s1",
+      "pid": 23508,
+      "started": 1790485882.8456087,
+      "ended": 1790485885.3760054,
+      "closed": true,
+      "charged_upper_bound": 238,
+      "committed": 238
+    },
+    {
+      "label": "worker:no_graph_s1",
+      "pid": 25508,
+      "started": 1790485882.8550267,
+      "ended": 1790485885.3035364,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_k4_s1",
+      "pid": 25508,
+      "started": 1790485885.3719523,
+      "ended": 1790485886.6664376,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "formal-shape:full",
+      "pid": 25816,
+      "started": 1790485951.3992653,
+      "ended": 1790485964.397891,
+      "closed": true,
+      "charged_upper_bound": 1252,
+      "committed": 1252
+    },
+    {
+      "label": "worker:ddqn_s1",
+      "pid": 27272,
+      "started": 1790486213.3849907,
+      "ended": 1790486214.3370664,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:dqn_s1",
+      "pid": 27272,
+      "started": 1790486211.568589,
+      "ended": 1790486213.3526213,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:dqn_s1",
+      "pid": 28076,
+      "started": 1790486208.632474,
+      "ended": 1790486209.9008033,
+      "closed": true,
+      "charged_upper_bound": 0,
+      "committed": 0
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 30052,
+      "started": 1790485882.798791,
+      "ended": 1790485885.5005355,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_h1_s1",
+      "pid": 30052,
+      "started": 1790485885.5905035,
+      "ended": 1790485886.7720585,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "formal-shape:a2c",
+      "pid": 3148,
+      "started": 1790486027.0923371,
+      "ended": 1790486030.2255862,
+      "closed": true,
+      "charged_upper_bound": 1024,
+      "committed": 1024
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 33772,
+      "started": 1790486211.568107,
+      "ended": 1790486213.4345791,
+      "closed": true,
+      "charged_upper_bound": 150,
+      "committed": 150
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 36692,
+      "started": 1790485858.8052921,
+      "ended": 1790485858.8223186,
+      "closed": true,
+      "charged_upper_bound": 0,
+      "committed": 0
+    },
+    {
+      "label": "pytest",
+      "pid": 36692,
+      "started": 1790485855.0424805,
+      "ended": 1790485880.546461,
+      "closed": true,
+      "charged_upper_bound": 2088,
+      "committed": 2088
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 36692,
+      "started": 1790485856.9041228,
+      "ended": 1790485858.7620015,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_w03_s1",
+      "pid": 37080,
+      "started": 1790485945.6239908,
+      "ended": 1790485946.782172,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:no_demo_s1",
+      "pid": 37080,
+      "started": 1790485939.6157506,
+      "ended": 1790485940.8852868,
+      "closed": true,
+      "charged_upper_bound": 247,
+      "committed": 247
+    },
+    {
+      "label": "worker:no_scenario_s1",
+      "pid": 37080,
+      "started": 1790485938.4522414,
+      "ended": 1790485939.5949032,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:a2c_s1",
+      "pid": 37080,
+      "started": 1790485933.2012606,
+      "ended": 1790485934.0989087,
+      "closed": true,
+      "charged_upper_bound": 193,
+      "committed": 193
+    },
+    {
+      "label": "worker:dual_attention_s1",
+      "pid": 37080,
+      "started": 1790485936.2575529,
+      "ended": 1790485937.3994865,
+      "closed": true,
+      "charged_upper_bound": 238,
+      "committed": 238
+    },
+    {
+      "label": "worker:hgnn_s1",
+      "pid": 37080,
+      "started": 1790485935.1171389,
+      "ended": 1790485936.2361057,
+      "closed": true,
+      "charged_upper_bound": 252,
+      "committed": 252
+    },
+    {
+      "label": "worker:impact_only_s1",
+      "pid": 37080,
+      "started": 1790485940.9049935,
+      "ended": 1790485942.0536702,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 37080,
+      "started": 1790485930.0923772,
+      "ended": 1790485931.2538369,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_h1_s1",
+      "pid": 37080,
+      "started": 1790485946.8049114,
+      "ended": 1790485947.967152,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "smoke:parent",
+      "pid": 37080,
+      "started": 1790485881.1181006,
+      "ended": 1790486107.333575,
+      "closed": true,
+      "charged_upper_bound": 8011,
+      "committed": 8011
+    },
+    {
+      "label": "worker:dqn_s1",
+      "pid": 37080,
+      "started": 1790485931.27899,
+      "ended": 1790485932.2200685,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:no_graph_s1",
+      "pid": 37080,
+      "started": 1790485937.418983,
+      "ended": 1790485938.4297915,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:ddqn_s1",
+      "pid": 37080,
+      "started": 1790485932.2440634,
+      "ended": 1790485933.1814346,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_k1_s1",
+      "pid": 37080,
+      "started": 1790485942.0743895,
+      "ended": 1790485943.2344313,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_w003_s1",
+      "pid": 37080,
+      "started": 1790485944.4358802,
+      "ended": 1790485945.6009283,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:ppo_s1",
+      "pid": 37080,
+      "started": 1790485934.1199436,
+      "ended": 1790485935.0970085,
+      "closed": true,
+      "charged_upper_bound": 210,
+      "committed": 210
+    },
+    {
+      "label": "worker:sensitivity_k4_s1",
+      "pid": 37080,
+      "started": 1790485943.2559524,
+      "ended": 1790485944.4143035,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_h4_s1",
+      "pid": 37080,
+      "started": 1790485947.9923732,
+      "ended": 1790485949.1711853,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_w003_s1",
+      "pid": 38304,
+      "started": 1790485885.4000778,
+      "ended": 1790485886.7256343,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:hgnn_s1",
+      "pid": 38304,
+      "started": 1790485882.8437293,
+      "ended": 1790485885.3529353,
+      "closed": true,
+      "charged_upper_bound": 252,
+      "committed": 252
+    },
+    {
+      "label": "fault-injection:terminated-child",
+      "pid": 38532,
+      "started": 1790486217.2469852,
+      "ended": null,
+      "closed": false,
+      "charged_upper_bound": 128,
+      "committed": 0
+    },
+    {
+      "label": "fault-injection:terminated-child",
+      "pid": 3904,
+      "started": 1790485868.94505,
+      "ended": null,
+      "closed": false,
+      "charged_upper_bound": 128,
+      "committed": 0
+    },
+    {
+      "label": "formal-shape:no_demo",
+      "pid": 40632,
+      "started": 1790486078.7838533,
+      "ended": 1790486089.5349958,
+      "closed": true,
+      "charged_upper_bound": 1252,
+      "committed": 1252
+    },
+    {
+      "label": "formal-shape:no_graph",
+      "pid": 41332,
+      "started": 1790486054.425221,
+      "ended": 1790486064.8134365,
+      "closed": true,
+      "charged_upper_bound": 1252,
+      "committed": 1252
+    },
+    {
+      "label": "worker:dqn_s1",
+      "pid": 42008,
+      "started": 1790485860.69467,
+      "ended": 1790485861.732586,
+      "closed": true,
+      "charged_upper_bound": 0,
+      "committed": 0
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 42788,
+      "started": 1790486206.5242267,
+      "ended": 1790486206.541219,
+      "closed": true,
+      "charged_upper_bound": 0,
+      "committed": 0
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 42788,
+      "started": 1790486204.4872394,
+      "ended": 1790486206.4818773,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "pytest",
+      "pid": 42788,
+      "started": 1790486202.6487107,
+      "ended": 1790486232.6048326,
+      "closed": true,
+      "charged_upper_bound": 2088,
+      "committed": 2088
+    },
+    {
+      "label": "worker:full_s1",
+      "pid": 44712,
+      "started": 1790485860.694101,
+      "ended": 1790485861.9194503,
+      "closed": true,
+      "charged_upper_bound": 32,
+      "committed": 32
+    },
+    {
+      "label": "formal-shape:ppo",
+      "pid": 45456,
+      "started": 1790486031.7866964,
+      "ended": 1790486035.4985926,
+      "closed": true,
+      "charged_upper_bound": 1024,
+      "committed": 1024
+    },
+    {
+      "label": "formal-shape:ddqn",
+      "pid": 45724,
+      "started": 1790485996.6996412,
+      "ended": 1790486025.4321065,
+      "closed": true,
+      "charged_upper_bound": 1024,
+      "committed": 1024
+    },
+    {
+      "label": "formal-shape:hgnn",
+      "pid": 46972,
+      "started": 1790486037.0716386,
+      "ended": 1790486043.5337653,
+      "closed": true,
+      "charged_upper_bound": 1024,
+      "committed": 1024
+    },
+    {
+      "label": "worker:ppo_s1",
+      "pid": 9056,
+      "started": 1790485882.83503,
+      "ended": 1790485885.168215,
+      "closed": true,
+      "charged_upper_bound": 210,
+      "committed": 210
+    },
+    {
+      "label": "worker:no_demo_s1",
+      "pid": 9056,
+      "started": 1790485885.2598193,
+      "ended": 1790485886.7527483,
+      "closed": true,
+      "charged_upper_bound": 247,
+      "committed": 247
+    },
+    {
+      "label": "formal-shape:dual_attention",
+      "pid": 9176,
+      "started": 1790486045.0684521,
+      "ended": 1790486052.8732545,
+      "closed": true,
+      "charged_upper_bound": 1024,
+      "committed": 1024
+    },
+    {
+      "label": "worker:dqn_s1",
+      "pid": 9556,
+      "started": 1790485882.8106966,
+      "ended": 1790485885.259795,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    },
+    {
+      "label": "worker:sensitivity_k1_s1",
+      "pid": 9556,
+      "started": 1790485885.326904,
+      "ended": 1790485886.5725174,
+      "closed": true,
+      "charged_upper_bound": 182,
+      "committed": 182
+    }
+  ]
+}

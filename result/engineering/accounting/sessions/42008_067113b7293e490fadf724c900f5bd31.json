@@ -1,0 +1,9 @@
+{
+  "label": "worker:dqn_s1",
+  "pid": 42008,
+  "started": 1790485860.69467,
+  "ended": 1790485861.732586,
+  "closed": true,
+  "charged_upper_bound": 0,
+  "committed": 0
+}

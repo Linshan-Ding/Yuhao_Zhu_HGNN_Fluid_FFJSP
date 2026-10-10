@@ -1,0 +1,38 @@
+{
+  "inputs": {
+    "main.csv": "55bb608f61827a99935ed8ca0022dd9f7df85610a1c62ff056a1b38b25e85612",
+    "small.csv": "571f631cca95dbaedee86ee7ee60234ac78a637b26491f9f1b435cf35fcad0a2",
+    "long_stream.csv": "74a1ae3260568ba3cf5afb69b26c825d30f6485da0db5d438437464e1e4e12ba",
+    "large_shop.csv": "6dddab5e646f8b97e3a45eadfa91e806c745b7e7b13a5efa51b2ec00225fd0b2",
+    "main_100000.csv": "934ef780d0900599b99960b5d64cd7b2045292e2002f06b9033bff7da3d61592",
+    "main_300000.csv": "3d52d8389acd251175d8659f6a641fd47621b80fde1e9a280de26b8728d0ad5a",
+    "main_500000.csv": "72b3b6d408e403416645b07768148cdafb91c3c34062a5bfe35aee39e8baf674",
+    "main_best.csv": "a706a9c6f8e8bc387002e09e1ec73df229faec1503203d35aceac97636b20681",
+    "initialization.csv": "6f2b74801adac678ebb1b483643f2f6a990f65197bdd8de6b80b95168f24d300",
+    "sensitivity.csv": "1f5fdd2812de3b793ed4f408f047aef3d107cca38b01c4b756658a3b1ccda990",
+    "exact.csv": "e8949eddd4977c1fc55234a44f9eda8b9f060809ce88d5ecfdf1a0bc12ca2bec",
+    "latency.csv": "fb2bc3d93eac48e5e1f7ece4fb9f1c10cfa27ce537ddac3d867c8337028ced14"
+  },
+  "outputs": {
+    "behavior.csv": "31fcc0259256c6e79e6b23ee2004235db7d55a83dc29adc92b061f6102214e89",
+    "case_effects.csv": "a86e78aea10dbba11e47511dc181d72668803eae33f2add76472b467578ebafe",
+    "costs.csv": "1b7ff4bc5b22bb8fe5434aea7b0d87b0f86bfaf29f434e6b5d6c5059294ab763",
+    "effects.csv": "8aa9fda37c6ed2560fdde6c1ef9b9234e643e0fa1844fb69b79b605f6da4aa2a",
+    "evaluation_lookups.csv": "73a0ca19044a93c076896c368ca10336b0ebe3cf356f259bcaecff6033c1d294",
+    "exact_schedule.csv": "1d3e6b4359f8ff075a1bb682173f5907a2f5adbd99320a1fc762502fb826b88b",
+    "learning_curves.csv": "cad568868a1efff4081b355dea123bb9eb674d9d92126b08d4557c3cc4b408ca",
+    "offline_gaps.csv": "164a85f4fec5ae711f84023ac4ad2ff9e2a08f847717b7345fbb52b51b391d44",
+    "per_case.csv": "ba460d230de40e7b1506907abb4b69f2b103c30e3a1722075edd4beb4216dd11",
+    "per_seed.csv": "599bd5a373a89c7112c42c918bb0b2f97987e1da44215f83a6630666945853e9",
+    "preference_diagnostics.csv": "84f43d9f2394e08c375fe32871b27cc6c94e50af2fce0b04b422d40d7a15602e",
+    "run_manifest.csv": "37f57c1d2d0aa58235b47cd846fd792287cdd5601b1f6cf3d13bf290851c1102",
+    "summary.csv": "bb1d1c8f4156dc5f99b7ca5759544d737d0691d5b9f773aaa8789418eb72f4d8",
+    "tests.csv": "74ba7872d1ee17071a7bb467eb9dc94c835c513cbf517ef353a5d1effaae6a7e",
+    "trace_audit.csv": "760ff3b308a26b9155e4a9aeebce42521cfd9d32d66756cac79792cd3f14f2f8"
+  },
+  "seed": 5691001,
+  "bootstrap": "resample whole training-seed vectors; no resampling of fixed cases",
+  "comparison": "conditional component effects; no factorial interaction",
+  "primary": "seed-vector bootstrap intervals and paired per-cell effects",
+  "secondary": "unadjusted paired Wilcoxon p-values in tests.csv"
+}

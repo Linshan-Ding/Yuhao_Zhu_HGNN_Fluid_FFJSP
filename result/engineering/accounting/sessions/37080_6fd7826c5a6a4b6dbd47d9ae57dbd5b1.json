@@ -1,0 +1,9 @@
+{
+  "label": "smoke:parent",
+  "pid": 37080,
+  "started": 1790485881.1181006,
+  "ended": 1790486107.333575,
+  "closed": true,
+  "charged_upper_bound": 8011,
+  "committed": 8011
+}

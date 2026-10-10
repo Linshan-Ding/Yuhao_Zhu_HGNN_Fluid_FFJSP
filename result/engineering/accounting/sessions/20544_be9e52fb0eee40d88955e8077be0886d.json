@@ -1,0 +1,9 @@
+{
+  "label": "worker:a2c_s1",
+  "pid": 20544,
+  "started": 1790485882.8262782,
+  "ended": 1790485885.1244628,
+  "closed": true,
+  "charged_upper_bound": 193,
+  "committed": 193
+}

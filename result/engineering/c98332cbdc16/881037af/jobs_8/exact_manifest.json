@@ -1,0 +1,9 @@
+{
+  "cases": {
+    "case_d6c513f5d8a22692.json": "474d0844ee0a201d928835e55fefee6be90660dba2cba2b30c26f8528cc9b31f"
+  },
+  "outputs": {
+    "exact.csv": "fd9892cf435cb9d4622b41d1ad77e5798b0ec2fcc74e8a3783aaaea42c7f0f2d",
+    "exact_schedule.csv": "5b8cb5cd2aa88a7aac32a1a31747da389504cbac7cf6812d652208bf42acfc70"
+  }
+}

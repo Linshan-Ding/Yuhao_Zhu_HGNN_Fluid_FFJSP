@@ -1,0 +1,31 @@
+demo epoch=1 loss=0.5531
+demo epoch=2 loss=0.1663
+demo epoch=3 loss=0.0903
+demo epoch=4 loss=0.0652
+demo epoch=5 loss=0.0586
+demo epoch=6 loss=0.0495
+demo epoch=7 loss=0.0425
+demo epoch=8 loss=0.0478
+demo epoch=9 loss=0.0420
+demo epoch=10 loss=0.0326
+[no_scenario s4] 11024/1000000 eta=0.8426 labels=0 real=1024 branch=0
+[no_scenario s4] 61200/1000000 eta=0.8472 labels=0 real=51200 branch=0
+[no_scenario s4] 100000/1000000 eta=0.8356 labels=0 real=90000 branch=0
+[no_scenario s4] 150176/1000000 eta=0.8426 labels=0 real=140176 branch=0
+[no_scenario s4] 200352/1000000 eta=0.8403 labels=0 real=190352 branch=0
+[no_scenario s4] 250528/1000000 eta=0.8426 labels=0 real=240528 branch=0
+[no_scenario s4] 300000/1000000 eta=0.8472 labels=0 real=290000 branch=0
+[no_scenario s4] 350176/1000000 eta=0.8449 labels=0 real=340176 branch=0
+[no_scenario s4] 400352/1000000 eta=0.8380 labels=0 real=390352 branch=0
+[no_scenario s4] 450528/1000000 eta=0.8333 labels=0 real=440528 branch=0
+[no_scenario s4] 500000/1000000 eta=0.8449 labels=0 real=490000 branch=0
+[no_scenario s4] 550176/1000000 eta=0.8426 labels=0 real=540176 branch=0
+[no_scenario s4] 600352/1000000 eta=0.8403 labels=0 real=590352 branch=0
+[no_scenario s4] 650528/1000000 eta=0.8426 labels=0 real=640528 branch=0
+[no_scenario s4] 700704/1000000 eta=0.7778 labels=0 real=690704 branch=0
+[no_scenario s4] 750880/1000000 eta=0.8426 labels=0 real=740880 branch=0
+[no_scenario s4] 801056/1000000 eta=0.8333 labels=0 real=791056 branch=0
+[no_scenario s4] 851232/1000000 eta=0.8380 labels=0 real=841232 branch=0
+[no_scenario s4] 901408/1000000 eta=0.8426 labels=0 real=891408 branch=0
+[no_scenario s4] 951584/1000000 eta=0.8380 labels=0 real=941584 branch=0
+[no_scenario s4] 1000000/1000000 eta=0.8403 labels=0 real=990000 branch=0

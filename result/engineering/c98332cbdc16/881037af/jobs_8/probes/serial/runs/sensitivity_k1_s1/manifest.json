@@ -1,0 +1,275 @@
+{
+  "format": "run-1",
+  "source_hash": "95fcbb0ac457f5c4f30a6176cd0fdfeffaa72142f1ec83d49a35d16141bbb07d",
+  "identity": "6fb54b3e52e56e4a66301ec5bc9e6ad2e1281715fd137228ba07e03a17920174",
+  "seed": 1,
+  "config": {
+    "schema_version": "schedule-data-1",
+    "purpose": "engineering-smoke",
+    "network": {
+      "width": 16,
+      "layers": 1,
+      "action_layers": 1,
+      "candidate_chunk": 16,
+      "path_capacity": true,
+      "path_delivery": true
+    },
+    "environment": {
+      "wait_interval": 0.0,
+      "max_steps": 20000,
+      "exposure": "hopeful_first",
+      "exposure_threshold": 1.5
+    },
+    "data": {
+      "products": 3,
+      "stages": 3,
+      "machines_per_stage": 2,
+      "orders": [
+        6,
+        8
+      ],
+      "processing": [
+        4,
+        30
+      ],
+      "due_factor": [
+        1.5,
+        3.0
+      ],
+      "due_jitter": [
+        0.9,
+        1.1
+      ],
+      "eligibility_probability": 0.8,
+      "max_attempts": 1000,
+      "regimes": [
+        {
+          "name": "frequent_overload",
+          "weight": 0.5,
+          "iota": [
+            1.0,
+            3.0
+          ],
+          "rho": [
+            1.0,
+            1.8
+          ],
+          "upper_open": false
+        },
+        {
+          "name": "frequent_underload",
+          "weight": 0.25,
+          "iota": [
+            1.0,
+            3.0
+          ],
+          "rho": [
+            0.3,
+            1.0
+          ],
+          "upper_open": true
+        },
+        {
+          "name": "infrequent_underload",
+          "weight": 0.25,
+          "iota": [
+            0.4,
+            1.0
+          ],
+          "rho": [
+            0.3,
+            1.0
+          ],
+          "upper_open": true
+        }
+      ],
+      "grid_iota": [
+        0.6,
+        1.5,
+        2.5
+      ],
+      "grid_due": [
+        1.5,
+        3.0
+      ],
+      "fixed_rho": [
+        0.3,
+        1.8
+      ]
+    },
+    "training": {
+      "environments": 2,
+      "learning_rate": 0.0001,
+      "rollout_steps": 32,
+      "minibatch": 16,
+      "epochs": 1,
+      "clip": 0.2,
+      "gamma": 1.0,
+      "gae_lambda": 0.95,
+      "entropy": 0.01,
+      "value_weight": 0.5,
+      "max_grad_norm": 0.5,
+      "target_kl": 0.03,
+      "evaluate_every": 128,
+      "milestones": [
+        64,
+        128
+      ]
+    },
+    "scenario": {
+      "count": 1,
+      "interval": 32,
+      "warmup_real_steps": 16,
+      "horizon_routes": 2.0,
+      "max_branch_steps": 5000,
+      "auxiliary_weight": 0.1,
+      "prior_count": 3.0,
+      "budget_fraction": 0.2,
+      "replay_size": 4096,
+      "replay_batches": 4,
+      "replay_batch": 4,
+      "versions": 2,
+      "frozen_interval": 256,
+      "reliability_floor": 0.01,
+      "max_preference": 2.0,
+      "kl": 0.01,
+      "minimum_query_cost": 64,
+      "reservation_floor": 4096,
+      "reservation_multiplier": 2,
+      "wait_probe_interval": 4
+    },
+    "runtime": {
+      "device": "cpu",
+      "jobs": 8,
+      "threads": 1
+    },
+    "method": "full",
+    "teacher": "SPT",
+    "demonstration": {
+      "steps": 32,
+      "epochs": 2,
+      "minibatch": 16,
+      "learning_rate": 0.001,
+      "max_grad_norm": 0.5
+    },
+    "classic": {
+      "width": 32,
+      "replay_size": 512,
+      "batch": 8,
+      "start": 16,
+      "train_every": 4,
+      "target_every": 1000,
+      "epsilon_steps": 50000,
+      "epsilon_final": 0.05,
+      "a2c_rollout": 32,
+      "learning_rates": {
+        "dqn": 0.0003,
+        "ddqn": 0.0003,
+        "a2c": 0.0003,
+        "ppo": 0.0001
+      }
+    },
+    "experiment": {
+      "seeds": [
+        1
+      ],
+      "budget": 128,
+      "sensitivity_seeds": [
+        1
+      ],
+      "sensitivity_budget": 128,
+      "total_budget": 64000000,
+      "sensitivity_changes": {
+        "k1": {
+          "count": 1
+        },
+        "k4": {
+          "count": 4
+        },
+        "w003": {
+          "auxiliary_weight": 0.03
+        },
+        "w03": {
+          "auxiliary_weight": 0.3
+        },
+        "h1": {
+          "horizon_routes": 1.0
+        },
+        "h4": {
+          "horizon_routes": 4.0
+        }
+      },
+      "exact": {
+        "wall_seconds": 2,
+        "deterministic_seconds": 1,
+        "workers": 1
+      },
+      "evaluate_milestones_from": 64,
+      "bootstrap_repeats": 2000,
+      "statistics_seed": 5691001,
+      "latency_warmup": 1,
+      "latency_repeats": 2
+    },
+    "benchmark": {
+      "seeds": {
+        "validation": 1711001,
+        "standard": 1944001,
+        "large5": 2166001,
+        "large7": 2166002
+      },
+      "validation_orders": [
+        72
+      ],
+      "main_orders": [
+        48,
+        96
+      ],
+      "small_orders": [
+        12,
+        24
+      ],
+      "long_stream_orders": [
+        128,
+        192
+      ],
+      "large_designs": [
+        {
+          "family": "large5",
+          "products": 6,
+          "stages": 5,
+          "machines_per_stage": 3,
+          "orders": 128
+        },
+        {
+          "family": "large7",
+          "products": 6,
+          "stages": 7,
+          "machines_per_stage": 3,
+          "orders": 192
+        }
+      ],
+      "large_iota": [
+        1.5,
+        2.5
+      ]
+    },
+    "recording": {
+      "chunk_rows": 1024,
+      "minimum_free_gb": 5.0,
+      "preflight_headroom": 2.0,
+      "keep_recovery_copies": 2,
+      "phase_startup_fraction": 0.2
+    },
+    "smoke": {
+      "budget": 128,
+      "scenario_probe_budget": 4096,
+      "probe_due_factor": [
+        1.0,
+        1.3
+      ]
+    }
+  },
+  "archive_sha256": "02c9d067e0097bcc1f3cca0961afeedebfc412123d9dab9a62ea416a97097c58",
+  "torch": "2.14.0+cpu",
+  "numpy": "2.5.3"
+}

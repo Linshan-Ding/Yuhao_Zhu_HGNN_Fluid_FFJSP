@@ -1,0 +1,19 @@
+{
+  "python": "3.13.5",
+  "executable": "D:\\Python project\\Yuhao_Zhu_HGNN_Fluid_FFJSP\\.venv\\Scripts\\python.exe",
+  "os": "Windows-11-10.0.26200-SP0",
+  "cpu": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+  "logical_cpus": 20,
+  "torch_threads": 1,
+  "cuda": false,
+  "packages": {
+    "torch": "2.14.0",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "PyYAML": "6.0.3",
+    "matplotlib": "3.11.2",
+    "ortools": "9.15.6755",
+    "pytest": "9.1.1"
+  },
+  "git_commit": "ffc5fab01ace051218efa5a618faba4764c5419c"
+}

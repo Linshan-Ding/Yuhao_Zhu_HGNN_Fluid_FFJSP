@@ -1,0 +1,20 @@
+{
+  "files": {
+    "checkpoint_128.pt": "4cdf1b3b20d9ab8cf9c2d297bc13a0adfbeb07deb422ea50ddcf1a486e9c4bea",
+    "checkpoint_64.pt": "83ed266cb32733d33693522a3d15698a38d8a5c7c645c62b2576f273fbc5b967",
+    "checkpoint_best.pt": "3dfde92b1d3d8f50e75224f1f97b96c713990ede75ca25f60fa26ddb16801f33",
+    "checkpoint_initialization.pt": "dfd8bf7921ae91ccbb980a12aceed8909a5bbfbc64d1945a013decb44c54bd03",
+    "checkpoint_last.pt": "e0c6b57fa0c66c616b85f73d169228e3a977658379db2383b0a94130ec4cdb10",
+    "checkpoint_previous.pt": "ad0a9489af410fe408c7e21a808d03b73eeb46de0230a1956f9503d4f6652452",
+    "monitor_128.json": "417b2f3f4e7c844e9c5498023753e7f24ff3e981629f161f630c21438bdfb30e",
+    "monitor_64.json": "aec8cf2e2f8318f2f79958c6fadb73257e823493b52d14c3f78b131ca9b6a1ad",
+    "budget.json": "628867904c6b967fc050e5e6873a368019fd0afe219cd5ce0093c5145dca2cb0",
+    "config.yaml": "5850e442059185f99508056bbfbddaf0df4ba5cf9eca9645a64eac1db031630a",
+    "manifest.json": "6d440a087f6e42e5df0bdc4e23780972a8ba0732366f5e79ec48646c859958a4",
+    "source.zip": "b164fadbd7f848ee1f1e79852e7aed376343906d56a586a2851afd8f3f6f6ab1",
+    "raw/manifest.json": "2a900bc4769590be7be412c3e7dde60b2efb4ec4e786274495b8ea4742d7c97f",
+    "log.jsonl": "6808efccb8c9cd7b6accd002f1c403c519aa2723e3126aeb6f3edd82291b110a",
+    "demonstrations.pt": "b6d2ad73e6bffc9dca5b45437a9892d486ee1160f53db31f36d7a92e39d4352e",
+    "initialization_evaluation.json": "247adfd549b0afcea91e95b96b27f1ec9b6be665c06df91a2fc64781bea25207"
+  }
+}

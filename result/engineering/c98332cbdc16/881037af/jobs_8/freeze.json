@@ -1,0 +1,143 @@
+{
+  "format": "study-freeze-2",
+  "training_source": "95fcbb0ac457f5c4f30a6176cd0fdfeffaa72142f1ec83d49a35d16141bbb07d",
+  "jobs": [
+    {
+      "name": "full_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 128,
+      "group": "main",
+      "config_identity": "30fc5f85ab63ebac5bcc61bf3717235eb5a13af78e811f875c6cab931d0fb887"
+    },
+    {
+      "name": "dqn_s1",
+      "method": "dqn",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "e89bf4a11224f42e4bdbe6ad74140d426fde2329ceaa24a547d92b1cc2a725f0"
+    },
+    {
+      "name": "ddqn_s1",
+      "method": "ddqn",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "6611aa6907c121fb0d401468ccb0b4ab612a31bf2c9e924be8b0ec2cf2d37c40"
+    },
+    {
+      "name": "a2c_s1",
+      "method": "a2c",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "74a826b4d63d3b5fbe49070334f7169f8e79e8aec046cb97fa27b374e2e16434"
+    },
+    {
+      "name": "ppo_s1",
+      "method": "ppo",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "03457b24ae5c3f1bb265ffee7b06f3b0e350d874e02018a16da652c4e43373ee"
+    },
+    {
+      "name": "hgnn_s1",
+      "method": "hgnn",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "ae15a53d8519cc14ffbc30d2b81ac0a40c29c56d5ccebba92ef9c56529ccce65"
+    },
+    {
+      "name": "dual_attention_s1",
+      "method": "dual_attention",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "d8284570638ac0d0c4a475e8ebc1585f9c7dac4a87c6c7c8d5e7c4e3b5e6b685"
+    },
+    {
+      "name": "no_graph_s1",
+      "method": "no_graph",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "28935b60c0a933726dcca7e8c113b72a347bf41f3c76b3adcb94bfa79f100650"
+    },
+    {
+      "name": "no_scenario_s1",
+      "method": "no_scenario",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "9716caad74d28ae8951b1a3f9a010f8154405761174dc823aaaa70e1d24f721c"
+    },
+    {
+      "name": "no_demo_s1",
+      "method": "no_demo",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "072cfcea380cd5b56dca44ca4aa73d539473baa5bd23083bac93452a03314f5a"
+    },
+    {
+      "name": "impact_only_s1",
+      "method": "impact_only",
+      "seed": 1,
+      "budget": 128,
+      "group": "comparators",
+      "config_identity": "4d9749703c735f2f9c2ab45dca0c65a6726c709457236788ad400b996a5ec146"
+    },
+    {
+      "name": "sensitivity_k1_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 128,
+      "group": "sensitivity",
+      "config_identity": "6fb54b3e52e56e4a66301ec5bc9e6ad2e1281715fd137228ba07e03a17920174"
+    },
+    {
+      "name": "sensitivity_k4_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 128,
+      "group": "sensitivity",
+      "config_identity": "67b9bf7457db4f09826545a218249b6c0da09006ba9f07f46f18b55744984141"
+    },
+    {
+      "name": "sensitivity_w003_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 128,
+      "group": "sensitivity",
+      "config_identity": "eae4139daf7ab1ac80ac238aaf5000ae978c777c91093fe155c36de7eab075ed"
+    },
+    {
+      "name": "sensitivity_w03_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 128,
+      "group": "sensitivity",
+      "config_identity": "c6bcb8146bce7e66a22a127fe8e8cd9ed0a17d9094cff3103c4dc7c5fe2b2298"
+    },
+    {
+      "name": "sensitivity_h1_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 128,
+      "group": "sensitivity",
+      "config_identity": "cf7e15a846cc7ff0d7d0448493ba59d28c97406b4af6f32eadb28cf50bcca307"
+    },
+    {
+      "name": "sensitivity_h4_s1",
+      "method": "full",
+      "seed": 1,
+      "budget": 128,
+      "group": "sensitivity",
+      "config_identity": "7d6795f2f7d37a040390eeebfdf5bcd39718b8accc0fd999a3a5ef3fc3caecf9"
+    }
+  ],
+  "data": "57f5262a5a455f4571b0e2ca947927e0b87a1ffa9c400af1a76c8dda8af3aa85"
+}

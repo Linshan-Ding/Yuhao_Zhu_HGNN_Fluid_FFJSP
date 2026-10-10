@@ -1,0 +1,517 @@
+{
+  "planned": 64000000,
+  "charged": 64000000,
+  "jobs": [
+    {
+      "run": "full_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "full_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "full_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "full_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "full_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dqn_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dqn_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dqn_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dqn_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dqn_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ddqn_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ddqn_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ddqn_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ddqn_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ddqn_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "a2c_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "a2c_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "a2c_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "a2c_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "a2c_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ppo_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ppo_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ppo_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ppo_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "ppo_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "hgnn_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "hgnn_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "hgnn_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "hgnn_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "hgnn_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dual_attention_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dual_attention_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dual_attention_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dual_attention_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "dual_attention_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_graph_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_graph_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_graph_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_graph_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_graph_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_scenario_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_scenario_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_scenario_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_scenario_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_scenario_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_demo_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_demo_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_demo_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_demo_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "no_demo_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "impact_only_s1",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "impact_only_s2",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "impact_only_s3",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "impact_only_s4",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "impact_only_s5",
+      "budget": 1000000,
+      "charged": 1000000,
+      "committed": 1000000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k1_s1",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k1_s2",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k1_s3",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k4_s1",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k4_s2",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_k4_s3",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w003_s1",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w003_s2",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w003_s3",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w03_s1",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w03_s2",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_w03_s3",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h1_s1",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h1_s2",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h1_s3",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h4_s1",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h4_s2",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    },
+    {
+      "run": "sensitivity_h4_s3",
+      "budget": 500000,
+      "charged": 500000,
+      "committed": 500000,
+      "status": "complete"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "jobs": 1,
+  "available_bytes": 18168635392,
+  "required_bytes": 11408075776,
+  "per_worker_bytes": 7113108480,
+  "recommended_jobs": 1
+}

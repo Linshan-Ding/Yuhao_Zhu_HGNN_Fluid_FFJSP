@@ -1,0 +1,259 @@
+{
+  "identity": "a13745bca25926aca6bbc01eccf8a248f9db8e50185d4dc97ad7703de5644a01",
+  "instance_id": "case_b7a65f9b52be476e",
+  "status": "OPTIMAL",
+  "eta": 0.8333333333333334,
+  "upper": 0.8333333333333334,
+  "seconds": 0.02189679996808991,
+  "assignment": [
+    {
+      "order": 0,
+      "stage": 0,
+      "machine": 0,
+      "start": 0.0,
+      "end": 6.0
+    },
+    {
+      "order": 0,
+      "stage": 1,
+      "machine": 2,
+      "start": 6.0,
+      "end": 31.0
+    },
+    {
+      "order": 1,
+      "stage": 0,
+      "machine": 0,
+      "start": 30.271429061031537,
+      "end": 36.27142906103154
+    },
+    {
+      "order": 0,
+      "stage": 2,
+      "machine": 5,
+      "start": 31.0,
+      "end": 54.0
+    },
+    {
+      "order": 2,
+      "stage": 0,
+      "machine": 1,
+      "start": 32.74156934572981,
+      "end": 52.74156934572981
+    },
+    {
+      "order": 1,
+      "stage": 1,
+      "machine": 2,
+      "start": 36.27142906103154,
+      "end": 61.27142906103154
+    },
+    {
+      "order": 3,
+      "stage": 0,
+      "machine": 0,
+      "start": 48.67111160651664,
+      "end": 54.67111160651664
+    },
+    {
+      "order": 2,
+      "stage": 1,
+      "machine": 3,
+      "start": 52.74156934572981,
+      "end": 71.7415693457298
+    },
+    {
+      "order": 1,
+      "stage": 2,
+      "machine": 5,
+      "start": 61.27142906103154,
+      "end": 84.27142906103154
+    },
+    {
+      "order": 3,
+      "stage": 1,
+      "machine": 2,
+      "start": 61.27142906103154,
+      "end": 86.27142906103154
+    },
+    {
+      "order": 4,
+      "stage": 0,
+      "machine": 1,
+      "start": 64.41485252684176,
+      "end": 88.41485252684176
+    },
+    {
+      "order": 2,
+      "stage": 2,
+      "machine": 5,
+      "start": 84.27142906103154,
+      "end": 105.27142906103154
+    },
+    {
+      "order": 3,
+      "stage": 2,
+      "machine": 4,
+      "start": 86.27142906103154,
+      "end": 111.27142906103154
+    },
+    {
+      "order": 4,
+      "stage": 1,
+      "machine": 2,
+      "start": 88.41485252684176,
+      "end": 114.41485252684176
+    },
+    {
+      "order": 5,
+      "stage": 0,
+      "machine": 0,
+      "start": 93.75115268305116,
+      "end": 111.75115268305116
+    },
+    {
+      "order": 6,
+      "stage": 0,
+      "machine": 1,
+      "start": 102.87168626094565,
+      "end": 122.87168626094565
+    },
+    {
+      "order": 5,
+      "stage": 1,
+      "machine": 3,
+      "start": 111.75115268305116,
+      "end": 141.75115268305115
+    },
+    {
+      "order": 4,
+      "stage": 2,
+      "machine": 4,
+      "start": 114.41485252684176,
+      "end": 137.41485252684174
+    },
+    {
+      "order": 7,
+      "stage": 0,
+      "machine": 0,
+      "start": 118.51546814275582,
+      "end": 124.51546814275582
+    },
+    {
+      "order": 10,
+      "stage": 0,
+      "machine": 1,
+      "start": 123.28906446723681,
+      "end": 143.2890644672368
+    },
+    {
+      "order": 7,
+      "stage": 1,
+      "machine": 2,
+      "start": 124.51546814275582,
+      "end": 149.51546814275582
+    },
+    {
+      "order": 5,
+      "stage": 2,
+      "machine": 4,
+      "start": 141.75115268305115,
+      "end": 164.75115268305115
+    },
+    {
+      "order": 6,
+      "stage": 1,
+      "machine": 3,
+      "start": 141.75115268305115,
+      "end": 160.75115268305115
+    },
+    {
+      "order": 11,
+      "stage": 0,
+      "machine": 1,
+      "start": 143.2890644672368,
+      "end": 163.2890644672368
+    },
+    {
+      "order": 7,
+      "stage": 2,
+      "machine": 5,
+      "start": 149.51546814275582,
+      "end": 172.51546814275582
+    },
+    {
+      "order": 10,
+      "stage": 1,
+      "machine": 2,
+      "start": 149.51546814275582,
+      "end": 173.51546814275582
+    },
+    {
+      "order": 6,
+      "stage": 2,
+      "machine": 5,
+      "start": 172.51546814275582,
+      "end": 193.51546814275582
+    },
+    {
+      "order": 10,
+      "stage": 2,
+      "machine": 4,
+      "start": 173.51546814275582,
+      "end": 192.51546814275582
+    },
+    {
+      "order": 11,
+      "stage": 1,
+      "machine": 2,
+      "start": 173.51546814275582,
+      "end": 197.51546814275582
+    },
+    {
+      "order": 11,
+      "stage": 2,
+      "machine": 4,
+      "start": 197.51546814275582,
+      "end": 216.51546814275582
+    }
+  ],
+  "replay": {
+    "eta_solver": 0.8333333333333334,
+    "eta_replay": 0.8333333333333334,
+    "n_orders_checked": 10,
+    "replay_scope": "physical_schedule_not_online_policy_reachability",
+    "eta_env": 0.8333333333333334,
+    "match": true,
+    "n_issues": 0,
+    "issues": []
+  },
+  "parameters": {
+    "wall_seconds": 300,
+    "deterministic_seconds": 60,
+    "workers": 1
+  },
+  "replay_steps": 30,
+  "metadata": {
+    "response": "CpSolverResponse summary:\nstatus: OPTIMAL\nobjective: 10\nbest_bound: 10\nintegers: 85\nbooleans: 158\nconflicts: 13\nbranches: 479\npropagations: 2437\ninteger_propagations: 3208\nrestarts: 0\nlp_iterations: 13\nwalltime: 0.0201418\nusertime: 0.0201418\ndeterministic_time: 0.00200032\ngap_integral: 0\nsolution_fingerprint: 0x4d3a66c613a180eb\n",
+    "response_proto": "status: OPTIMAL\nsolution: 1\nsolution: 0\nsolution: 72\nsolution: 1\nsolution: 0\nsolution: 72\nsolution: 372\nsolution: 1\nsolution: 0\nsolution: 372\nsolution: 648\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 361\nsolution: 433\nsolution: 1\nsolution: 0\nsolution: 433\nsolution: 733\nsolution: 1\nsolution: 0\nsolution: 733\nsolution: 1009\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 392\nsolution: 632\nsolution: 1\nsolution: 632\nsolution: 860\nsolution: 0\nsolution: 1\nsolution: 1009\nsolution: 1261\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 582\nsolution: 654\nsolution: 1\nsolution: 0\nsolution: 733\nsolution: 1033\nsolution: 1\nsolution: 0\nsolution: 1033\nsolution: 1333\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 772\nsolution: 1060\nsolution: 0\nsolution: 1\nsolution: 1060\nsolution: 1372\nsolution: 1\nsolution: 0\nsolution: 1372\nsolution: 1648\nsolution: 1\nsolution: 1\nsolution: 1125\nsolution: 1341\nsolution: 1\nsolution: 0\nsolution: 1341\nsolution: 1701\nsolution: 0\nsolution: 1\nsolution: 1701\nsolution: 1977\nsolution: 1\nsolution: 1\nsolution: 1234\nsolution: 1474\nsolution: 1\nsolution: 1701\nsolution: 1929\nsolution: 0\nsolution: 1\nsolution: 2069\nsolution: 2321\nsolution: 0\nsolution: 1\nsolution: 1\nsolution: 1421\nsolution: 1493\nsolution: 1\nsolution: 0\nsolution: 1493\nsolution: 1793\nsolution: 1\nsolution: 0\nsolution: 1793\nsolution: 2069\nsolution: 0\nsolution: 1\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 0\nsolution: 1\nsolution: 1478\nsolution: 1718\nsolution: 1\nsolution: 1793\nsolution: 2081\nsolution: 1\nsolution: 0\nsolution: 2081\nsolution: 2309\nsolution: 1\nsolution: 0\nsolution: 1\nsolution: 1718\nsolution: 1958\nsolution: 1\nsolution: 2081\nsolution: 2369\nsolution: 1\nsolution: 0\nsolution: 2369\nsolution: 2597\nsolution: 1\nsolution: 0\nobjective_value: 10\nbest_objective_bound: 10\nnum_booleans: 158\nnum_conflicts: 13\nnum_branches: 479\nnum_binary_propagations: 2437\nnum_integer_propagations: 3208\nwall_time: 0.0201418\nuser_time: 0.0201418\ndeterministic_time: 0.0020003218000000178\nsolution_info: \"main\"\nnum_lp_iterations: 13\ninner_objective_lower_bound: -10\nnum_integers: 85\nnum_fixed_booleans: 81",
+    "parameters": "max_time_in_seconds: 300\nmax_deterministic_time: 60\nnum_workers: 1",
+    "time_scale": {
+      "K": 12,
+      "fractions": [
+        0.0,
+        0.27142906103153663,
+        0.28906446723681256,
+        0.2906487522662502,
+        0.4148525268417558,
+        0.5154681427558216,
+        0.6711116065166394,
+        0.6984475280442553,
+        0.7415693457298076,
+        0.7511526830511599,
+        0.8716862609456513,
+        0.8916250112053632
+      ]
+    }
+  },
+  "interpretation": "clairvoyant offline reference; only OPTIMAL proves optimality"
+}

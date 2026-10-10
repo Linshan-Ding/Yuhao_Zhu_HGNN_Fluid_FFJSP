@@ -1,0 +1,13 @@
+identity,instance_id,status,eta,upper,seconds,replay_steps,interpretation
+ed40b71d0a2b962cd33033863e53ccef6536d187d73cf7a96aba042c6b0252cb,case_8caa76f3754eae6b,OPTIMAL,1.0,1.0,0.044874199957121164,36,clairvoyant offline reference; only OPTIMAL proves optimality
+2ddd31327a5ed3b78fc37ffd12689a523c9aaefeae8b7b3b29b44d0dd34b37b9,case_b16711242581d3dd,OPTIMAL,1.0,1.0,0.019941300037316978,36,clairvoyant offline reference; only OPTIMAL proves optimality
+7bbb3e1b974966b7c46ba90751b206aba4406c1662a1dda1bf98d8b4c22f8b55,case_66146f41aeadc908,OPTIMAL,0.9166666666666666,0.9166666666666666,0.02033189998473972,33,clairvoyant offline reference; only OPTIMAL proves optimality
+483d043f875fa4b68c40fbf14c740ef4bd630a1cffca0bd60a3d3f34ba7e1830,case_080700f73b31ce0d,OPTIMAL,1.0,1.0,0.01976029999786988,36,clairvoyant offline reference; only OPTIMAL proves optimality
+a13745bca25926aca6bbc01eccf8a248f9db8e50185d4dc97ad7703de5644a01,case_b7a65f9b52be476e,OPTIMAL,0.8333333333333334,0.8333333333333334,0.02189679996808991,30,clairvoyant offline reference; only OPTIMAL proves optimality
+ecab771040317ab819dd9a86c82dd5655cbbc8f028510b6db1c5aeb6c63aa848,case_04ac5d4006eda6bc,OPTIMAL,1.0,1.0,0.02002699999138713,36,clairvoyant offline reference; only OPTIMAL proves optimality
+792b7f8765501601855b27144e010181df5d8d9d0c2955e9535c4d70af04388e,case_a3a1670395234156,OPTIMAL,1.0,1.0,0.04147510003531352,72,clairvoyant offline reference; only OPTIMAL proves optimality
+9df74e25e54f3100c4abe2a62b678aac42f499fe1a55bbcdab3a81daf332b56f,case_6f963526aef5998b,OPTIMAL,1.0,1.0,0.041141900001093745,72,clairvoyant offline reference; only OPTIMAL proves optimality
+8f4c500e1879a6aaea30cca9a1658e22ecd8849dc0a5f1407be5bdb1b07b956f,case_a2ca14f1d964abac,OPTIMAL,0.9166666666666666,0.9166666666666666,0.04432100005215034,66,clairvoyant offline reference; only OPTIMAL proves optimality
+0426ce7d200893de88c869ede9c49621dc004442745d6c738c1253a2eff7d3b8,case_87538cf61900cd89,OPTIMAL,1.0,1.0,0.04134739999426529,72,clairvoyant offline reference; only OPTIMAL proves optimality
+4f6afb212699e20545d7447f579ec082a3fdb6cf716c1650c9dcd36e7a3e71ac,case_a9dbf02963d4b739,OPTIMAL,0.875,0.875,0.05402690003393218,63,clairvoyant offline reference; only OPTIMAL proves optimality
+d23672f1227adf0ac0b151c7870d9d66d893332c931553b80a08a6906a714c52,case_f4a1533a72cc71fd,OPTIMAL,1.0,1.0,0.04228909994708374,72,clairvoyant offline reference; only OPTIMAL proves optimality

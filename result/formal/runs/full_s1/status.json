@@ -1,0 +1,15 @@
+{
+  "status": "complete",
+  "steps": 1000000,
+  "real": 790163,
+  "scenario": 199837,
+  "demonstration": 10000,
+  "lost": 0,
+  "run": "full_s1",
+  "seconds": 3793.6381075999816,
+  "reused": false,
+  "pid": 29128,
+  "started": 1790486309.4019682,
+  "ended": 1790490103.0419853,
+  "threads": 1
+}
