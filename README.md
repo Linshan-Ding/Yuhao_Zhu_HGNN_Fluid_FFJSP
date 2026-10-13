@@ -163,4 +163,4 @@ PyCharm 中选择相同解释器、对应脚本及仓库根目录作为工作目
 
 主证据为整体重采样训练种子向量得到的自助 95% 区间和逐算例配对效应。配对 Wilcoxon 原始 p 值仅作附录参考，不做多重比较校正。每个参数组合只有一个固定实例，不能将固定网格均值解释为该参数下随机实例总体的期望。负结果完整保留，导出不要求主方法胜出。
 
-进一步阅读：[实验规格](docs/experiment-spec.md) · [数据字典](docs/data-dictionary.md) · [主张与证据映射](docs/claim-evidence.md) · [验收报告](docs/ACCEPTANCE.md)。
+进一步阅读：[实验规格](docs/experiment-spec.md) · [数据字典](docs/data-dictionary.md) · [主张与证据映射](docs/claim-evidence.md) · [验收报告](docs/ACCEPTANCE.md) · [正式实验结果分析](docs/results-analysis.md)（2026‑10‑13，基于已发布的 `result/formal/`）。
