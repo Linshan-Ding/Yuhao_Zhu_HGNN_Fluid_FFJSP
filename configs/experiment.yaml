@@ -3,10 +3,6 @@ purpose: formal
 network:
   width: 64
   layers: 3
-  action_layers: 2
-  candidate_chunk: 128
-  path_capacity: true
-  path_delivery: true
 environment:
   max_steps: 20000
   exposure: hopeful_first

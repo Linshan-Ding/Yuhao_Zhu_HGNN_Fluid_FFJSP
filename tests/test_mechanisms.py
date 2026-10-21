@@ -34,13 +34,14 @@ def test_rules_are_independent_of_candidate_enumeration(rule):
     a=RulePolicy(rule).act(o)[0];other=RulePolicy(rule).act(shuffled)[0]
     assert o.actions.actions[a]==shuffled.actions.actions[other]
 
-def test_zero_residual_chunk_batch_and_gradient():
+def test_zero_residual_batch_invariance_and_gradient():
     c=config(True);o=observe(tiny());p=Policy(c);b=p.batch([o]);full=p(b)
+    assert len(o.contender_action)>0   # both orders contend for both machines
     p.residual_enabled=False;base=p(b);torch.testing.assert_close(full.logits,base.logits,rtol=0,atol=0)
     p.residual_enabled=True
     with torch.no_grad():p.delta.weight.fill_(.01)
-    p.chunk=1;a=p(p.batch([o])).logits;p.chunk=128;bb=p(p.batch([o,o])).logits
-    torch.testing.assert_close(a,bb[:len(a)],atol=2e-6,rtol=1e-5)
+    a=p(p.batch([o])).logits;bb=p(p.batch([o,o])).logits
+    torch.testing.assert_close(a,bb[:len(a)],atol=2e-6,rtol=1e-5);assert not torch.equal(a,base.logits)
     (-p(b).logp[0]).backward();assert p.delta.weight.grad.abs().sum()>0
 
 def test_double_dqn_selection_differs_from_dqn():
@@ -64,7 +65,7 @@ def test_node_relabeling_and_hidden_future():
     candidate[live]=np.column_stack((ip[candidate[live,0]],im[candidate[live,1]],io[candidate[live,2]]))
     base=replace(o.base,order=o.order[order],operation=o.operation[op],machine=o.machine[machine],owner=io[o.owner[op]],
                  candidate=candidate,precedence=ip[o.precedence],eligibility=np.column_stack((ip[o.eligibility[:,0]],im[o.eligibility[:,1]])))
-    other=replace(o,base=base,local_op=ip[o.local_op])
+    other=replace(o,base=base,contender_order=io[o.contender_order],late=o.late[:,order])
     torch.testing.assert_close(p(p.batch([o])).logits,p(p.batch([other])).logits,atol=2e-6,rtol=1e-5)
     e=SchedulingEnv(sample(c,np.random.default_rng(71)),environment_config(c));before=observe(e)
     hidden=e.status==0
@@ -72,7 +73,7 @@ def test_node_relabeling_and_hidden_future():
     from environment.env import NOT_ARRIVED
     hidden=e.status==NOT_ARRIVED;e.inst.arrival_times[hidden]+=1000;e.inst.due_dates[hidden]+=5000
     after=observe(e)
-    for k in ('extra','keys','condition','local_action','local_op'):np.testing.assert_array_equal(getattr(before,k),getattr(after,k))
+    for k in ('extra','keys','contender_action','contender_order','contender_features','late'):np.testing.assert_array_equal(getattr(before,k),getattr(after,k))
 
 def test_scenarios_shared_isolated_and_same_action_zero():
     c=config(True);e=tiny();o=observe(e);p=Policy(c);a=RulePolicy('SPT').act(o)[0]

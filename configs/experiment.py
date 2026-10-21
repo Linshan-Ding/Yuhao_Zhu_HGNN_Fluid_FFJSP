@@ -23,7 +23,7 @@ def config(micro=False):
         b = c['smoke']['budget']
         c['purpose'] = 'engineering-smoke'
         c['data'].update(orders=[6, 8])
-        c['network'].update(width=16, layers=1, action_layers=1, candidate_chunk=16)
+        c['network'].update(width=16, layers=1)
         c['demonstration'].update(steps=32, epochs=2, minibatch=16)
         c['training'].update(rollout_steps=32, minibatch=16, epochs=1, environments=2,
                              milestones=[b // 2, b], evaluate_every=b)

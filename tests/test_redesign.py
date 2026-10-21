@@ -36,3 +36,37 @@ def test_wait_wakes_at_the_next_event_and_is_public():
     e.step(Wait());assert e.now==2. and e.machine_busy_with[1]<0
     s=e.public_state();v=s.graph_view()
     assert dominating_wait(v.inst,v.problem,v.status,v.stage,v.machine_free_at,v.machine_busy_with,v.now) is None
+
+
+def contended():
+    """Two ready orders: product 0 runs on machine 0 (4) or 1 (8); product 1 only on machine 0 (6). Deadlines 10 and 7."""
+    i=Instance('contended','test',2,1,(2,),np.array([[4,8],[6,0]],np.float32),np.array([0,1]),np.array([0.,0.]),np.array([10.,7.]),{'DDT':1.})
+    return SchedulingEnv(i,environment_config(config(True)))
+
+
+def test_contenders_and_late_sets_follow_known_commitments():
+    o=observe(contended());by={(int(o.candidate[k,2]),int(o.candidate[k,1])):k for k in range(len(o.candidate))}
+    a,b,c=by[0,0],by[0,1],by[1,0]
+    # Committing order 0 to machine 0 pushes order 1 (machine 0 only) to finish at 4+6=10 > 7: it becomes a contender and late.
+    pairs=np.flatnonzero(o.contender_action==a);assert o.contender_order[pairs].tolist()==[1]
+    f=o.contender_features[pairs[0]]
+    assert f[0]==pytest.approx(7-10) and f[1]==pytest.approx(7-6) and f[2]==pytest.approx(4) and f[3]==pytest.approx(4)
+    assert f[4]==pytest.approx(6) and f[5]==pytest.approx(6/8) and f[6]==pytest.approx(6/8) and f[7]==pytest.approx(7/6)
+    assert o.late[a].tolist()==[False,True] and o.late[b].tolist()==[False,False] and o.late[c].tolist()==[False,False]
+    assert not len(np.flatnonzero(o.contender_action==b))   # machine 1 is contested by nobody
+    assert o.extra[a,11]==pytest.approx(np.log1p(1)) and o.extra[b,11]==0
+
+
+def test_contender_correction_is_scale_free_and_only_for_contended_candidates():
+    import torch
+    from dataclasses import replace
+    from agent.model import Policy
+    c=config(True);o=observe(contended());p=Policy(c)
+    with torch.no_grad():
+        p.delta.weight.normal_(std=.1);p.gate.weight.zero_()   # frozen gate: the count only enters through it
+    by={(int(o.candidate[k,2]),int(o.candidate[k,1])):k for k in range(len(o.candidate))}
+    out=p(p.batch([o]),details=True)
+    assert out.correction[by[0,1]]==0 and out.correction[by[0,0]]!=0 and out.correction[by[1,0]]!=0
+    twice=replace(o,contender_action=np.r_[o.contender_action,o.contender_action],contender_order=np.r_[o.contender_order,o.contender_order],
+                  contender_features=np.r_[o.contender_features,o.contender_features])
+    torch.testing.assert_close(p(p.batch([twice])).logits,out.logits,atol=1e-6,rtol=1e-5)

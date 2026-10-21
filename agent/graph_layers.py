@@ -1,4 +1,4 @@
-"""Ragged graph batches, dual-path attention and sparse action-conditioned updates."""
+"""Ragged graph batches, dual-path attention and the scale-free machine-contender attention."""
 from dataclasses import dataclass
 from types import SimpleNamespace
 import math
@@ -109,6 +109,25 @@ class GraphLayer(nn.Module):
             cs=torch.cat((cs,b.mm_src)); cd=torch.cat((cd,b.mm_dst)); ce=torch.cat((ce,x[b.mm_op]))
         h2=self.competition(x,cs,cd,ce) if competition else torch.zeros_like(x)
         return self.norm(x+self.fuse(torch.cat((h1,h2),-1)))
+
+class ContenderAttention(nn.Module):
+    """Candidate-conditioned attention over the orders contending for the candidate's machine.
+
+    Keys/values come from the contending order's embedding and the pair features; weights are normalized per
+    candidate, so the aggregate stays bounded however many contenders a larger shop produces. Returns the aggregate
+    (zero for candidates without contenders) and the contender count per candidate."""
+    def __init__(self,d,pair_dim):
+        super().__init__()
+        self.pair=mlp(pair_dim,d,d);self.q=nn.Linear(d,d,bias=False);self.k=nn.Linear(2*d,d,bias=False);self.v=nn.Linear(2*d,d,bias=False)
+
+    def forward(self,h,orders,action_index,order_index,features):
+        count=segment_sum(h.new_ones(len(action_index)),action_index,len(h))
+        if len(action_index)==0:
+            return torch.zeros_like(h),count
+        pair=torch.cat((orders[order_index],self.pair(features)),-1)
+        score=(self.q(h)[action_index]*self.k(pair)).sum(-1)/math.sqrt(h.shape[1])
+        w=segment_softmax(score,action_index,len(h))
+        return segment_sum(w[:,None]*self.v(pair),action_index,len(h)),count
 
 @dataclass
 class PolicyOutput:
