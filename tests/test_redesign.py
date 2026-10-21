@@ -121,3 +121,41 @@ def test_improved_action_targets_update_only_from_reliable_wins():
     m=preference_update(p,opt,replay,c,np.random.default_rng(1),1)
     after=p(p.batch([o])).logp.detach()
     assert m['preference_steps']>=1 and m['usable_in_replay']==1 and after[1]>before[1]   # the challenger (index 1) gains probability
+
+
+def test_teacher_is_selected_on_the_validation_split_and_recorded(tmp_path):
+    import json
+    from configs.experiment import resolve_teacher, RULES, matrix
+    c=config(True);c['teacher']='auto';d=resolve_teacher(c,tmp_path)
+    record=json.loads((tmp_path/'teacher.json').read_text())
+    assert d['teacher']==record['rule'] and record['split']=='contested_validation' and set(record['scores'])==set(RULES)
+    best=max(record['scores'].values());assert record['scores'][record['rule']]==best
+    assert all(record['scores'][r]<best for r in RULES[:RULES.index(record['rule'])])   # ties go to the earlier rule
+    assert c['teacher']=='auto' and matrix(d)[0].config['teacher']==record['rule']
+
+
+def test_online_regimes_draw_loads_and_due_factors_per_regime():
+    from data.online import sample
+    c=config(True);d=c['data'];d['orders']=[8,8]
+    for regime in d['regimes']:regime['weight']=0.
+    d['regimes'][0]['weight']=1.;contested=d['regimes'][0];assert contested['by_rho']
+    rng=np.random.default_rng(5);draws=[sample(c,rng) for _ in range(20)]
+    assert all(contested['rho'][0]<=i.meta['rho_sys']<=contested['rho'][1] and contested['due'][0]<=i.meta['due_factor']<=contested['due'][1] for i in draws)
+    assert all(i.meta['sampling_regime']=='contested' for i in draws)
+    d['regimes'][0]['weight']=0.;d['regimes'][3]['weight']=1.;legacy=d['regimes'][3]
+    draws=[sample(c,rng) for _ in range(10)]
+    assert all(legacy['iota'][0]<=i.meta['iota_target']<=legacy['iota'][1] and legacy['due'][0]<=i.meta['due_factor']<=legacy['due'][1] for i in draws)
+
+
+def test_evaluation_plan_and_groups_follow_the_study():
+    from configs.experiment import matrix
+    from result.evaluation import evaluation_plan
+    from result.statistics import grouped, groups_of
+    c=config(True);names=[p['name'] for p in evaluation_plan(c,matrix(c))]
+    assert names[:6]==['contested','contested_small','main','small','long_stream','large_shop'] and 'contested_best' in names and 'sensitivity' in names
+    assert next(p for p in evaluation_plan(c,matrix(c)) if p['name']=='initialization')['split']=='contested_validation'
+    assert 'sensitivity' not in [p['name'] for p in evaluation_plan(c,matrix(c,'pilot'))]
+    rows=[dict(rho_target='1.3',due_factor='1.5',orders='48',iota='2.5',rho='1.3'),dict(rho_target='1.0',due_factor='2.0',orders='96',iota='2.0',rho='1.0')]
+    assert groups_of(rows)==['all','rho=1','rho=1.3','due=1.5','due=2','orders=48','orders=96']
+    assert grouped(rows,'rho=1.3')==rows[:1] and grouped(rows,'orders=96')==rows[1:] and grouped(rows,'all')==rows
+    assert groups_of([dict(rho_target='-1.0',iota='1.5',rho='.8')])==['all','frequent','infrequent','overload','underload']

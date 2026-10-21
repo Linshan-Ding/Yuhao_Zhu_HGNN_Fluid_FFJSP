@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import _bootstrap  # noqa: F401,E402
 
-from configs.experiment import ROOT  # noqa: E402
+from configs.experiment import ROOT, config  # noqa: E402
 from result.provenance import evaluation_hash, source_hash  # noqa: E402
 from result.storage import digest  # noqa: E402
 
@@ -22,7 +22,7 @@ from result.storage import digest  # noqa: E402
 def identities():
     from scripts.pipeline import smoke_identity
     return dict(training_source=source_hash(), evaluation_source=evaluation_hash(),
-                data_manifest_sha256=digest(ROOT / 'data/instances/fixed/manifest.json'),
+                data_manifest_sha256=digest(ROOT / config()['experiment']['data'] / 'manifest.json'),
                 smoke_identity=smoke_identity())
 
 

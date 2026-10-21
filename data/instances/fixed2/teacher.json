@@ -1,0 +1,28 @@
+{
+  "rule": "SPT",
+  "scores": {
+    "SPT": 0.6493055555555556,
+    "FCFS": 0.6006944444444444,
+    "EDD": 0.625,
+    "MST": 0.6041666666666667,
+    "CR": 0.6111111111111112,
+    "LWKR": 0.642361111111111
+  },
+  "split": "contested_validation",
+  "instances": [
+    "case_af12a78dd027aa8c",
+    "case_8718ac0133a836d5",
+    "case_1d08bc57a5242839",
+    "case_39b5ef7da3248010"
+  ],
+  "fingerprint": "d2c07c7838548b73ed8d489653838f72a79f5e63d34df7e8d230956bf898c63a",
+  "rule_order": [
+    "SPT",
+    "FCFS",
+    "EDD",
+    "MST",
+    "CR",
+    "LWKR"
+  ],
+  "selection": "highest mean fulfillment on the contested validation split; ties by rule order"
+}

@@ -17,9 +17,14 @@ from result.storage import run_lock, digest
 
 
 def test_formal_matrix_and_one_factor_sensitivity():
-    c=config();jobs=matrix(c)
+    c=config()
+    with pytest.raises(ValueError,match='resolve_teacher'):matrix(c)
+    c['teacher']='SPT';jobs=matrix(c)
     assert len(jobs)==73 and sum(j.budget for j in jobs)==64000000
     assert len({j.name for j in jobs})==73
+    pilot=matrix(c,'pilot')
+    assert [j.name for j in pilot]==[f'{m}_s{s}' for m in c['pilot']['methods'] for s in (1,2,3)] and sum(j.budget for j in pilot)==9000000
+    assert all(j.config['training']['milestones'][-1]==500000 and j.group==('main' if j.method=='full' else 'comparators') for j in pilot)
     for j in jobs:
         if j.group=='sensitivity':
             assert sum(j.config['scenario'][k]!=c['scenario'][k] for k in c['scenario'])==1
@@ -29,10 +34,20 @@ def test_formal_matrix_and_one_factor_sensitivity():
     assert identity(c)!=identity(other)
 
 
-def test_fifty_unique_cells_shared_prefix_and_alias(tmp_path):
-    c=config();m=prepare(c,tmp_path);assert len(m['cases'])==len({r['parameter_hash'] for r in m['cases']})==50
-    assert {k:len(v) for k,v in m['splits'].items()}==dict(validation=6,main=12,small=12,long_stream=12,large_shop=8,sensitivity=12)
-    assert m['splits']['main']==m['splits']['sensitivity']
+def test_fixed_cells_shared_prefix_replicates_and_alias(tmp_path):
+    c=config();m=prepare(c,tmp_path);assert len(m['cases'])==len({r['parameter_hash'] for r in m['cases']})==102
+    assert {k:len(v) for k,v in m['splits'].items()}==dict(validation=6,main=12,small=12,long_stream=12,large_shop=8,
+        contested_validation=4,contested=36,contested_small=12,sensitivity=36)
+    assert m['splits']['contested']==m['splits']['sensitivity']
+    contested=[r for r in m['cases'] if r['role']=='contested'];by={(r['rho_target'],r['due_factor'],r['orders'],r['replicate']):r for r in contested}
+    assert all(abs(float(r['rho_sys'])-float(r['rho_target']))<1e-9 for r in contested) and len(by)==36
+    x=fixtures(c,tmp_path,'contested');inst={i.instance_id:i for i in x}
+    a=inst[by[1.0,1.5,48,0]['instance_id']];b=inst[by[1.0,1.5,96,0]['instance_id']];d=inst[by[1.6,1.5,48,0]['instance_id']];e=inst[by[1.0,1.5,48,1]['instance_id']]
+    np.testing.assert_array_equal(a.order_product,b.order_product[:48]);np.testing.assert_array_equal(a.arrival_times,b.arrival_times[:48])
+    np.testing.assert_allclose(a.arrival_times*1.0,d.arrival_times*1.6);assert not np.array_equal(a.arrival_times,e.arrival_times)
+    # Legacy cells keep their ids and files (the published results refer to them).
+    legacy=json.loads((__import__('pathlib').Path(__file__).resolve().parents[1]/'data/instances/fixed/manifest.json').read_text())
+    assert {r['instance_id'] for r in legacy['cases']}<{r['instance_id'] for r in m['cases']}
     inst=fixtures(c,tmp_path,'main');indexed={(i.order_count,round(i.meta['iota'],1),i.meta['due_factor']):i for i in inst}
     a=indexed[48,.6,1.5];b=indexed[96,.6,1.5];d=indexed[48,1.5,1.5];e=indexed[48,.6,3.]
     np.testing.assert_array_equal(a.proc_times,b.proc_times);np.testing.assert_array_equal(a.order_product,b.order_product[:48])
@@ -109,7 +124,7 @@ def test_ppo_rollout_rollback_restores_logs_and_optimizer(monkeypatch):
 
 
 def test_full_size_graph_and_zero_module_boundaries():
-    c=config();root=__import__('pathlib').Path(__file__).resolve().parents[1]/'data/instances/fixed'
+    c=config();root=__import__('pathlib').Path(__file__).resolve().parents[1]/'data/instances/fixed2'
     i=next(i for i in fixtures(c,root,'large_shop') if i.stage_count==7)
     i=replace(i,arrival_times=np.zeros(i.order_count),due_dates=np.full(i.order_count,100000.))
     e=SchedulingEnv(i,environment_config(c));o=observe(e);p=Policy(c)
@@ -121,7 +136,7 @@ def test_full_size_graph_and_zero_module_boundaries():
 def test_entry_points_and_code_only_export():
     from configs.experiment import ROOT
     names=['run_00_smoke','run_01_prepare_data','run_02_train_main','run_03_train_comparators','run_04_train_sensitivity',
-           'run_05_evaluate','run_06_exact_reference','run_07_statistics','run_08_export','run_formal_all']
+           'run_05_evaluate','run_06_exact_reference','run_07_statistics','run_08_export','run_formal_all','run_pilot']
     for name in names:assert (ROOT/'scripts'/f'{name}.py').is_file()
     for name in ('result/export.py','scripts/pipeline.py'):
         assert 'Yuhao_Zhu_FFJSP_Order_GNN_Fluid_model' not in (ROOT/name).read_text(encoding='utf-8')

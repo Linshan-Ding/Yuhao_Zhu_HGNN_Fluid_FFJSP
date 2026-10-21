@@ -80,7 +80,7 @@ def snapshot():
         micro = config(True)
         m = prepare(micro, Path(tmp) / 'micro')
         snap['bench/micro/splits'] = {k: list(v) for k, v in m['splits'].items()}
-        for split in ('validation', 'main', 'small', 'long_stream', 'large_shop'):
+        for split in ('validation', 'main', 'small', 'long_stream', 'large_shop', 'contested_validation', 'contested', 'contested_small'):
             for inst in fixtures(micro, Path(tmp) / 'micro', split):
                 snap[f'bench/micro/{inst.instance_id}'] = arrays(inst)
     for method in METHODS:

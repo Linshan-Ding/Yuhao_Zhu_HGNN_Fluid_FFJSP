@@ -40,3 +40,15 @@ result/engineering/**/*.pt
 /data/instances/*
 !/data/instances/fixed/
 !/data/instances/fixed/**
+
+# Keep pre-registered pilot and second formal study results (same exclusions as above)
+!/result/pilot/
+!/result/pilot/**
+!/result/formal2/
+!/result/formal2/**
+result/pilot/**/*.pt
+result/formal2/**/*.pt
+
+# The contested fixed benchmark (legacy cells byte-identical to data/instances/fixed)
+!/data/instances/fixed2/
+!/data/instances/fixed2/**

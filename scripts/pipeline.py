@@ -11,8 +11,8 @@ import sys
 import time
 import traceback
 import torch
-from configs.experiment import ROOT,config,matrix,identity
-from data.benchmark import prepare
+from configs.experiment import ROOT,config,matrix,identity,resolve_teacher,STUDIES
+from data.benchmark import prepare,design,cells
 from result.storage import atomic_json,digest,object_hash,run_lock,disk_check,write_csv
 from result.provenance import source_hash,evaluation_hash,hash_files,runtime_info
 
@@ -23,8 +23,11 @@ def smoke_identity():
             *sorted((ROOT/'result').glob('*.py')),ROOT/'configs/experiment.yaml',ROOT/'requirements.txt'])))
 
 
-def paths(micro=False,jobs=1):
-    if not micro:return ROOT/'result/formal',ROOT/'data/instances/fixed'
+def paths(micro=False,jobs=1,study='formal'):
+    """Result root and fixed-data root of a study (formal, pilot) or of the engineering smoke."""
+    if study not in STUDIES:raise ValueError(f'unknown study: {study}')
+    if not micro:
+        c=config();return ROOT/(c['pilot']['root'] if study=='pilot' else c['experiment']['root']),ROOT/c['experiment']['data']
     from result.acceptance import runtime_key
     runtime=runtime_info();runtime['torch_threads']=config()['runtime']['threads']
     root=ROOT/'result/engineering'/smoke_identity()[:12]/object_hash(runtime_key(runtime))[:8]/f'jobs_{jobs}'
@@ -55,7 +58,7 @@ def initialize_worker(stop):
 
 def worker(spec,root,data):
     from result.engineering import counted
-    context=counted(f'worker:{spec.name}') if spec.config['purpose']!='formal' else nullcontext()
+    context=counted(f'worker:{spec.name}') if spec.config['purpose']=='engineering-smoke' else nullcontext()
     with context:
         return _worker(spec,root,data)
 
@@ -142,24 +145,23 @@ def execute(selected,root,data,jobs,all_specs):
     return results
 
 
-def storage_preflight(root,c):
+def storage_preflight(root,c,specs):
     # Scale event data with interactions, and checkpoint/buffer data with their actual units.
     from configs.experiment import uses_demo
     q=ROOT/'result/engineering/complete.json';estimate=0;components={}
-    if q.exists() and c['purpose']=='formal':
-        proof=json.loads(q.read_text());micro_root=ROOT/proof['root'];small=config(True)
-        components['trajectory']=proof['raw_bytes_per_interaction']*c['experiment']['total_budget']
+    if q.exists() and c['purpose']!='engineering-smoke':
+        proof=json.loads(q.read_text());micro_root=ROOT/proof['root'];small=config(True);planned=sum(s.budget for s in specs)
         components['checkpoints_and_buffers']=0
         measurements=json.loads((micro_root/'probes/resources.json').read_text())['methods']
         components['trajectory']=max([proof['raw_bytes_per_interaction'],
-            *(r['raw_bytes_per_interaction'] for r in measurements.values())])*c['experiment']['total_budget']
-        order_ratio=max(c['data']['orders'])/max(small['data']['orders'])
-        for spec in matrix(c):
+            *(r['raw_bytes_per_interaction'] for r in measurements.values())])*planned
+        order_ratio=max(c['data']['orders'])/max(small['data']['orders']);cell_ratio=len(cells(design(c)))/len(cells(design(small)))
+        for spec in specs:
             measured=measurements[spec.method]
             components['checkpoints_and_buffers']+=measured['recovery_bytes']*c['recording']['keep_recovery_copies']
             components['checkpoints_and_buffers']+=measured['inference_bytes']*(len(spec.config['training']['milestones'])+2)
             if uses_demo(spec.method):components['checkpoints_and_buffers']+=measured['demonstration_bytes']
-        components['evaluation_and_reports']=sum(p.stat().st_size for p in (micro_root/'evaluations').rglob('*') if p.is_file())*len(matrix(c))/len(matrix(small))*50/6*order_ratio
+        components['evaluation_and_reports']=sum(p.stat().st_size for p in (micro_root/'evaluations').rglob('*') if p.is_file())*len(specs)/len(matrix(small))*cell_ratio*order_ratio
         estimate=int(sum(components.values())*c['recording']['preflight_headroom'])
     import shutil
     free=shutil.disk_usage(root).free
@@ -168,11 +170,13 @@ def storage_preflight(root,c):
     disk_check(root,estimate,c['recording']['minimum_free_gb'])
 
 
-def memory_preflight(root,jobs):
+def memory_preflight(root,jobs,specs):
     from result.resources import memory_info
     proof=json.loads((ROOT/'result/engineering/complete.json').read_text())
     measured=json.loads((ROOT/proof['root']/'probes/resources.json').read_text())
-    available=memory_info()['available_bytes'];worker_bytes=measured['worker_with_margin_bytes']
+    available=memory_info()['available_bytes']
+    # The per-worker requirement follows the heaviest method actually scheduled (the formal matrix includes them all).
+    peak=max(measured['methods'][m]['peak_memory_bytes'] for m in {s.method for s in specs});worker_bytes=int(peak*1.25)
     required=worker_bytes*jobs+4*2**30
     atomic_json(Path(root)/'memory_preflight.json',dict(jobs=jobs,available_bytes=available,required_bytes=required,
         per_worker_bytes=worker_bytes,recommended_jobs=max(0,min(config()['runtime']['jobs'],(available-4*2**30)//worker_bytes))))
@@ -190,14 +194,17 @@ def retire_stale_smoke_data(c,data):
             print(f'[DATA] smoke data configuration changed; previous set kept at {stale}',flush=True)
 
 
-def run(stage,jobs,micro=False):
-    c=config(micro);specs=matrix(c);root,data=paths(micro,jobs)
+def run(stage,jobs,micro=False,study='formal'):
+    c=config(micro);root,data=paths(micro,jobs,study)
+    if study=='pilot' and not micro:c['purpose']='pilot'
     if micro:retire_stale_smoke_data(c,data)
     with run_lock(root):
+        # The teacher is selected on the fixed validation split before any job identity is frozen.
+        c=resolve_teacher(c,data);specs=matrix(c,study)
         prepare_study(c,root,data,specs);ledger(root,specs)
         if stage in ('main','comparators','sensitivity','all'):
-            storage_preflight(root,c)
-            if not micro:memory_preflight(root,jobs)
+            storage_preflight(root,c,specs)
+            if not micro:memory_preflight(root,jobs,specs)
             execute([s for s in specs if stage=='all' or s.group==stage],root,data,jobs,specs)
         if stage in ('evaluate','all'):
             from result.evaluation import evaluate_matrix,latency
@@ -212,8 +219,11 @@ def run(stage,jobs,micro=False):
             from result.export import export
             export(root,data,c,specs)
         if stage=='all':
-            atomic_json(root/'complete.json',dict(purpose=c['purpose'],training=sum(s.budget for s in specs),
+            atomic_json(root/'complete.json',dict(purpose=c['purpose'],study=study,training=sum(s.budget for s in specs),
                 source=source_hash(),assets=digest(root/'paper_assets/manifest.json')))
+            if study=='pilot' and not micro:
+                from result.pilot import verdict
+                verdict(root,c,specs)
     print(f'[OK] {stage}: {root}',flush=True)
 
 
@@ -247,10 +257,12 @@ def _smoke(jobs):
         from agent.training import train
         c=config(True);probe_budget=c['smoke']['scenario_probe_budget']
         c['training']['milestones']=[probe_budget//2,probe_budget];c['training']['evaluate_every']=probe_budget
-        c['data']['due_factor']=list(c['smoke']['probe_due_factor'])  # Engineering-only tight deadlines exercise nonzero preference gradients.
+        for regime in c['data']['regimes']:regime['due']=list(c['smoke']['probe_due_factor'])  # Engineering-only tight deadlines exercise contested queries.
         root,data=paths(True,jobs);probe=root/'scenario_probe';probe_data=probe/'data'
-        # Its tighter training distribution has a separate engineering data identity.
-        with run_lock(probe):out=train(c,probe,29,c['smoke']['scenario_probe_budget'],probe_data)
+        # Its tighter training distribution has a separate engineering data identity; the probe also exercises teacher selection.
+        c['teacher']='auto'
+        with run_lock(probe):
+            c=resolve_teacher(c,probe_data);out=train(c,probe,29,c['smoke']['scenario_probe_budget'],probe_data)
         history=[json.loads(x) for x in (probe/'log.jsonl').read_text().splitlines()]
         if not any((r.get('preference_gradient') or 0)>0 and r.get('preference_steps',0)>0 for r in history):raise AssertionError('No nonzero accepted preference learning in smoke')
         raw_bytes=sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
@@ -272,9 +284,9 @@ def _smoke(jobs):
     return saved
 
 
-def entry(stage):
+def entry(stage,study='formal'):
     runtime=config()['runtime']
-    parser=argparse.ArgumentParser(description=f'Fixed-cell scheduling study: {stage}')
+    parser=argparse.ArgumentParser(description=f'Fixed-cell scheduling study ({study}): {stage}')
     parser.add_argument('jobs',type=int,nargs='?',default=runtime['jobs'],
                         help=f"concurrent CPU jobs; default and upper cap runtime.jobs={runtime['jobs']}");args=parser.parse_args()
     if args.jobs<1:parser.error('concurrency must be a positive integer')
@@ -282,4 +294,4 @@ def entry(stage):
     if jobs!=args.jobs:print(f"[RESOURCE] requested {args.jobs}; using {jobs} CPU jobs, {runtime['threads']} thread(s) each")
     if stage=='smoke':smoke(jobs);return
     if stage in ('main','comparators','sensitivity','all'):smoke(jobs)
-    run(stage,jobs)
+    run(stage,jobs,study=study)
