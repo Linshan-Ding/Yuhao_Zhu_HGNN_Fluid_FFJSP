@@ -253,9 +253,10 @@ def _smoke(jobs):
     if result.returncode:raise RuntimeError('Regression tests failed; formal training not started')
     with counted('smoke:parent'):
         run('all',jobs,True)
-        # Actual scenario labels must reach the preference optimizer; this is not a performance run.
+        # Actual scenario labels must reach the preference optimizer; this is not a performance run. The probe starts from
+        # an uninitialized policy (no_demo) so that the rule challenger wins reliably and the improved-action update fires.
         from agent.training import train
-        c=config(True);probe_budget=c['smoke']['scenario_probe_budget']
+        c=config(True);c['method']='no_demo';probe_budget=c['smoke']['scenario_probe_budget']
         c['training']['milestones']=[probe_budget//2,probe_budget];c['training']['evaluate_every']=probe_budget
         for regime in c['data']['regimes']:regime['due']=list(c['smoke']['probe_due_factor'])  # Engineering-only tight deadlines exercise contested queries.
         root,data=paths(True,jobs);probe=root/'scenario_probe';probe_data=probe/'data'

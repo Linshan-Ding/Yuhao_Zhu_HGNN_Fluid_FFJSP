@@ -10,8 +10,9 @@ __pycache__/
 # Ignore result contents by default
 result/*
 
-# Keep Python source files under result/
+# Keep Python source files and the directory guide under result/
 !/result/*.py
+!/result/README.md
 
 # Keep formal experimental results
 !/result/formal/

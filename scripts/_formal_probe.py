@@ -98,7 +98,7 @@ def probe(method,root):
     atomic_torch_save(dict(model=policy.state_dict(),cfg=c),root/'inference.pt')
     del restored,state,replay,preferences,records,observations;gc.collect()
     # Full largest-shop input, with all orders visible, exercises worst candidate/graph shape.
-    inst=next(i for i in fixtures(c,ROOT/'data/instances/fixed','large_shop') if i.stage_count==7)
+    inst=next(i for i in fixtures(c,ROOT/c['experiment']['data'],'large_shop') if i.stage_count==7)
     inst=replace(inst,arrival_times=np.zeros(inst.order_count),due_dates=np.full(inst.order_count,100000.))
     obs=observe(SchedulingEnv(inst,environment_config(c)))
     with torch.no_grad():
