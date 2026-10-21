@@ -83,7 +83,7 @@ def probe(method,root):
     if uses_scenario(method):
         preferences=PreferenceReplay(c['scenario']['replay_size'],c['scenario']['versions'])
         valid=[o for o in observations if len(o.candidate)>1]
-        label=ScenarioPreference((0,1),np.array([[0.,1.],[0.,1.]]),1.,0.,.9,.9,0,8,0.,True,'resource_fixture',[],[],'',[],[])
+        label=ScenarioPreference((0,1),np.array([[0.,1.],[0.,1.]]),1.,0.,.9,.9,0,8,0.,True,'resource_fixture',[],[],'',[],2,'challenger',[[],[]])
         encoded=[pickle.dumps((o,label),protocol=5) for o in valid]
         for j in range(c['scenario']['replay_size']):preferences.items.append(pickle.loads(encoded[j%len(encoded)]))
         metrics.update(preference_update(policy,optimizer,preferences,c,np.random.default_rng(13),0))

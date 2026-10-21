@@ -7,6 +7,7 @@ from environment.public import SchedulingEnv
 from environment.interfaces import Dispatch, Wait
 from environment.env import dominating_wait
 from agent.observation import observe
+from agent.rules import RulePolicy
 
 
 def shop(proc, due, arrivals=None):
@@ -70,3 +71,53 @@ def test_contender_correction_is_scale_free_and_only_for_contended_candidates():
     twice=replace(o,contender_action=np.r_[o.contender_action,o.contender_action],contender_order=np.r_[o.contender_order,o.contender_order],
                   contender_features=np.r_[o.contender_features,o.contender_features])
     torch.testing.assert_close(p(p.batch([twice])).logits,out.logits,atol=1e-6,rtol=1e-5)
+
+
+class FrozenRule:
+    """Deterministic SPT continuation standing in for the frozen graph policy."""
+    def __init__(self):self.rule=RulePolicy('SPT')
+    def act_many(self,observations):return self.rule.act_many(observations)
+    def state_dict(self):return {}
+
+
+def test_adaptive_futures_resolve_the_sign_and_stop_on_ties(monkeypatch):
+    import agent.preference as preference
+    c=config(True);c['scenario'].update(count=2,max_count=8,reliability_floor=.25)
+    e=contended();o=observe(e);by={(int(o.candidate[k,2]),int(o.candidate[k,1])):k for k in range(len(o.candidate))}
+    a,b,d=by[0,0],by[0,1],by[1,0]
+    # Even futures add nothing; odd futures add an order of product 0 (deadline 9) that only the anchor branch can serve
+    # on time, so the challenger's advantage alternates 1,0,1,0,...: the sign is resolved after five futures.
+    def future(self,snapshot):
+        j=self.calls_made=getattr(self,'calls_made',0)+1
+        return (np.array([],np.int64),np.array([]),np.array([])) if j%2 else (np.array([0]),np.array([.5]),np.array([9.]))
+    monkeypatch.setattr(preference.ScenarioEvaluator,'future',future)
+    label=preference.ScenarioEvaluator(c,1).evaluate(e.public_state(),o,FrozenRule(),10000,'SPT',0,indices=[a,b])
+    assert label.complete and label.k_used==5 and label.returns[:,1].tolist()==[2,2,2,2,2] and label.returns[:,0].tolist()==[1,2,1,2,1]
+    assert label.mean==pytest.approx(.6) and label.winner=='challenger' and label.reliability>=.5
+    tie=preference.ScenarioEvaluator(c,1).evaluate(e.public_state(),o,FrozenRule(),10000,'SPT',0,indices=[b,d])
+    assert tie.complete and tie.k_used==2 and tie.mean==0 and tie.winner=='tie' and tie.reliability==0
+    # A consistent advantage is resolved with the minimum number of futures.
+    monkeypatch.setattr(preference.ScenarioEvaluator,'future',lambda self,s:(np.array([],np.int64),np.array([]),np.array([])))
+    sure=preference.ScenarioEvaluator(c,1).evaluate(e.public_state(),o,FrozenRule(),10000,'SPT',0,indices=[a,b])
+    assert sure.k_used==2 and sure.mean==1 and sure.reliability==pytest.approx(1/1.25)
+
+
+def test_improved_action_targets_update_only_from_reliable_wins():
+    import torch
+    from agent.model import Policy
+    from agent.learning import preference_update
+    from agent.preference import ScenarioPreference,PreferenceReplay
+    c=config(True);c['scenario'].update(reliability_threshold=.5);o=observe(contended());p=Policy(c)
+    opt=torch.optim.Adam(p.parameters(),lr=.001);replay=PreferenceReplay(8,2)
+    def label(mean,reliability):
+        return ScenarioPreference((0,1),np.array([[0.,mean],[0.,mean]]),mean,0.,reliability,.5,1,8,0.,True,'test',[],[],'',[],2,
+                                  'tie' if mean==0 else ('challenger' if mean>0 else 'anchor'),[[],[]])
+    replay.add(o,label(0.,0.));replay.add(o,label(1.,.3));replay.add(o,label(-1.,.9))
+    before=p(p.batch([o])).logp.detach().clone()
+    m=preference_update(p,opt,replay,c,np.random.default_rng(1),1)
+    assert m['preference_steps']==0 and m['usable_in_replay']==0 and m['replay_labels']==3
+    torch.testing.assert_close(p(p.batch([o])).logp,before,rtol=0,atol=0)
+    replay.add(o,label(1.,.8))
+    m=preference_update(p,opt,replay,c,np.random.default_rng(1),1)
+    after=p(p.batch([o])).logp.detach()
+    assert m['preference_steps']>=1 and m['usable_in_replay']==1 and after[1]>before[1]   # the challenger (index 1) gains probability

@@ -78,35 +78,41 @@ def test_node_relabeling_and_hidden_future():
 def test_scenarios_shared_isolated_and_same_action_zero():
     c=config(True);e=tiny();o=observe(e);p=Policy(c);a=RulePolicy('SPT').act(o)[0]
     before=deepcopy(e.state_dict());ev=ScenarioEvaluator(c,4)
-    r=ev.evaluate(e.public_state(),o,p,10000,'SPT',0,[a,a])
-    assert r.complete and r.mean==0 and r.reliability==0
+    r=ev.evaluate(e.public_state(),o,p,10000,'SPT',0,indices=[a,a])
+    assert r.complete and r.mean==0 and r.reliability==0 and r.winner=='tie' and r.k_used==c['scenario']['count']
     assert all(x[0]==x[1]==h for x,h in zip(r.branch_hashes,r.scene_hashes))
     for k,v in before['dynamic'].items():np.testing.assert_equal(v,e.state_dict()['dynamic'][k])
     ev1=ScenarioEvaluator(c,4);ev2=ScenarioEvaluator(c,4);b=next(i for i in range(len(o.candidate)) if i!=a)
-    x=ev1.evaluate(e.public_state(),o,p,10000,'SPT',0,[a,b]);y=ev2.evaluate(e.public_state(),o,p,10000,'SPT',0,[b,a])
-    assert x.mean==pytest.approx(-y.mean) and x.scene_hashes==y.scene_hashes
+    x=ev1.evaluate(e.public_state(),o,p,10000,'SPT',0,indices=[a,b]);y=ev2.evaluate(e.public_state(),o,p,10000,'SPT',0,indices=[b,a])
+    assert x.mean==pytest.approx(-y.mean) and x.scene_hashes==y.scene_hashes and x.k_used==y.k_used
 
 
-def test_candidates_use_live_policy_and_continuation_stays_frozen():
-    c=config(True);e=tiny();o=observe(e);frozen=Policy(c)
-    anchor=RulePolicy('SPT').act(o)[0]
-    challenger=next(i for i,a in enumerate(o.candidate) if a[0]>=0 and i!=anchor)
-    frozen.act=lambda obs:(anchor,0.,0.)
+def test_queries_anchor_on_the_live_policy_at_contested_states_only():
+    from tests.test_redesign import contended
+    c=config(True);e=contended();o=observe(e);frozen=Policy(c)
+    by={(int(o.candidate[k,2]),int(o.candidate[k,1])):k for k in range(len(o.candidate))};a,b,d=by[0,0],by[0,1],by[1,0]
     class CurrentPolicy:
-        def act(self,obs):return challenger,0.,0.
-    # A one-step allowance suffices to inspect selection; the unfinished branches
-    # incur cost but cannot enter replay as valid labels.
+        def act_many(self,obs,return_probabilities=False):
+            p=np.zeros(len(o.candidate));p[[a,b,d]]=[.5,.3,.2];return [(a,0.,0.)],[p]
+    # A one-step allowance suffices to inspect selection; unfinished branches cost steps but never enter replay.
     label=ScenarioEvaluator(c,44).evaluate(e.public_state(),o,frozen,1,'SPT',0,candidate_policy=CurrentPolicy())
-    assert label.actions==(anchor,challenger)
-    assert label.candidate_policy_hash=='CurrentPolicy'
-    assert not label.complete and label.steps==1
-    assert label.continuations.count('SPT')==label.continuations.count('frozen_policy')==1
+    assert label.actions==(a,b) and label.source=='contested_policy' and label.candidate_policy_hash=='CurrentPolicy'
+    assert not label.complete and label.steps==1 and label.winner=='tie' and label.late_sets==[[1],[]]
+    # The rule challenger is used when the policy's runner-ups do not change who is late.
+    p=np.zeros(len(o.candidate));p[[b,d,a]]=[.5,.3,.2]
+    assert ScenarioEvaluator(c,44).choose(o,p,'SPT')==((b,a),'contested_policy')
+    p[[b,d,a]]=[.6,.3,.1]   # runner-ups d (not late) and a; a differs -> still a policy challenger
+    assert ScenarioEvaluator(c,44).choose(o,p,'SPT')[0]==(b,a)
+    # Generous deadlines: no commitment changes any deadline status, so no query is issued.
+    g=observe(tiny());q=np.ones(len(g.candidate))/len(g.candidate)
+    assert ScenarioEvaluator(c,44).choose(g,q,'SPT')==(None,'uncontested')
+    assert ScenarioEvaluator(c,44).evaluate(tiny().public_state(),g,frozen,100,'SPT',0,probabilities=q) is None
 
 def test_preferences_expire_and_rollback(monkeypatch):
     import agent.ppo as ppo  # the transactional step (shared by PPO and preference updates) lives there
     c=config(True);o=observe(tiny());p=Policy(c);opt=torch.optim.Adam(p.parameters(),lr=.001)
-    label=ScenarioPreference((0,1),np.array([[0.,1.],[0.,1.]]),1.,0.,.9,.9,1,8,0.,True,'test',[],[],'',[],[])
-    replay=PreferenceReplay(4,2);replay.add(o,label);replay.expire(2);assert len(replay.items)==1
+    label=ScenarioPreference((0,1),np.array([[0.,1.],[0.,1.]]),1.,0.,.9,.9,1,8,0.,True,'test',[],[],'',[],2,'challenger',[[],[]])
+    replay=PreferenceReplay(4,2);replay.add(o,label);replay.expire(2);assert len(replay.items)==1 and len(replay.usable(.5))==1
     before=deepcopy(p.state_dict());monkeypatch.setattr(ppo,'categorical_kl',lambda *args:torch.tensor(1.))
     m=preference_update(p,opt,replay,c,np.random.default_rng(1),2);assert m['preference_rejected']==1 and not opt.state
     for k,v in before.items():torch.testing.assert_close(v,p.state_dict()[k],rtol=0,atol=0)

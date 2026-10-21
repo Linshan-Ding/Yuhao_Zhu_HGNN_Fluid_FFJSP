@@ -85,6 +85,7 @@ training:
   - 1000000
 scenario:
   count: 2
+  max_count: 8
   interval: 32
   warmup_real_steps: 2048
   horizon_routes: 2.0
@@ -95,15 +96,15 @@ scenario:
   replay_size: 4096
   replay_batches: 4
   replay_batch: 32
-  versions: 2
+  versions: 4
   frozen_interval: 8192
-  reliability_floor: 0.01
+  reliability_floor: 0.25
+  reliability_threshold: 0.5
   max_preference: 2.0
   kl: 0.01
   minimum_query_cost: 64
-  reservation_floor: 4096
+  reservation_floor: 16384
   reservation_multiplier: 2
-  wait_probe_interval: 4
 runtime:
   device: cpu
   jobs: 8

@@ -4,7 +4,7 @@ from data.generator import capacity_unit_load, route_minimum
 
 class FutureGenerator:
     def __init__(self,cfg,seed):
-        self.cfg=cfg; self.rng=np.random.default_rng(seed); self.calls=0
+        self.cfg=cfg; self.rng=np.random.default_rng(seed); self.calls=0; self.checks=0
         self.last_cost=cfg['scenario']['minimum_query_cost']  # cost of the last complete query, used for reservations
 
     def state_dict(self):

@@ -1,8 +1,8 @@
 """Resumable training with conservative crash accounting and immutable source archives.
 
-Naming: `teacher` is always the fixed dispatching rule (c['teacher'], SPT) that supplies demonstrations, the query anchor
-and one scenario continuation; `frozen` is the periodically refreshed frozen copy of the graph policy that supplies the
-other continuation; `target` is the DQN/DDQN target network.
+Naming: `teacher` is the dispatching rule resolved before the study (configs.experiment.resolve_teacher) that supplies
+demonstrations and the rule challenger of scenario queries; `frozen` is the periodically refreshed frozen copy of the
+graph policy that continues both scenario branches; `target` is the DQN/DDQN target network.
 """
 from collections import deque
 from copy import deepcopy
@@ -42,6 +42,7 @@ class TrainingInterrupted(RuntimeError):
 
 def _train(c,run,seed,budget,data,holders,stop_requested=None):
     run=Path(run);run.mkdir(parents=True,exist_ok=True);torch.set_num_threads(c['runtime']['threads'])
+    if c['teacher']=='auto':raise ValueError('teacher must be resolved on the validation split before training (configs.experiment.resolve_teacher)')
     torch.manual_seed(seed);torch.use_deterministic_algorithms(True);sc=c['scenario']
     policy=Policy(c);optimizer=torch.optim.Adam(policy.parameters(),lr=c['training']['learning_rate'])
     demo_opt=torch.optim.Adam(policy.parameters(),lr=c['demonstration']['learning_rate'])
@@ -51,7 +52,7 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
     replay=deque(maxlen=c['classic']['replay_size']);demo=DemonstrationDataset([],[])
     demo_env=None;envs=[None]*c['training']['environments'];next_obs=[None]*len(envs)
     real=branch=lost=epoch=demo_epoch=q_steps=eval_steps=0;elapsed_offset=0.;next_eval=0;best=-1.
-    labels=failed=0;next_scenario=0;frozen_version=0;next_frozen=sc['frozen_interval'];demo_finished=not uses_demo(c['method'])
+    labels=failed=usable=0;next_scenario=0;frozen_version=0;next_frozen=sc['frozen_interval'];demo_finished=not uses_demo(c['method'])
     cp=run/'checkpoint_last.pt';code=source_hash();fp=identity(c);ledger=run/'budget.json';log=run/'log.jsonl'
     history=[];monitor=fixtures(c,data,'monitor');began=time.perf_counter();scenario_seconds=0.;best_checkpoint=None
     recorder_state=None
@@ -65,7 +66,7 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
         demo=s['demonstrations'];demo_finished=s['demo_finished'];demo_env=SchedulingEnv.from_state_dict(s['demo_environment']) if s['demo_environment'] else None
         envs=[SchedulingEnv.from_state_dict(e) if e else None for e in s['environments']];next_obs=s['next_observations']
         scenario.load_state_dict(s['scenario_state']);pref=s['preferences'];replay=s['replay'];elapsed_offset=s['elapsed_seconds']
-        best=s['best'];next_eval=s['next_eval'];labels=s['labels'];failed=s['failed_labels'];next_scenario=s['next_scenario']
+        best=s['best'];next_eval=s['next_eval'];labels=s['labels'];failed=s['failed_labels'];usable=s['usable_labels'];next_scenario=s['next_scenario']
         best_checkpoint=s['best_checkpoint']
         frozen_version=s['frozen_version'];next_frozen=s['next_frozen'];history=s['history'];scenario_seconds=s['scenario_seconds']
         recorder_state=s['recorder']
@@ -107,7 +108,7 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
             demonstrations=demo,demo_finished=demo_finished,demo_environment=demo_env.state_dict() if demo_env else None,
             environments=[e.state_dict() if e else None for e in envs],next_observations=next_obs,scenario_state=scenario.state_dict(),
             preferences=pref,replay=replay,elapsed_seconds=elapsed_offset+time.perf_counter()-began,best=best,best_checkpoint=best_checkpoint,next_eval=next_eval,labels=labels,
-            failed_labels=failed,next_scenario=next_scenario,frozen_version=frozen_version,next_frozen=next_frozen,history=history,scenario_seconds=scenario_seconds,recorder=recorder.snapshot())
+            failed_labels=failed,usable_labels=usable,next_scenario=next_scenario,frozen_version=frozen_version,next_frozen=next_frozen,history=history,scenario_seconds=scenario_seconds,recorder=recorder.snapshot())
     keep=int(c['recording']['keep_recovery_copies'])
     if keep<1:raise ValueError('recording.keep_recovery_copies must be at least 1')
     copies=[cp]+[run/('checkpoint_previous.pt' if k==2 else f'checkpoint_previous_{k}.pt') for k in range(2,keep+1)]
@@ -170,7 +171,7 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
                     envs[i]=make_env('real');next_obs[i]=None
                 obs.append(next_obs[i] if next_obs[i] is not None else observe(envs[i]));next_obs[i]=None
             epsilon=max(c['classic']['epsilon_final'],1-(1-c['classic']['epsilon_final'])*real/c['classic']['epsilon_steps'])
-            choices=policy.act_many(obs,arng,epsilon)
+            choices,probabilities=policy.act_many(obs,arng,epsilon,return_probabilities=True)
             for i,(o,(a,lp,val)) in enumerate(zip(obs,choices)):
                 if total()>=end:break
                 env=envs[i]
@@ -179,10 +180,13 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
                 fraction=sc['budget_fraction'];allowance=int((real+demo.steps)*fraction/(1-fraction))-branch
                 minimum=max(sc['minimum_query_cost'],int(scenario.last_cost))
                 if uses_scenario(c['method']) and real>=sc['warmup_real_steps'] and real>=next_scenario and allowance>=minimum and end-total()>minimum:
-                    label=scenario.evaluate(env.public_state(),o,frozen,min(allowance,end-total()-1),c['teacher'],frozen_version,candidate_policy=policy)
-                    next_scenario=real+sc['interval']
+                    # Queries are issued only at contested states; an uncontested state leaves the next step eligible.
+                    label=scenario.evaluate(env.public_state(),o,frozen,min(allowance,end-total()-1),c['teacher'],frozen_version,
+                                            probabilities=probabilities[i],candidate_policy=policy)
                     if label is not None:
+                        next_scenario=real+sc['interval']
                         branch+=label.steps;scenario_seconds+=label.seconds;pref.add(o,label);labels+=int(label.complete);failed+=int(not label.complete)
+                        usable+=int(label.complete and label.winner=='challenger' and label.reliability>=sc['reliability_threshold'])
                         with (run/'scenario_labels.jsonl').open('a',encoding='utf-8') as f:f.write(json.dumps(dict(epoch=epoch+1,real_steps=real,**label.record()))+'\n')
                 recorder.annotate(env,action_index=a,log_probability=lp,value=val,candidates=len(o.candidate),
                     orders_visible=len(o.order),operations_visible=len(o.operation),machines=len(o.machine))
@@ -216,7 +220,8 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
             if eta>best:
                 best=eta;best_checkpoint=deepcopy(lightweight(run/'checkpoint_best.pt',eta_validation=eta))
         row=dict(epoch=epoch,total_steps=total(),real_steps=real,scenario_steps=branch,demonstration_steps=demo.steps,lost_upper_bound=lost,
-            eta_validation=eta,labels=labels,failed_labels=failed,frozen_version=frozen_version,evaluation_steps=eval_steps,
+            eta_validation=eta,labels=labels,failed_labels=failed,usable_labels=usable,contested_checks=scenario.checks if uses_scenario(c['method']) else 0,
+            frozen_version=frozen_version,evaluation_steps=eval_steps,
             elapsed_seconds=elapsed_offset+time.perf_counter()-began,scenario_seconds=scenario_seconds,recording_seconds=recorder.io_seconds,**metrics)
         history.append(row)
         with log.open('a',encoding='utf-8') as f:f.write(json.dumps(row)+'\n')

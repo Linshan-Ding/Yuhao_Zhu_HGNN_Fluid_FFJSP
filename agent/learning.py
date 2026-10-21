@@ -16,25 +16,26 @@ def on_policy(policy,optimizer,records,bootstrap,c,rng):
     return dict(policy_loss=float(pg.detach()),value_loss=float(vl.detach()),gradient_norm=float(gn),effective_optimizer_steps=1)
 
 def preference_update(policy,optimizer,replay,c,rng,version):
-    replay.expire(version);metrics=[];rejected=0;sc=c['scenario']
+    """Improved-action targets: every usable label (challenger won, reliability >= threshold) is a cross-entropy target on
+    the full legal-action distribution; ties and unreliable labels never update the policy. `impact_only` instead
+    regresses the impact-head difference onto the measured difference for every complete label."""
+    replay.expire(version);metrics=[];rejected=0;sc=c['scenario'];impact=c['method']=='impact_only'
+    pool=list(replay.items) if impact else replay.usable(sc['reliability_threshold'])
     for _ in range(sc['replay_batches']):
-        samples=replay.sample(rng,sc['replay_batch'])
+        samples=replay.sample(rng,sc['replay_batch'],pool)
         if not samples:break
         batch=policy.batch([o for o,l in samples]);out=policy(batch);old=out.logp.detach();losses=[]
         for j,(obs,label) in enumerate(samples):
             idx=batch.offsets[j]+torch.tensor(label.actions)
-            if c['method']=='impact_only':
-                losses.append(F.smooth_l1_loss(out.impact[idx[1]]-out.impact[idx[0]],out.impact.new_tensor(label.mean)))
-            else:
-                target=out.logp.new_tensor([1-label.probability,label.probability])
-                losses.append(label.reliability*F.kl_div(F.log_softmax(out.logits[idx],0),target,reduction='sum'))
+            if impact:losses.append(F.smooth_l1_loss(out.impact[idx[1]]-out.impact[idx[0]],out.impact.new_tensor(label.mean)))
+            else:losses.append(-out.logp[idx[1]])   # the challenger is the demonstrated improvement
         loss=sc['auxiliary_weight']*torch.stack(losses).mean()
         ok,kl,gn=transactional_step(policy,optimizer,loss,c['training']['max_grad_norm'],batch,old,sc['kl'])
         if not ok:rejected+=1;break
         metrics.append((float(loss.detach()),kl,gn))
     return dict(preference_steps=len(metrics),preference_rejected=rejected,preference_loss=float(np.mean([x[0] for x in metrics])) if metrics else None,
                 preference_kl=max([x[1] for x in metrics],default=None),preference_gradient=float(np.mean([x[2] for x in metrics])) if metrics else None,
-                replay_labels=len(replay.items),label_reuses=replay.reuses)
+                replay_labels=len(replay.items),usable_in_replay=len(pool),label_reuses=replay.reuses)
 
 def q_bootstrap(online,target,offsets,double):
     return torch.stack([target[a:b][online[a:b].argmax()] if double else target[a:b].max() for a,b in zip(offsets[:-1],offsets[1:])])
