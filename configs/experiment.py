@@ -45,8 +45,7 @@ def identity(c):
 def environment_config(c):
     from configs.config import Config
     e = c['environment']
-    return Config({'action_space': {'allow_noop': True, 'wait_interval': e['wait_interval'],
-                                    'exposure': e['exposure'], 'exposure_threshold': e['exposure_threshold']},
+    return Config({'action_space': {'allow_noop': True, 'exposure': e['exposure'], 'exposure_threshold': e['exposure_threshold']},
                    'episode': {'max_decision_steps': e['max_steps']}})
 
 

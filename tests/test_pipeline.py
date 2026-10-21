@@ -45,31 +45,37 @@ def test_fifty_unique_cells_shared_prefix_and_alias(tmp_path):
 
 
 def test_recorder_partial_abandon_and_reward_reconstruction(tmp_path):
-    c=config(True);i=Instance('partial','test',2,2,(1,1),np.array([[2,0],[0,6],[2,0],[0,4]],np.float32),
-        np.array([0,1]),np.array([0.,0.]),np.array([8.,20.]),dict(DDT=10,iota=1,rho_sys=1,due_factor=2))
+    c=config(True);i=Instance('partial','test',2,2,(2,1),np.array([[2,10,0],[0,0,6],[2,10,0],[0,0,4]],np.float32),
+        np.array([0,1]),np.array([0.,0.]),np.array([8.,7.5]),dict(DDT=10,iota=1,rho_sys=1,due_factor=2))
     r=Recorder(tmp_path,c);e=SchedulingEnv(i,environment_config(c)).attach_recorder(r)
-    e.step(Dispatch(0,0));assert e.stage[0]==1
-    e.step(Wait());assert e.order_outcome[0]==0 and e.machine_busy_time[0]==2
+    e.step(Dispatch(0,0));assert e.stage[0]==0 and e.machine_busy_with[0]==0
+    # Order 1 may hold for machine 0 (free at 2, then 2 units) instead of the idle slow machine 1 (10 units).
+    assert e.awaited()[1:4]==(1,2,0)
+    e.step(Wait());assert e.now==2 and e.order_outcome[1]==0 and e.machine_busy_time[0]==2  # 2+6>7.5: holding made order 1 hopeless
     while not e.done:
         o=observe(e);e.step(o.actions.actions[RulePolicy('SPT').act(o)[0]])
     r.commit(r.snapshot());verify(tmp_path)
     assert sum(x['reward'] for x in records(tmp_path,'decisions'))==e.eta
     events=list(records(tmp_path,'events'))
     assert any(x['kind']=='order_resolved' and x.get('reason')=='hopeless_remaining_route' for x in events)
-    starts=[x for x in events if x['kind']=='operation_start'];assert len(starts)==3
+    starts=[x for x in events if x['kind']=='operation_start'];assert len(starts)==2
     assert len(list(records(tmp_path,'orders')))==2
     restored=SchedulingEnv.from_state_dict(e.state_dict());np.testing.assert_array_equal(restored.machine_busy_time,e.machine_busy_time)
 
 
 def test_nonpreemption_wait_and_public_isolation():
-    c=config(True);i=Instance('running','test',1,1,(2,),np.array([[10,10]],np.float32),np.array([0,0,0]),
+    c=config(True);i=Instance('running','test',1,1,(2,),np.array([[10,2]],np.float32),np.array([0,0,0]),
         np.array([0.,0.,30.]),np.array([10.,40.,70.]),{'DDT':10})
-    e=SchedulingEnv(i,environment_config(c));e.step(Dispatch(0,0));o=observe(e)
-    e.step(Wait());assert e.machine_busy_with[0]==0 and e.machine_free_at[0]==10
+    e=SchedulingEnv(i,environment_config(c));e.step(Dispatch(0,1));o=observe(e)
+    # Waiting is offered because machine 1 (free at 2, then 2 units) beats the idle machine 0 (10 units) for order 1.
+    assert o.candidate[-1,0]<0 and o.candidate_features[-1,5]==pytest.approx(4/e.t_ref) and o.candidate_features[-1,6]==pytest.approx(6/e.p_ref)
+    with pytest.raises(ValueError):e.step(Dispatch(1,1))   # busy machine
+    e.step(Wait());assert e.now==2 and e.machine_busy_with[1]<0 and e.n_completed==1   # held until the release, never preempted
     before=observe(e);e.inst.arrival_times[2]+=900;e.inst.due_dates[2]+=1000;after=observe(e)
-    for key in ('order','operation','machine','candidate','extra','global_features'):np.testing.assert_array_equal(getattr(before,key),getattr(after,key))
+    for key in ('order','operation','machine','candidate','candidate_features','extra','global_features'):np.testing.assert_array_equal(getattr(before,key),getattr(after,key))
     assert not before.order.flags.writeable
-    with pytest.raises(ValueError):e.step(Dispatch(1,0))
+    e.step(Dispatch(1,1));assert e.now==930 and e.n_completed==2   # the (shifted) order 2 arrives with both machines idle
+    with pytest.raises(ValueError,match='admissible'):e.step(Wait())
 
 
 def test_phase_time_is_split_at_boundaries():

@@ -8,7 +8,6 @@ network:
   path_capacity: true
   path_delivery: true
 environment:
-  wait_interval: 0.0
   max_steps: 20000
   exposure: hopeful_first
   exposure_threshold: 1.5
