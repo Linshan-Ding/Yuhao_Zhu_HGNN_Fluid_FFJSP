@@ -4,7 +4,7 @@
 
 固定基准为 data/instances/fixed2（旧 data/instances/fixed 仅供标签 `paper2-v1-formal` 复现，其 50 例在 fixed2 中 id 与文件字节完全相同）。cases中的CSV长表以kind区分header、stage_machines、proc、order、meta。订单和机器下标从0开始；时间单位为生成加工时间单位，不自动称为秒。CPU计时字段seconds为墙钟秒，ms为毫秒。
 
-index.csv每固定单元一行：instance_id、role、family、parameter_hash、file、sha256、orders/products/stages/machines_per_stage、processing、eligibility_probability、arrival_process、iota（争用族为由目标负荷反算的值）、due_factor、rho_target（争用族的目标负荷，旧族为 -1）、replicate（争用族的复制实例序号，旧族为 -1）、machines（机器总数）、catalog_sha256、seed、sampling_attempts、Lambda、empirical_Lambda、p_bar、rho_sys。manifest记录六族的随机子流、目标负荷与联合接受条件。sensitivity与contested引用同一ID列表。teacher.json记录在contested_validation上的教师择优（规则、各规则分数、数据指纹）。训练实例不混入固定测试索引。
+index.csv每固定单元一行：instance_id（可读名：前缀 V/M/S/L/H<阶段数>/CV/C/CS 加订单数，旧网格接 I<到达强度>-K<交期系数>，争用网格接 R<目标负荷>-K<交期系数>-r<复制序号>，如 M48-I1.5-K3.0、C96-R1.6-K2.0-r3）、legacy_id（第一轮的 case_<哈希> 名，用于对照 result/formal）、role、family、parameter_hash、file、sha256、orders/products/stages/machines_per_stage、processing、eligibility_probability、arrival_process、iota（争用族为由目标负荷反算的值）、due_factor、rho_target（争用族的目标负荷，旧族为 -1）、replicate（争用族的复制实例序号，旧族为 -1）、machines（机器总数）、catalog_sha256、seed、sampling_attempts、Lambda、empirical_Lambda、p_bar、rho_sys。manifest记录六族的随机子流、目标负荷与联合接受条件。sensitivity与contested引用同一ID列表。teacher.json记录在contested_validation上的教师择优（规则、各规则分数、数据指纹）。训练实例不混入固定测试索引。
 
 所有sha256按换行归一后的内容计算（CRLF折为LF，二进制文件按原字节），因此同一提交在不同平台得到相同身份值；manifest的fingerprint是数据与基准配置段的哈希，配置键增减会改变它但不改变算例内容。
 

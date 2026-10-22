@@ -159,3 +159,11 @@ def test_evaluation_plan_and_groups_follow_the_study():
     assert groups_of(rows)==['all','rho=1','rho=1.3','due=1.5','due=2','orders=48','orders=96']
     assert grouped(rows,'rho=1.3')==rows[:1] and grouped(rows,'orders=96')==rows[1:] and grouped(rows,'all')==rows
     assert groups_of([dict(rho_target='-1.0',iota='1.5',rho='.8')])==['all','frequent','infrequent','overload','underload']
+
+
+def test_instance_labels_are_readable_and_unique():
+    from data.benchmark import number, label, design, cells, parameter_key
+    assert [number(x) for x in (1.0,1.15,1.3,2.0,0.6,3.0)]==['1.0','1.15','1.3','2.0','0.6','3.0']
+    c=config();rows=design(c);names=[label(s['role'],s,parameter_key(c,s,iota,due,rho,r)) for s,iota,due,rho,r in cells(rows)]
+    assert len(names)==len(set(names))==102 and all(set(n)<=set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-.') for n in names)
+    micro=config(True);assert {label(s['role'],s,parameter_key(micro,s,iota,due,rho,r)) for s,iota,due,rho,r in cells(design(micro))}>={'M8-I1.5-K3.0','C8-R1.3-K1.5-r1','H4-12-I1.5-K3.0'}

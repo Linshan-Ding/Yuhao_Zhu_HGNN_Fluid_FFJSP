@@ -10,12 +10,12 @@
   },
   "split": "contested_validation",
   "instances": [
-    "case_af12a78dd027aa8c",
-    "case_8718ac0133a836d5",
-    "case_1d08bc57a5242839",
-    "case_39b5ef7da3248010"
+    "CV72-R1.15-K1.75-r1",
+    "CV72-R1.45-K1.75-r1",
+    "CV72-R1.15-K1.75-r2",
+    "CV72-R1.45-K1.75-r2"
   ],
-  "fingerprint": "d2c07c7838548b73ed8d489653838f72a79f5e63d34df7e8d230956bf898c63a",
+  "fingerprint": "ba76da8ca987c41ebaf4ee05be26c8878c9eec86a512fc96440c0647ed6356e8",
   "rule_order": [
     "SPT",
     "FCFS",

@@ -45,9 +45,12 @@ def test_fixed_cells_shared_prefix_replicates_and_alias(tmp_path):
     a=inst[by[1.0,1.5,48,0]['instance_id']];b=inst[by[1.0,1.5,96,0]['instance_id']];d=inst[by[1.6,1.5,48,0]['instance_id']];e=inst[by[1.0,1.5,48,1]['instance_id']]
     np.testing.assert_array_equal(a.order_product,b.order_product[:48]);np.testing.assert_array_equal(a.arrival_times,b.arrival_times[:48])
     np.testing.assert_allclose(a.arrival_times*1.0,d.arrival_times*1.6);assert not np.array_equal(a.arrival_times,e.arrival_times)
-    # Legacy cells keep their ids and files (the published results refer to them).
+    # Readable ids; legacy cells keep their hash ids as aliases (the published results refer to them) and their files.
+    assert by[1.0,1.5,48,0]['instance_id']=='C48-R1.0-K1.5-r1' and by[1.6,2.0,96,2]['instance_id']=='C96-R1.6-K2.0-r3'
+    names={r['instance_id'] for r in m['cases']};assert len(names)==102 and {'M48-I1.5-K3.0','S12-I0.6-K1.5','H7-192-I2.5-K1.5','CV72-R1.15-K1.75-r2','CS36-R1.3-K2.0-r1'}<names
     legacy=json.loads((__import__('pathlib').Path(__file__).resolve().parents[1]/'data/instances/fixed/manifest.json').read_text())
-    assert {r['instance_id'] for r in legacy['cases']}<{r['instance_id'] for r in m['cases']}
+    aliases={r['legacy_id']:r for r in m['cases']}
+    assert all(i in aliases and aliases[i]['parameter_hash']==x['parameter_hash'] for i,x in ((r['instance_id'],r) for r in legacy['cases']))
     inst=fixtures(c,tmp_path,'main');indexed={(i.order_count,round(i.meta['iota'],1),i.meta['due_factor']):i for i in inst}
     a=indexed[48,.6,1.5];b=indexed[96,.6,1.5];d=indexed[48,1.5,1.5];e=indexed[48,.6,3.]
     np.testing.assert_array_equal(a.proc_times,b.proc_times);np.testing.assert_array_equal(a.order_product,b.order_product[:48])

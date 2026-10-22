@@ -37,7 +37,7 @@
 
 ## 3. 教师择优（已执行，试点前）
 
-`teacher: auto`：在争用验证集（4 例）上评估六条规则的平均履约率，取最高者，并列取 `RULES` 顺序靠前者；结果写入 `data/instances/fixed2/teacher.json`。
+`teacher: auto`：在争用验证集（4 例：CV72-R1.15-K1.75-r1/r2、CV72-R1.45-K1.75-r1/r2）上评估六条规则的平均履约率，取最高者，并列取 `RULES` 顺序靠前者；结果写入 `data/instances/fixed2/teacher.json`。固定算例按参数命名（`C48-R1.3-K1.5-r1` 式，见 data-dictionary.md），第一轮的 `case_` 哈希名以 `legacy_id` 保留。
 
 | 规则 | SPT | LWKR | EDD | CR | MST | FCFS |
 |---|---:|---:|---:|---:|---:|---:|
