@@ -57,7 +57,27 @@ def parameter_key(c, s, iota, due, rho=None, replicate=None):
 
 
 def dataset_identity(c):
-    return object_hash(dict(data=c['data'], benchmark=c['benchmark'], design=design(c), format='fixed-cell-2'))
+    return object_hash(dict(data=c['data'], benchmark=c['benchmark'], design=design(c), format='fixed-cell-3'))
+
+
+PREFIX = {'validation': 'V', 'main': 'M', 'small': 'S', 'long_stream': 'L', 'large_shop': 'H',
+          'contested_validation': 'CV', 'contested': 'C', 'contested_small': 'CS'}
+
+
+def number(x):
+    """Two decimals with trailing zeros removed but at least one kept: 1.0 -> '1.0', 1.15 -> '1.15', 0.6 -> '0.6'."""
+    s = f'{float(x):.2f}'.rstrip('0')
+    return s + '0' if s.endswith('.') else s
+
+
+def label(role, row, key):
+    """Human-readable, paper-ready instance id built from the design cell: a role prefix (V/M/S/L/H<stages>/CV/C/CS)
+    and the order count, then I<iota>-K<due factor> for legacy cells or R<target load>-K<due factor>-r<replicate> for
+    contested cells, e.g. M48-I1.5-K3.0, H7-192-I2.5-K1.5, C96-R1.6-K2.0-r3."""
+    head = f"H{row['stages']}-{key['orders']}" if role == 'large_shop' else f"{PREFIX[role]}{key['orders']}"
+    if 'rho_target' in key:
+        return f"{head}-R{number(key['rho_target'])}-K{number(key['due_factor'])}-r{key['replicate'] + 1}"
+    return f"{head}-I{number(key['iota'])}-K{number(key['due_factor'])}"
 
 
 def catalog_intensity(catalog, rho):
@@ -113,8 +133,8 @@ def prepare(c, root):
                 if rep is not None and rep != r: continue
                 if rep is None and r > 0: continue
                 intensity = iota if rho is None else catalog_intensity(catalog, rho)
-                key = parameter_key(c, row, intensity, due, rho, rep); cell = object_hash(key); name = 'case_' + cell[:16]
-                if any(e['parameter_hash'] == cell for e in entries): raise ValueError('Duplicate parameter configuration')
+                key = parameter_key(c, row, intensity, due, rho, rep); cell = object_hash(key); name = label(row['role'], row, key)
+                if any(e['parameter_hash'] == cell or e['instance_id'] == name for e in entries): raise ValueError('Duplicate parameter configuration')
                 n = row['orders']; lam = intensity / catalog.meta['p_bar']
                 arrivals = np.cumsum(gaps[:n]) / lam
                 due_dates = deadlines(arrivals, route, products[:n], due, jitter[:n])
@@ -132,7 +152,7 @@ def prepare(c, root):
                            ('proc_times','order_product','arrival_times','due_dates')): raise ValueError(f'Conflicting instance: {path}')
                 else: save_instance_csv(inst, path)
                 relative = path.relative_to(root).as_posix(); files[relative] = digest(path)
-                entries.append(dict(instance_id=name, role=row['role'], family=family, parameter_hash=cell,
+                entries.append(dict(instance_id=name, legacy_id='case_' + cell[:16], role=row['role'], family=family, parameter_hash=cell,
                     file=relative, sha256=files[relative], **{k: v for k, v in key.items() if k not in ('iota', 'rho_target', 'replicate')},
                     iota=float(intensity), rho_target=meta.get('rho_target', -1.), replicate=meta.get('replicate', -1), machines=inst.machine_count,
                     catalog_sha256=meta['catalog_sha256'], seed=seed, sampling_attempts=attempt,
@@ -143,7 +163,7 @@ def prepare(c, root):
         raise AssertionError(f"Formal benchmark must have {c['benchmark']['expected_cells']} unique cells, got {len(entries)}")
     write_csv(root / 'index.csv', [{**e, 'machines_per_stage':json.dumps(e['machines_per_stage']),
                                   'processing':json.dumps(e['processing'])} for e in entries])
-    saved = dict(format='fixed-cell-2', fingerprint=fingerprint, files=files, cases=entries, splits=splits,
+    saved = dict(format='fixed-cell-3', fingerprint=fingerprint, files=files, cases=entries, splits=splits,
                  families=families, index_sha256=digest(root/'index.csv'))
     atomic_json(manifest, saved); return saved
 
@@ -152,3 +172,10 @@ def fixtures(c, root, split):
     split = 'contested_validation' if split == 'monitor' else split
     saved = prepare(c, root); by_id = {r['instance_id']:r for r in saved['cases']}
     return [load_instance_csv(Path(root)/by_id[i]['file'], tier=split, instance_id=i) for i in saved['splits'][split]]
+
+
+def instance_by_id(c, root, instance_id):
+    """One fixed instance by its readable id (single-instance training and evaluation)."""
+    saved = prepare(c, root); entry = next((r for r in saved['cases'] if r['instance_id'] == instance_id), None)
+    if entry is None: raise KeyError(f'unknown fixed instance: {instance_id}')
+    return load_instance_csv(Path(root)/entry['file'], tier=entry['role'], instance_id=instance_id)

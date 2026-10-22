@@ -12,7 +12,7 @@ ALL_RULES = (*RULES, 'SPT-mixed')
 CLASSIC = ('dqn', 'ddqn', 'a2c', 'ppo')
 ABLATIONS = ('no_graph', 'no_scenario', 'no_demo', 'impact_only')
 METHODS = ('full', *CLASSIC, 'hgnn', 'dual_attention', *ABLATIONS)
-STUDIES = ('formal', 'pilot')
+STUDIES = ('formal', 'pilot', 'instance')
 
 
 def config(micro=False):
@@ -34,13 +34,14 @@ def config(micro=False):
                                evaluate_milestones_from=b // 2, latency_warmup=1, latency_repeats=2)
         c['experiment']['exact'].update(wall_seconds=2, deterministic_seconds=1)
         c['pilot'].update(seeds=[1], budget=b)
+        c['instance_study'].update(methods=['full', 'ppo'], seeds=[1], budget=b, evaluate_every=b // 2, milestones=[b // 2, b], demonstration_steps=32)
         c['teacher'] = 'SPT'   # engineering smoke uses a fixed rule; the selection itself is exercised separately
     return c
 
 
 def identity(c):
     # Operational paths/concurrency/reporting do not define the training algorithm.
-    ignored = {'runtime', 'recording', 'smoke', 'purpose', 'experiment', 'pilot'}
+    ignored = {'runtime', 'recording', 'smoke', 'purpose', 'experiment', 'pilot', 'instance_study'}
     return hashlib.sha256(json.dumps({k: v for k, v in c.items() if k not in ignored},
                                      sort_keys=True).encode()).hexdigest()
 
@@ -95,6 +96,7 @@ class RunSpec:
     budget: int
     group: str
     config: dict
+    instance: str = None   # single-instance study: the fixed instance this job trains and is evaluated on
 
     def record(self):
         return asdict(self)
@@ -108,13 +110,28 @@ def job(c, method, seed, budget, group):
     return RunSpec(f'{method}_s{seed}', method, seed, budget, group, d)
 
 
-def matrix(c, study='formal'):
-    """Immutable job list of a study: the formal matrix (73 jobs, 64M interactions) or the pre-registered pilot."""
+def matrix(c, study='formal', instances=None):
+    """Immutable job list of a study: the formal matrix (73 jobs, 64M interactions), the pre-registered pilot, or the
+    single-instance convergence study (every method and seed trained on each fixed instance of `instance_study.split`)."""
     if study not in STUDIES:
         raise ValueError(f'unknown study: {study}')
     if c['teacher'] == 'auto':
         raise ValueError('resolve_teacher must run before the job matrix is built')
     e = c['experiment']; jobs = []
+    if study == 'instance':
+        s = c['instance_study']
+        if not instances:
+            raise ValueError('the single-instance study needs the ids of its fixed instances')
+        for instance in instances:
+            for method in s['methods']:
+                for seed in s['seeds']:
+                    d = deepcopy(c); d['method'] = method; d['instance'] = instance
+                    if method in CLASSIC:
+                        d['training']['learning_rate'] = c['classic']['learning_rates'][method]
+                    d['training'].update(evaluate_every=s['evaluate_every'], milestones=[x for x in s['milestones'] if x <= s['budget']])
+                    d['demonstration']['steps'] = s['demonstration_steps']
+                    jobs.append(RunSpec(f'{method}_{instance}_s{seed}', method, seed, s['budget'], 'instance', d, instance))
+        return jobs
     if study == 'pilot':
         p = c['pilot']
         for method in p['methods']:

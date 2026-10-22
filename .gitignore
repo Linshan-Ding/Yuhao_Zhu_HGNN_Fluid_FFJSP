@@ -47,8 +47,11 @@ result/engineering/**/*.pt
 !/result/pilot/**
 !/result/formal2/
 !/result/formal2/**
+!/result/instance/
+!/result/instance/**
 result/pilot/**/*.pt
 result/formal2/**/*.pt
+result/instance/**/*.pt
 
 # The contested fixed benchmark (legacy cells byte-identical to data/instances/fixed)
 !/data/instances/fixed2/

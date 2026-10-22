@@ -159,3 +159,26 @@ def test_evaluation_plan_and_groups_follow_the_study():
     assert groups_of(rows)==['all','rho=1','rho=1.3','due=1.5','due=2','orders=48','orders=96']
     assert grouped(rows,'rho=1.3')==rows[:1] and grouped(rows,'orders=96')==rows[1:] and grouped(rows,'all')==rows
     assert groups_of([dict(rho_target='-1.0',iota='1.5',rho='.8')])==['all','frequent','infrequent','overload','underload']
+
+
+def test_instance_labels_are_readable_and_unique():
+    from data.benchmark import number, label, design, cells, parameter_key
+    assert [number(x) for x in (1.0,1.15,1.3,2.0,0.6,3.0)]==['1.0','1.15','1.3','2.0','0.6','3.0']
+    c=config();rows=design(c);names=[label(s['role'],s,parameter_key(c,s,iota,due,rho,r)) for s,iota,due,rho,r in cells(rows)]
+    assert len(names)==len(set(names))==102 and all(set(n)<=set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-.') for n in names)
+    micro=config(True);assert {label(s['role'],s,parameter_key(micro,s,iota,due,rho,r)) for s,iota,due,rho,r in cells(design(micro))}>={'M8-I1.5-K3.0','C8-R1.3-K1.5-r1','H4-12-I1.5-K3.0'}
+
+
+def test_single_instance_training_uses_one_fixed_instance_and_tracks_episodes(tmp_path):
+    import json,torch
+    from agent.training import train
+    from data.benchmark import prepare
+    c=config(True);data=tmp_path/'data';target=prepare(c,data)['splits']['contested_small'][0]
+    c['method']='ppo';c['instance']=target;c['training'].update(milestones=[16,32],evaluate_every=16,rollout_steps=8);torch.set_num_threads(1)
+    train(c,tmp_path/'run',3,32,data)
+    rows=[json.loads(x) for x in (tmp_path/'run/log.jsonl').read_text().splitlines()];last=rows[-1]
+    assert last['episodes']>=1 and 0<=last['best_episode_eta']<=1 and all('epoch_episode_eta' in r for r in rows)
+    monitor=json.loads((tmp_path/'run/monitor_32.json').read_text())['rows']
+    assert [r['instance_id'] for r in monitor]==[target]
+    state=torch.load(tmp_path/'run/checkpoint_last.pt',weights_only=False)
+    assert state['episodes']==last['episodes'] and state['best_episode']==last['best_episode_eta']

@@ -27,6 +27,10 @@
 
 共 18 作业，900 万交互；七条规则零训练。通过门槛与裁决见 preregistration-v2.md。
 
+## 单算例收敛研究（result/instance，入口 scripts/run_instance_study.py）
+
+12 个争用离线参照算例（CS24/CS36-R1.3-K1.5|2.0-r1..3）× 6 配置（full、no_graph、no_scenario、no_demo、hgnn、ppo）× 3 种子，每作业 100000 交互，作业名 `<方法>_<算例>_s<种子>`（如 `full_CS24-R1.3-K1.5-r1_s1`），共 216 作业、2160 万交互；七条规则零训练。无通过门槛，见 preregistration-v2.md 第 8 节。
+
 ## 正式 v2（result/formal2）
 
 | 作业 | 方法 | 种子 | 预算 | 入口 |

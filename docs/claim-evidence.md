@@ -13,5 +13,6 @@ v2 试点与正式实验尚未开始，以下是待验证主张，不预填优�
 | 与离线参照的距离 | CP-SAT时间映射与上界 | 24个小规模固定实例（旧12+争用12） | 排程、界、状态、回放 | offline_gaps（含gap_to_bound）、offline |
 | 学习过程与资源代价 | 各训练器 | 固定里程碑和验证监测 | log、updates、预算、execution | learning_curves、fixed_budget_learning、costs |
 | 等机派工与行为 | 完整动作空间（等机等待） | 阶段与固定实例分析 | decisions/events/mechanisms | behavior、gantt、mechanism |
+| 单一工况上的收敛与最终目标值 | 同一方法在单个固定算例上反复训练 | 12 个争用离线参照算例 × 6 配置 × 3 种子（result/instance） | log（episodes、best_episode_eta）、里程碑评测、CP-SAT 记录 | instance_curves、instance_final、instance_summary、instance_convergence |
 
 统计范围限于固定参数基准。争用网格每个参数组合3个独立实例、旧网格1个实现，都不能宣称估计了该参数的随机实例期望。种子区间仅反映训练随机性；主证据是自助区间与逐单元效应量，配对Wilcoxon只作附录参考且不校正。两个核心消融识别条件增益；未增加纯示范HGNN匹配单元，不计算完整二乘二交互。失利数据与胜出数据同样进入所有完整性检查和导出。v1 的正式结果（result/formal）作为稿件附录，不与 v2 混合统计。
