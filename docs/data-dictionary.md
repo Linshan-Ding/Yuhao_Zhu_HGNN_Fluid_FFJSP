@@ -2,9 +2,9 @@
 
 ## 实例与身份
 
-固定基准为 data/instances/fixed。cases中的CSV长表以kind区分header、stage_machines、proc、order、meta。订单和机器下标从0开始；时间单位为生成加工时间单位，不自动称为秒。CPU计时字段seconds为墙钟秒，ms为毫秒。
+固定基准为 data/instances/fixed2（旧 data/instances/fixed 仅供标签 `paper2-v1-formal` 复现，其 50 例在 fixed2 中 id 与文件字节完全相同）。cases中的CSV长表以kind区分header、stage_machines、proc、order、meta。订单和机器下标从0开始；时间单位为生成加工时间单位，不自动称为秒。CPU计时字段seconds为墙钟秒，ms为毫秒。
 
-index.csv每参数组合一行：instance_id、role、family、parameter_hash、file、sha256、orders/products/stages/machines_per_stage、processing、eligibility_probability、arrival_process、iota、due_factor、machines（机器总数）、catalog_sha256、seed、sampling_attempts、Lambda、empirical_Lambda、p_bar、rho_sys。manifest记录四族的随机子流和联合接受条件。sensitivity与main引用同一ID列表。训练实例不混入固定测试索引。
+index.csv每固定单元一行：instance_id、role、family、parameter_hash、file、sha256、orders/products/stages/machines_per_stage、processing、eligibility_probability、arrival_process、iota（争用族为由目标负荷反算的值）、due_factor、rho_target（争用族的目标负荷，旧族为 -1）、replicate（争用族的复制实例序号，旧族为 -1）、machines（机器总数）、catalog_sha256、seed、sampling_attempts、Lambda、empirical_Lambda、p_bar、rho_sys。manifest记录六族的随机子流、目标负荷与联合接受条件。sensitivity与contested引用同一ID列表。teacher.json记录在contested_validation上的教师择优（规则、各规则分数、数据指纹）。训练实例不混入固定测试索引。
 
 所有sha256按换行归一后的内容计算（CRLF折为LF，二进制文件按原字节），因此同一提交在不同平台得到相同身份值；manifest的fingerprint是数据与基准配置段的哈希，配置键增减会改变它但不改变算例内容。
 
@@ -16,12 +16,12 @@ index.csv每参数组合一行：instance_id、role、family、parameter_hash、
 |---|---|---|
 | episodes | episode_id，instance对象哈希 | 初始状态、起始时间、已有事件、记录用途；恢复时可再次出现同ID的恢复快照 |
 | decisions | episode_id + step | start/end、动作、全部合法legal_actions、等待订单/忙机器数、reward、done/terminated/truncated、phase、动态数组变更、主动空闲机器时间、environment_seconds；评测额外有全部候选评分与观测/推断时间 |
-| events | episode_id + decision | arrival、operation_start/finish、order_resolved、wait；工序开始含order/stage/machine/duration/scheduled_end；结局含原因 |
+| events | episode_id + decision | arrival、operation_start/finish、order_resolved、wait；工序开始含order/stage/machine/duration/scheduled_end；wait 含被等机器 awaited_machine、代表订单 awaited_order 与预计完工 awaited_finish；结局含原因 |
 | orders | episode_id + order + snapshot_time + episode_reason | 产品、到达、交期、outcome、status、stage、快照时间；预算收尾可能仍未解决，不强行记失败 |
-| queries | query_id | 查询公开快照（public_state）、冻结策略对象（frozen_policy）、动作对、推荐来源、冻结策略版本 |
+| queries | query_id | 查询公开快照（public_state）、冻结策略对象（frozen_policy）、动作对（锚点=策略贪心动作，挑战者）、来源（contested_policy/contested_rule/explicit）、冻结策略版本 |
 | futures | query_id + scenario | 实际模拟产品、到达、交期数组，不只是哈希 |
 | branches | query_id + scenario + action_index | 分支episode_id，连接完整动作与事件轨迹 |
-| preferences | query_id | 逐情景returns、mean、standard_error、reliability、probability、complete、steps、seconds、后续策略（SPT或frozen_policy）、冻结策略与候选策略哈希 |
+| preferences | query_id | 逐未来returns（按时完成数，[k_used,2]）、mean、standard_error、reliability、probability、complete、steps、seconds、k_used、winner（challenger/anchor/tie）、late_sets（锚点/挑战者承诺后预计迟交的订单）、冻结策略与候选策略哈希；两分支均由冻结策略延续 |
 | updates | kind + epoch或number | 实际损失、梯度、KL、尝试/接受/回退及优化时间 |
 | mechanisms | episode_id + phase | 阶段首个有效决策的公开图、动作、评分及表示对象引用 |
 
@@ -33,7 +33,7 @@ DQN/DDQN的scores是Q值，probabilities和value为空；规则没有神经分�
 
 ## 场景与预算
 
-收益差为挑战动作减参照动作，分母为当前尚未解决订单与窗口内模拟订单。配对分支共享同一未来及后续策略；标签可靠性是训练启发式，不是统计置信保证。未完成分支的complete=false，保留成本与轨迹，不进入监督缓冲。
+收益差为挑战动作分支减锚点分支的按时完成订单数（整数，不再按队列规模归一；cohort_sizes 仅记录队列规模）。查询只在争用状态发出：候选承诺后“无法按时完成的订单集合”不同；共享未来逐个加入，直到 |mean|>2·standard_error、全部为零或达到 scenario.max_count。配对分支共享同一未来及冻结策略延续；reliability=|mean|/(|mean|+se+reliability_floor) 是训练启发式，不是统计置信保证。只有 winner=challenger 且 reliability≥scenario.reliability_threshold 的标签作为改进动作交叉熵目标进入更新；未完成分支的complete=false，保留成本与轨迹，不进入监督缓冲。训练日志的 usable_labels 累计可用标签数，contested_checks 累计争用判定次数。
 
 训练total_steps=real_steps+scenario_steps+demonstration_steps+lost_upper_bound。记录器steps还包括该运行中的验证评测，不能直接当训练预算。预留账本在执行前持久化，恢复时未提交预留保守计费；未提交块和failed_raw清单保留但不混入已提交轨迹。
 
@@ -51,11 +51,11 @@ decision_ms为平均网络/规则推断耗时，observation_ms为平均公开观
 
 latency.csv为SPT固定公共状态面板上的原始计时，不重复生成算例。orders/operations/machines/candidates描述该状态规模；seed是模型训练种子。规则seed=0仅是非训练标记，不增加重复。
 
-统计以固定参数格上的训练种子向量为随机单位。相同参数一个实例；区间不覆盖随机算例生成波动。对照规则没有种子标准差。多方法的主比较以full为参照：summary/effects给出各条件组的自助95%区间与正向种子数、胜/平/负单元数，case_effects给出每个固定单元的配对种子均值差、种子标准差、自助区间与正向种子数（主证据）；tests只保留未校正的配对Wilcoxon原始p值作附录参考，有效样本数是训练种子数，不做Holm等多重比较校正。
+统计以固定参数格上的训练种子向量为随机单位。旧网格相同参数一个实例，争用网格每单元 3 个独立实例（cell_effects 按设计单元给出复制实例均值的配对效应，分组 rho=/due=/orders= 按设计因子）；区间不覆盖随机算例生成波动。对照规则没有种子标准差。多方法的主比较以full为参照：summary/effects给出各条件组的自助95%区间与正向种子数、胜/平/负单元数，case_effects给出每个固定单元的配对种子均值差、种子标准差、自助区间与正向种子数（主证据）；tests只保留未校正的配对Wilcoxon原始p值作附录参考，有效样本数是训练种子数，不做Holm等多重比较校正。
 
 ## 离线与来源
 
-exact JSON保存每个工序的机器/开始/结束、求解器响应、时间映射、参数、上下界和回放。只有OPTIMAL证明最优。可行解差为offline incumbent减online，可能为负，不误标为证明的最优性差距。
+exact JSON保存每个工序的机器/开始/结束、求解器响应、时间映射、参数、上下界和回放，覆盖 experiment.exact_splits（small 与 contested_small）。只有OPTIMAL证明最优。可行解差为offline incumbent减online，可能为负，不误标为证明的最优性差距；gap_to_bound 为求解器上界减online，是任何策略都不可能超过的差距。
 
 评测complete.json连接模型、固定实例和评测代码哈希。statistics_manifest连接输入/输出CSV；paper_assets/manifest连接每张表图。任何报告结论可沿这些引用回到原始订单和事件。
 

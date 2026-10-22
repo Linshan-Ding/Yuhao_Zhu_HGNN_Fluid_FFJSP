@@ -53,7 +53,6 @@ class PublicSchedulingState:
     discarded: int
     t_ref: float
     p_ref: float
-    wait_interval: float
     raw_actions: tuple
 
     @classmethod
@@ -67,7 +66,7 @@ class PublicSchedulingState:
         return cls(safe,deepcopy(env.cfg.raw),env.now,readonly(env.status[known]),readonly(env.stage[known]),
             readonly(env.machine_free_at),readonly([mapping[int(o)] if o>=0 else -1 for o in env.machine_busy_with]),
             readonly(env.machine_busy_time),readonly(env.order_outcome[known]),readonly(known),
-            env.n_completed,env.n_discarded,env.t_ref,env.p_ref,env.wait_interval,raw)
+            env.n_completed,env.n_discarded,env.t_ref,env.p_ref,raw)
 
     @property
     def order_map(self): return {int(o):k for k,o in enumerate(self.original_ids)}
@@ -95,7 +94,7 @@ class PublicSchedulingState:
         from types import SimpleNamespace
         return SimpleNamespace(inst=self.instance,problem=Problem(self.instance),now=self.now,
             status=self.status,stage=self.stage,machine_free_at=self.machine_free,machine_busy_with=self.machine_busy,
-            t_ref=self.t_ref,p_ref=self.p_ref,wait_interval=self.wait_interval,n_completed=self.completed,
+            t_ref=self.t_ref,p_ref=self.p_ref,n_completed=self.completed,
             n_discarded=self.discarded,candidate_actions=lambda:self.raw_actions,
             _idle_mask=lambda:(self.machine_busy<0))
 

@@ -1,5 +1,7 @@
 # 正式实验前本机验收报告
 
+> **状态（2026‑10‑21）**：本报告对应第一轮代码（标签 `paper2-v1-formal`）。方法与基准已按 [预注册 v2](preregistration-v2.md) 重设计，训练/评测源码身份随之改变，启动试点或正式 v2 前必须在本机重新运行 `scripts/run_00_smoke.py` 并更新本报告与 `acceptance.json`。
+
 日期：2026-09-26。结论：**当前代码通过完整工程验收，可在本机以 1 作业并发启动正式实验。正式训练尚未启动。**
 
 本报告针对当前工作树源码；算法、正式超参数、固定算例和 6,400 万预算未改变。历史报告与当时的身份值分别保留在 [历史报告](acceptance-history.md) 和 [历史摘要](acceptance-history.json)，不与本轮结果混用。机器可读摘要见 [acceptance.json](acceptance.json)。

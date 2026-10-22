@@ -16,6 +16,8 @@ from result.storage import atomic_json, digest, object_hash, write_csv, atomic_t
 from result.provenance import source_hash, evaluation_hash
 
 PANEL_RULE='SPT'  # rule whose test-split trajectories supply the shared-state timing panel
+PRIMARY='contested'  # the split that carries learning curves, validation-best and behavior summaries
+SECONDARY=('contested_small','main','small','long_stream','large_shop')
 
 
 @torch.no_grad()
@@ -70,7 +72,8 @@ def evaluate_instances(policy, instances, c, recorder=None, kind='evaluation', p
         wall=time.perf_counter()-begun
         row=dict(instance_id=inst.instance_id,eta=env.eta,iota=inst.meta['iota'],rho=inst.meta['rho_sys'],
                  orders=inst.order_count,products=inst.product_count,stages=inst.stage_count,machines=inst.machine_count,
-                 due_factor=inst.meta['due_factor'],parameter_hash=inst.meta.get('parameter_hash'),
+                 due_factor=inst.meta['due_factor'],rho_target=inst.meta.get('rho_target',-1.),replicate=int(inst.meta.get('replicate',-1)),
+                 parameter_hash=inst.meta.get('parameter_hash'),
                  steps=steps,wait_fraction=waits/max(steps,1),held_share=env.held_share,
                  completed=env.n_completed,failed=env.n_discarded,decision_ms=1000*infer_total/max(steps,1),
                  observation_ms=1000*build_total/max(steps,1),decision_p50_ms=1000*float(np.median(timings)) if timings else 0.,
@@ -121,7 +124,7 @@ def cached_case(root, inst, policy, model_id, c, instance_sha, panel=False):
 
 
 def milestone_points(c,core):
-    """Intermediate core checkpoints that are evaluated on the main split (fixed-budget learning curves)."""
+    """Intermediate core checkpoints that are evaluated on the primary split (fixed-budget learning curves)."""
     start=c['experiment']['evaluate_milestones_from']
     return sorted({x for s in core for x in s.config['training']['milestones'] if start<=x<s.budget})
 
@@ -135,14 +138,15 @@ def evaluation_plan(c,specs):
     evaluate_matrix runs this plan and statistics.validate checks the persisted tables against the same plan."""
     e=c['experiment'];core=[s for s in specs if s.group!='sensitivity'];final=lambda s:f'checkpoint_{s.budget}.pt'
     plan=[dict(name=split,split=split,models=[(s,final(s)) for s in core],rules=ALL_RULES,panel=PANEL_RULE)
-          for split in ('main','small','long_stream','large_shop')]
-    plan+=[dict(name=f'main_{p}',split='main',models=[(s,f'checkpoint_{p}.pt') for s in core],rules=(),panel=None) for p in milestone_points(c,core)]
-    plan.append(dict(name='main_best',split='main',models=[(s,'checkpoint_best.pt') for s in core],rules=(),panel=None))
-    plan.append(dict(name='initialization',split='validation',models=[(s,'checkpoint_initialization.pt') for s in core if uses_demo(s.method)],
-                     rules=(c['teacher'],),panel=None))
+          for split in (PRIMARY,*SECONDARY)]
+    plan+=[dict(name=f'{PRIMARY}_{p}',split=PRIMARY,models=[(s,f'checkpoint_{p}.pt') for s in core],rules=(),panel=None) for p in milestone_points(c,core)]
+    plan.append(dict(name=f'{PRIMARY}_best',split=PRIMARY,models=[(s,'checkpoint_best.pt') for s in core],rules=(),panel=None))
+    plan.append(dict(name='initialization',split='contested_validation',models=[(s,'checkpoint_initialization.pt') for s in core if uses_demo(s.method)],
+                     rules=ALL_RULES,panel=None))
     changed=[(s,final(s)) for s in specs if s.group=='sensitivity']
-    defaults=[(s,f"checkpoint_{e['sensitivity_budget']}.pt") for s in core if s.method=='full' and s.seed in e['sensitivity_seeds']]
-    plan.append(dict(name='sensitivity',split='sensitivity',models=changed+defaults,rules=(),panel=None))
+    if changed:
+        defaults=[(s,f"checkpoint_{e['sensitivity_budget']}.pt") for s in core if s.method=='full' and s.seed in e['sensitivity_seeds']]
+        plan.append(dict(name='sensitivity',split='sensitivity',models=changed+defaults,rules=(),panel=None))
     return plan
 
 

@@ -1,4 +1,4 @@
-"""Single configuration source and immutable formal job specifications."""
+"""Single configuration source, pre-registered teacher selection and immutable job specifications."""
 from copy import deepcopy
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -12,6 +12,7 @@ ALL_RULES = (*RULES, 'SPT-mixed')
 CLASSIC = ('dqn', 'ddqn', 'a2c', 'ppo')
 ABLATIONS = ('no_graph', 'no_scenario', 'no_demo', 'impact_only')
 METHODS = ('full', *CLASSIC, 'hgnn', 'dual_attention', *ABLATIONS)
+STUDIES = ('formal', 'pilot')
 
 
 def config(micro=False):
@@ -23,7 +24,7 @@ def config(micro=False):
         b = c['smoke']['budget']
         c['purpose'] = 'engineering-smoke'
         c['data'].update(orders=[6, 8])
-        c['network'].update(width=16, layers=1, action_layers=1, candidate_chunk=16)
+        c['network'].update(width=16, layers=1)
         c['demonstration'].update(steps=32, epochs=2, minibatch=16)
         c['training'].update(rollout_steps=32, minibatch=16, epochs=1, environments=2,
                              milestones=[b // 2, b], evaluate_every=b)
@@ -32,12 +33,14 @@ def config(micro=False):
         c['experiment'].update(seeds=[1], budget=b, sensitivity_seeds=[1], sensitivity_budget=b,
                                evaluate_milestones_from=b // 2, latency_warmup=1, latency_repeats=2)
         c['experiment']['exact'].update(wall_seconds=2, deterministic_seconds=1)
+        c['pilot'].update(seeds=[1], budget=b)
+        c['teacher'] = 'SPT'   # engineering smoke uses a fixed rule; the selection itself is exercised separately
     return c
 
 
 def identity(c):
     # Operational paths/concurrency/reporting do not define the training algorithm.
-    ignored = {'runtime', 'recording', 'smoke', 'purpose', 'experiment'}
+    ignored = {'runtime', 'recording', 'smoke', 'purpose', 'experiment', 'pilot'}
     return hashlib.sha256(json.dumps({k: v for k, v in c.items() if k not in ignored},
                                      sort_keys=True).encode()).hexdigest()
 
@@ -45,9 +48,31 @@ def identity(c):
 def environment_config(c):
     from configs.config import Config
     e = c['environment']
-    return Config({'action_space': {'allow_noop': True, 'wait_interval': e['wait_interval'],
-                                    'exposure': e['exposure'], 'exposure_threshold': e['exposure_threshold']},
+    return Config({'action_space': {'allow_noop': True, 'exposure': e['exposure'], 'exposure_threshold': e['exposure_threshold']},
                    'episode': {'max_decision_steps': e['max_steps']}})
+
+
+def resolve_teacher(c, data):
+    """Pre-registered teacher selection on the contested validation split (never on test instances).
+
+    With `teacher: auto`, every rule in RULES is evaluated on the fixed validation cells, the rule with the highest mean
+    fulfillment (ties broken by RULES order) is written to <data>/teacher.json and returned in a copy of the
+    configuration, so that run identities carry a concrete rule. A named teacher is returned unchanged."""
+    if c['teacher'] != 'auto':
+        return deepcopy(c)
+    from agent.rules import RulePolicy
+    from data.benchmark import fixtures, prepare
+    from result.evaluation import evaluate_instances
+    from result.storage import atomic_json
+    import numpy as np
+    dataset = prepare(c, data); instances = fixtures(c, data, 'contested_validation')
+    scores = {rule: float(np.mean([r['eta'] for r in evaluate_instances(RulePolicy(rule), instances, c)])) for rule in RULES}
+    best = max(RULES, key=lambda r: (scores[r], -RULES.index(r)))
+    atomic_json(Path(data) / 'teacher.json', dict(rule=best, scores=scores, split='contested_validation',
+                instances=[i.instance_id for i in instances], fingerprint=dataset['fingerprint'],
+                rule_order=list(RULES), selection='highest mean fulfillment on the contested validation split; ties by rule order'))
+    d = deepcopy(c); d['teacher'] = best
+    return d
 
 
 def uses_demo(method):
@@ -75,15 +100,30 @@ class RunSpec:
         return asdict(self)
 
 
-def matrix(c):
+def job(c, method, seed, budget, group):
+    d = deepcopy(c); d['method'] = method
+    if method in CLASSIC:
+        d['training']['learning_rate'] = c['classic']['learning_rates'][method]
+    d['training']['milestones'] = [x for x in d['training']['milestones'] if x <= budget]
+    return RunSpec(f'{method}_s{seed}', method, seed, budget, group, d)
+
+
+def matrix(c, study='formal'):
+    """Immutable job list of a study: the formal matrix (73 jobs, 64M interactions) or the pre-registered pilot."""
+    if study not in STUDIES:
+        raise ValueError(f'unknown study: {study}')
+    if c['teacher'] == 'auto':
+        raise ValueError('resolve_teacher must run before the job matrix is built')
     e = c['experiment']; jobs = []
+    if study == 'pilot':
+        p = c['pilot']
+        for method in p['methods']:
+            for seed in p['seeds']:
+                jobs.append(job(c, method, seed, p['budget'], 'main' if method == 'full' else 'comparators'))
+        return jobs
     for method in METHODS:
         for seed in e['seeds']:
-            d = deepcopy(c); d['method'] = method
-            if method in CLASSIC:
-                d['training']['learning_rate'] = c['classic']['learning_rates'][method]
-            group = 'main' if method == 'full' else 'comparators'
-            jobs.append(RunSpec(f'{method}_s{seed}', method, seed, e['budget'], group, d))
+            jobs.append(job(c, method, seed, e['budget'], 'main' if method == 'full' else 'comparators'))
     for name, change in e['sensitivity_changes'].items():
         for seed in e['sensitivity_seeds']:
             d = deepcopy(c); d['method'] = 'full'; d['scenario'].update(change)

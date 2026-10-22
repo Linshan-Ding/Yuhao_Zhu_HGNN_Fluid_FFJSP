@@ -1,6 +1,33 @@
-# 正式运行矩阵
+# 运行矩阵（v2）
 
-全部作业尚未启动。动态状态以 result/formal/budget_ledger.json 和各作业 status.json 为准。
+第一轮正式矩阵（73 作业）已于 2026-10 完成并发布在 `result/formal/`（标签 `paper2-v1-formal`）。下表为 v2 的矩阵：先预注册试点，通过后启动正式 v2（`result/formal2/`）。动态状态以各根目录的 budget_ledger.json 和各作业 status.json 为准。
+
+## 预注册试点（result/pilot，入口 scripts/run_pilot.py）
+
+| 作业 | 方法 | 种子 | 预算 |
+|---|---|---:|---:|
+| full_s1 | full | 1 | 500000 |
+| full_s2 | full | 2 | 500000 |
+| full_s3 | full | 3 | 500000 |
+| no_graph_s1 | no_graph | 1 | 500000 |
+| no_graph_s2 | no_graph | 2 | 500000 |
+| no_graph_s3 | no_graph | 3 | 500000 |
+| no_scenario_s1 | no_scenario | 1 | 500000 |
+| no_scenario_s2 | no_scenario | 2 | 500000 |
+| no_scenario_s3 | no_scenario | 3 | 500000 |
+| no_demo_s1 | no_demo | 1 | 500000 |
+| no_demo_s2 | no_demo | 2 | 500000 |
+| no_demo_s3 | no_demo | 3 | 500000 |
+| hgnn_s1 | hgnn | 1 | 500000 |
+| hgnn_s2 | hgnn | 2 | 500000 |
+| hgnn_s3 | hgnn | 3 | 500000 |
+| ppo_s1 | ppo | 1 | 500000 |
+| ppo_s2 | ppo | 2 | 500000 |
+| ppo_s3 | ppo | 3 | 500000 |
+
+共 18 作业，900 万交互；七条规则零训练。通过门槛与裁决见 preregistration-v2.md。
+
+## 正式 v2（result/formal2）
 
 | 作业 | 方法 | 种子 | 预算 | 入口 |
 |---|---|---:|---:|---|
@@ -59,23 +86,23 @@
 | impact_only_s3 | impact_only | 3 | 1000000 | run_03_train_comparators.py |
 | impact_only_s4 | impact_only | 4 | 1000000 | run_03_train_comparators.py |
 | impact_only_s5 | impact_only | 5 | 1000000 | run_03_train_comparators.py |
-| sensitivity_k1_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_k1_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_k1_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_k4_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_k4_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_k4_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_kmax4_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_kmax4_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_kmax4_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_kmax16_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_kmax16_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_kmax16_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_t03_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_t03_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_t03_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_t07_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_t07_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
+| sensitivity_t07_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
 | sensitivity_w003_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
 | sensitivity_w003_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
 | sensitivity_w003_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
 | sensitivity_w03_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
 | sensitivity_w03_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
 | sensitivity_w03_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_h1_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_h1_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_h1_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_h4_s1 | full | 1 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_h4_s2 | full | 2 | 500000 | run_04_train_sensitivity.py |
-| sensitivity_h4_s3 | full | 3 | 500000 | run_04_train_sensitivity.py |
 
-共73作业，6400万交互。CPU单进程一线程，上限8并发；初始化与情景已包含于作业预算。
+共73作业，6400万交互。CPU单进程一线程，上限8并发；初始化与情景已包含于作业预算。敏感性单因素：kmax4/kmax16（最大未来数）、t03/t07（可靠性阈值）、w003/w03（辅助权重）。

@@ -83,7 +83,7 @@ def probe(method,root):
     if uses_scenario(method):
         preferences=PreferenceReplay(c['scenario']['replay_size'],c['scenario']['versions'])
         valid=[o for o in observations if len(o.candidate)>1]
-        label=ScenarioPreference((0,1),np.array([[0.,1.],[0.,1.]]),1.,0.,.9,.9,0,8,0.,True,'resource_fixture',[],[],'',[],[])
+        label=ScenarioPreference((0,1),np.array([[0.,1.],[0.,1.]]),1.,0.,.9,.9,0,8,0.,True,'resource_fixture',[],[],'',[],2,'challenger',[[],[]])
         encoded=[pickle.dumps((o,label),protocol=5) for o in valid]
         for j in range(c['scenario']['replay_size']):preferences.items.append(pickle.loads(encoded[j%len(encoded)]))
         metrics.update(preference_update(policy,optimizer,preferences,c,np.random.default_rng(13),0))
@@ -98,7 +98,7 @@ def probe(method,root):
     atomic_torch_save(dict(model=policy.state_dict(),cfg=c),root/'inference.pt')
     del restored,state,replay,preferences,records,observations;gc.collect()
     # Full largest-shop input, with all orders visible, exercises worst candidate/graph shape.
-    inst=next(i for i in fixtures(c,ROOT/'data/instances/fixed','large_shop') if i.stage_count==7)
+    inst=next(i for i in fixtures(c,ROOT/c['experiment']['data'],'large_shop') if i.stage_count==7)
     inst=replace(inst,arrival_times=np.zeros(inst.order_count),due_dates=np.full(inst.order_count,100000.))
     obs=observe(SchedulingEnv(inst,environment_config(c)))
     with torch.no_grad():

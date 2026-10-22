@@ -1,6 +1,6 @@
 """Build the public graph exclusively from arrived orders and the public catalog."""
 import numpy as np
-from environment.env import WAITING, IN_PROCESS, NOT_ARRIVED
+from environment.env import WAITING, IN_PROCESS, NOT_ARRIVED, dominating_wait
 from environment.interfaces import Dispatch, Wait
 from environment.public import ActionSet, DecisionObservation, PublicSchedulingState
 
@@ -18,6 +18,9 @@ def observe(state):
     arrived = np.flatnonzero(env.status != NOT_ARRIVED)
     tref, pref = env.t_ref, env.p_ref
     nseen = max(len(arrived), 1)
+    awaited = dominating_wait(inst, p, env.status, env.stage, env.machine_free_at, env.machine_busy_with, now)
+    release = (awaited[0]-now)/tref if awaited else 0.   # time until the awaited machine completes the held operation
+    gain = awaited[4]/pref if awaited else 0.            # its completion-time advantage over the best idle machine
     machine = np.zeros((p.n_machine, MACHINE_DIM), np.float32)
     idle = env._idle_mask()
     machine[:, 0] = idle
@@ -68,7 +71,7 @@ def observe(state):
     for t,m,o in raw:
         if t < 0:
             candidate.append((-1,-1,-1))
-            features.append([0,0,0,0,1,env.wait_interval/tref,0])
+            features.append([0,0,0,0,1,release,gain])
         else:
             stage = int(env.stage[o])
             r = int(inst.order_product[o])
@@ -80,7 +83,7 @@ def observe(state):
     history_time = max(now-float(inst.arrival_times[arrived].min()), tref)
     rate = max(len(arrived)-1,0)/history_time
     glob = np.asarray([env.n_completed/nseen,env.n_discarded/nseen,len(active)/nseen,
-        rate*pref,float(idle.mean()),np.log1p(nseen),env.wait_interval/tref,p.n_stage/10],np.float32)
+        rate*pref,float(idle.mean()),np.log1p(nseen),release,p.n_stage/10],np.float32)
     return DecisionObservation(np.asarray(order,np.float32), np.asarray(op,np.float32), machine,
         np.asarray(owner,np.int64), np.asarray(prec,np.int64).reshape(-1,2),
         np.asarray(elig,np.int64).reshape(-1,2),np.asarray(edge,np.float32).reshape(-1,EDGE_DIM),

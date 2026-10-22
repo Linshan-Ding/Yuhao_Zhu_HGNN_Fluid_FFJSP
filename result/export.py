@@ -5,6 +5,7 @@ import shutil
 import numpy as np
 from result.storage import read_csv, write_csv, atomic_json, digest
 from result.statistics import validate
+from result.evaluation import PRIMARY
 from result.recording import records
 
 
@@ -34,28 +35,34 @@ def export(root,data,c,specs):
         lines += [r'\bottomrule',r'\end{tabular}'];p.write_text('\n'.join(lines),encoding='utf-8');made.append(p)
     for p in root.glob('*.csv'):
         out=target/p.name;shutil.copy2(p,out);made.append(out)
-    summaries=read_csv(root/'summary.csv');main=[r for r in summaries if r['split']=='main'];methods=sorted({r['variant'] for r in main})
-    lookup={(r['group'],r['variant']):r for r in main}
-    table('comparison',['Method','All (%)','Frequent (%)','Infrequent (%)'],
-        [[m,*[f"{100*float(lookup[g,m]['eta']):.2f}" if (g,m) in lookup else '--' for g in ('all','frequent','infrequent')]] for m in methods])
+    summaries=read_csv(root/'summary.csv');main=[r for r in summaries if r['split']==PRIMARY];methods=sorted({r['variant'] for r in main})
+    lookup={(r['group'],r['variant']):r for r in main};groups=list(dict.fromkeys(r['group'] for r in main))
+    table('comparison',['Method',*[f'{g} (%)' for g in groups]],
+        [[m,*[f"{100*float(lookup[g,m]['eta']):.2f}" if (g,m) in lookup else '--' for g in groups]] for m in methods])
+    legacy=[r for r in summaries if r['split']=='main'];legacy_lookup={(r['group'],r['variant']):r for r in legacy}
+    table('comparison_legacy',['Method','All (%)','Frequent (%)','Infrequent (%)'],
+        [[m,*[f"{100*float(legacy_lookup[g,m]['eta']):.2f}" if (g,m) in legacy_lookup else '--' for g in ('all','frequent','infrequent')]] for m in sorted({r['variant'] for r in legacy})])
     ablations=('no_graph','no_scenario','no_demo','impact_only')
-    selected=[r for r in read_csv(root/'effects.csv') if r['split']=='main' and r['group']=='all' and r['contrast'].split()[-1] in ablations]
+    selected=[r for r in read_csv(root/'effects.csv') if r['split']==PRIMARY and r['group']=='all' and r['contrast'].split()[-1] in ablations]
     table('components',['Conditional contrast','Difference (pp)','Lower','Upper','Positive seeds','Cells won/tied/lost'],
           [[r['contrast'],*[f'{100*float(r[k]):.3f}' if r[k] else '--' for k in ('difference','ci_low','ci_high')],
             f"{r['positive_seeds']}/{r['seeds']}",f"{r['wins']}/{r['ties']}/{r['losses']}"] for r in selected])
-    # Appendix reference only: unadjusted paired Wilcoxon p-values on the main split.
+    # Appendix reference only: unadjusted paired Wilcoxon p-values on the primary split.
     table('tests',['Group','Contrast','Seeds','Wilcoxon p (unadjusted)'],
-          [[r['group'],r['comparison'],r['seeds'],f"{float(r['p']):.4f}"] for r in read_csv(root/'tests.csv') if r['split']=='main'])
-    for name,splits in [('sensitivity',('sensitivity',)),('generalization',('long_stream','large_shop')),('initialization',('initialization',)),('validation_best',('main_best',))]:
+          [[r['group'],r['comparison'],r['seeds'],f"{float(r['p']):.4f}"] for r in read_csv(root/'tests.csv') if r['split']==PRIMARY])
+    cells=[r for r in read_csv(root/'cell_effects.csv') if r['split']==PRIMARY and r['contrast'].split()[-1] in ablations]
+    table('cell_effects',['Contrast','Load','Due factor','Orders','Difference (pp)','Lower','Upper','Positive seeds'],
+          [[r['contrast'],r['rho_target'],r['due_factor'],r['orders'],*[f'{100*float(r[k]):.2f}' if r[k] else '--' for k in ('difference','ci_low','ci_high')],f"{r['positive_seeds']}/{r['seeds']}"] for r in cells])
+    for name,splits in [('sensitivity',('sensitivity',)),('generalization',('main','small','long_stream','large_shop')),('initialization',('initialization',)),('validation_best',(f'{PRIMARY}_best',))]:
         rr=[r for r in summaries if r['split'] in splits and r['group']=='all']
         table(name,['Dataset / method','Fulfillment (%)','Seed SD (pp)'],
               [[r['split']+' / '+r['variant'],f"{100*float(r['eta']):.2f}",f"{100*float(r['seed_sd']):.2f}" if r['seed_sd'] else '--'] for r in rr])
-    rr=[lookup['frequent',m] for m in methods if ('frequent',m) in lookup]
+    rr=[lookup['all',m] for m in methods if ('all',m) in lookup]
     fig,ax=plt.subplots(figsize=(11,4));ax.bar([r['variant'] for r in rr],[100*float(r['eta']) for r in rr],
         yerr=[100*float(r['seed_sd']) if r['seed_sd'] else 0 for r in rr]);ax.set_ylabel('On-time fulfillment (%)');ax.tick_params(axis='x',rotation=65);save(fig,'fulfillment')
     fig,ax=plt.subplots(figsize=(8,4));ax.barh([r['contrast'] for r in selected],[100*float(r['difference']) for r in selected]);ax.axvline(0,color='black',lw=.8);ax.set_xlabel('Conditional mean difference (percentage points)');save(fig,'components')
     # Paired per-cell effects on the main split, one marker per fixed cell with its seed-vector interval.
-    cells=[r for r in read_csv(root/'case_effects.csv') if r['split']=='main' and r['contrast'].split()[-1] in ablations]
+    cells=[r for r in read_csv(root/'case_effects.csv') if r['split']==PRIMARY and r['contrast'].split()[-1] in ablations]
     fig,ax=plt.subplots(figsize=(11,4));contrasts=sorted({r['contrast'] for r in cells})
     for k,contrast in enumerate(contrasts):
         rr=sorted([r for r in cells if r['contrast']==contrast],key=lambda r:r['instance_id']);xs=np.arange(len(rr))+(k-(len(contrasts)-1)/2)*.15
@@ -63,14 +70,16 @@ def export(root,data,c,specs):
         err=[[100*(float(r['difference'])-float(r['ci_low'])) if r['ci_low'] else 0 for r in rr],[100*(float(r['ci_high'])-float(r['difference'])) if r['ci_high'] else 0 for r in rr]]
         ax.errorbar(xs,ys,yerr=err,fmt='o',ms=3,lw=.8,capsize=2,label=contrast)
         ax.set_xticks(np.arange(len(rr)),[r['instance_id'].replace('case_','')[:6] for r in rr],rotation=60,fontsize=7)
-    ax.axhline(0,color='black',lw=.8);ax.set(xlabel='Main-test cell',ylabel='Paired difference (pp)');ax.legend(fontsize=7,ncol=2);save(fig,'case_effects')
-    pc=read_csv(root/'per_case.csv');fig,axes=plt.subplots(1,2,figsize=(10,4))
-    for method in ('full','SPT','hgnn','dual_attention','dqn','ddqn','a2c','ppo'):
-        rr=[r for r in pc if r['split']=='main' and r['variant']==method]
-        for ax,factor in zip(axes,('iota','orders')):
-            xs=sorted({float(r[factor]) for r in rr});ys=[100*np.mean([float(r['eta']) for r in rr if float(r[factor])==x]) for x in xs]
-            ax.plot(xs,ys,marker='o',label=method);ax.set_xlabel(factor);ax.set_ylabel('Fixed-grid fulfillment (%)')
-    axes[0].legend(fontsize=7,ncol=2);save(fig,'parameter_effects')
+    ax.axhline(0,color='black',lw=.8);ax.set(xlabel='Contested test cell',ylabel='Paired difference (pp)');ax.legend(fontsize=7,ncol=2);save(fig,'case_effects')
+    pc=read_csv(root/'per_case.csv')
+    for suffix,split,factors in (('',PRIMARY,('rho_target','due_factor','orders')),('_legacy','main',('iota','orders'))):
+        fig,axes=plt.subplots(1,len(factors),figsize=(5*len(factors),4))
+        for method in ('full','SPT','EDD','hgnn','dual_attention','dqn','ddqn','a2c','ppo'):
+            rr=[r for r in pc if r['split']==split and r['variant']==method]
+            for ax,factor in zip(axes,factors):
+                xs=sorted({float(r[factor]) for r in rr});ys=[100*np.mean([float(r['eta']) for r in rr if float(r[factor])==x]) for x in xs]
+                ax.plot(xs,ys,marker='o',label=method);ax.set_xlabel(factor);ax.set_ylabel('Fixed-grid fulfillment (%)')
+        axes[0].legend(fontsize=7,ncol=2);save(fig,'parameter_effects'+suffix)
     curves=read_csv(root/'learning_curves.csv');fig,ax=plt.subplots(figsize=(8,4))
     for method in ('full','hgnn','dual_attention','dqn','ddqn','a2c','ppo'):
         rr=[r for r in curves if r['method']==method and not r['run'].startswith('sensitivity')]
@@ -79,8 +88,8 @@ def export(root,data,c,specs):
         points=sorted({int(r['steps']) for r in rr if int(r['steps']) in c['training']['milestones']})
         if points:ax.plot(points,[np.mean([float(r['eta']) for r in rr if int(r['steps'])==p]) for p in points],label=method,marker='o')
     ax.set_xlabel('Charged training interactions');ax.set_ylabel('Validation fulfillment');ax.legend(fontsize=7);save(fig,'learning')
-    # Main-test curves use the same fixed cells at every charged-budget milestone.
-    checkpoints=[root/'main.csv',*(root/f'main_{p}.csv' for p in c['training']['milestones'] if (root/f'main_{p}.csv').exists())]
+    # Primary-split curves use the same fixed cells at every charged-budget milestone.
+    checkpoints=[root/f'{PRIMARY}.csv',*(root/f'{PRIMARY}_{p}.csv' for p in c['training']['milestones'] if (root/f'{PRIMARY}_{p}.csv').exists())]
     fixed_rows=[r for path in checkpoints for r in read_csv(path) if r['seed']!='0'];curve_rows=[]
     for method in sorted({r['variant'] for r in fixed_rows}):
         for seed in sorted({r['seed'] for r in fixed_rows if r['variant']==method}):
@@ -93,10 +102,10 @@ def export(root,data,c,specs):
     for method in ('full','hgnn','dual_attention','dqn','ddqn','a2c','ppo'):
         rr=[r for r in curve_rows if r['variant']==method];points=sorted({r['budget'] for r in rr})
         ax.plot(points,[np.mean([r['eta'] for r in rr if r['budget']==p]) for p in points],marker='o',label=method)
-    ax.set(xlabel='Charged training interactions',ylabel='Fixed main-grid fulfillment');ax.legend(fontsize=7);save(fig,'fixed_budget_learning')
+    ax.set(xlabel='Charged training interactions',ylabel='Fixed contested-grid fulfillment');ax.legend(fontsize=7);save(fig,'fixed_budget_learning')
     sensitive=[r for r in summaries if r['split']=='sensitivity' and r['group']=='all'];fig,ax=plt.subplots(figsize=(9,4));ax.bar([r['variant'] for r in sensitive],[100*float(r['eta']) for r in sensitive]);ax.tick_params(axis='x',rotation=45);ax.set_ylabel('Fulfillment (%)');save(fig,'sensitivity')
-    general=[r for r in summaries if r['split'] in ('long_stream','large_shop') and r['group']=='all'];fig,axes=plt.subplots(1,2,figsize=(12,4))
-    for ax,split in zip(axes,('long_stream','large_shop')):
+    general=[r for r in summaries if r['split'] in ('main','long_stream','large_shop') and r['group']=='all'];fig,axes=plt.subplots(1,3,figsize=(18,4))
+    for ax,split in zip(axes,('main','long_stream','large_shop')):
         rr=[r for r in general if r['split']==split];ax.bar([r['variant'] for r in rr],[100*float(r['eta']) for r in rr]);ax.tick_params(axis='x',rotation=80);ax.set_title(split);ax.set_ylabel('Fulfillment (%)')
     save(fig,'generalization')
     costs=read_csv(root/'costs.csv');names=sorted({r['run'].rsplit('_s',1)[0] for r in costs});costrows=[]
@@ -110,12 +119,12 @@ def export(root,data,c,specs):
         vals=sorted(1000*float(r['inference_seconds']) for r in latency if r['run']==method or r['run'].rsplit('_s',1)[0]==method)
         if vals:ax.plot(vals,np.arange(1,len(vals)+1)/len(vals),label=method)
     ax.set_xscale('log');ax.set_xlabel('Shared-state inference time (ms)');ax.set_ylabel('Empirical cumulative fraction');ax.legend(fontsize=7);save(fig,'latency')
-    raw=read_csv(root/'main.csv');fig,axes=plt.subplots(1,2,figsize=(10,4))
+    raw=read_csv(root/f'{PRIMARY}.csv');fig,axes=plt.subplots(1,2,figsize=(10,4))
     for method in ('full','SPT','hgnn','dual_attention'):
         rr=[r for r in raw if r['variant']==method]
         axes[0].scatter([int(r['orders']) for r in rr],[float(r['wall_seconds']) for r in rr],label=method,alpha=.7)
-        axes[1].scatter([float(r['iota']) for r in rr],[float(r['decision_p50_ms']) for r in rr],label=method,alpha=.7)
-    axes[0].set(xlabel='Orders',ylabel='Whole schedule wall seconds');axes[1].set(xlabel='Arrival frequency',ylabel='Median full decision time (ms)');axes[0].legend();save(fig,'runtime_parameters')
+        axes[1].scatter([float(r['rho']) for r in rr],[float(r['decision_p50_ms']) for r in rr],label=method,alpha=.7)
+    axes[0].set(xlabel='Orders',ylabel='Whole schedule wall seconds');axes[1].set(xlabel='System load',ylabel='Median full decision time (ms)');axes[0].legend();save(fig,'runtime_parameters')
     behavior=read_csv(root/'behavior.csv');behaviorrows=[]
     for method in methods:
         for phase in ('startup','arrivals','drain'):
@@ -128,7 +137,7 @@ def export(root,data,c,specs):
     ax.tick_params(axis='x',rotation=70);ax.set_ylabel('Wait-action share');ax.legend();save(fig,'behavior')
     gaps=read_csv(root/'offline_gaps.csv');fig,ax=plt.subplots(figsize=(6,4));valid=[r for r in gaps if r['reference']]
     ax.scatter([float(r['reference']) for r in valid],[float(r['eta']) for r in valid],s=12,alpha=.5);ax.plot([0,1],[0,1],color='black',lw=.7);ax.set(xlabel='Offline feasible incumbent',ylabel='Online fulfillment');save(fig,'offline')
-    table('offline',['Instance','Status','Incumbent','Upper bound'],[[r['instance_id'],r['status'],r['eta'] or '--',r['upper'] or '--'] for r in read_csv(root/'exact.csv')])
+    table('offline',['Split','Instance','Status','Incumbent','Upper bound'],[[r['split'],r['instance_id'],r['status'],r['eta'] or '--',r['upper'] or '--'] for r in read_csv(root/'exact.csv')])
     # Deterministic example selection by cell ID, never by performance.
     chosen=min(r['instance_id'] for r in raw);fig,axes=plt.subplots(2,1,figsize=(11,6));mechanism=[]
     for ax,method in zip(axes,('full','SPT')):
@@ -148,8 +157,8 @@ def export(root,data,c,specs):
                      mean_gate=float(np.mean(model['gates'])),mean_absolute_correction=float(np.mean(np.abs(model['correction'])))))
     write_csv(target/'mechanism.csv',mechanism,['instance_id','seed','phase','decision','mean_gate','mean_absolute_correction']);made.append(target/'mechanism.csv')
     fig,ax=plt.subplots(figsize=(6,4));ax.scatter([r['mean_gate'] for r in mechanism],[r['mean_absolute_correction'] for r in mechanism],s=5,alpha=.3);ax.set(xlabel='Mean residual gate',ylabel='Mean absolute score correction');save(fig,'mechanism')
-    report=target/'REPORT.md';report.write_text('# '+('工程冒烟：不是正式性能证据' if micro else '固定参数基准实验报告')+'\n\n'
-        '每个参数组合仅一个固定算例；区间只反映训练种子波动。全部对照与负结果保留。\n\n'
+    report=target/'REPORT.md';report.write_text('# '+('工程冒烟：不是正式性能证据' if micro else ('预注册试点结果' if c['purpose']=='pilot' else '固定参数基准实验报告'))+'\n\n'
+        '主基准为争用网格（每个设计单元 3 个独立算例），旧固定网格为次级基准；区间只反映训练种子波动。全部对照与负结果保留。\n\n'
         'CSV 为表图原始数据，TeX 为表格，PDF/SVG 为矢量图。来源见 manifest.json；完整轨迹位于上级 evaluations 与 runs。\n',encoding='utf-8');made.append(report)
     atomic_json(target/'manifest.json',dict(purpose=c['purpose'],statistics=digest(root/'statistics_manifest.json'),
         data=digest(Path(data)/'manifest.json'),assets={p.name:digest(p) for p in made},

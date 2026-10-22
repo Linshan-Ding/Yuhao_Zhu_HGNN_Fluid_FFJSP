@@ -19,6 +19,41 @@ def is_noop(action) -> bool:
     return int(action[0]) < 0
 
 
+def dominating_wait(inst, problem, status, stage, machine_free_at, machine_busy_with, now):
+    """The wait-for-a-machine rule, computed from public quantities only.
+
+    Among ready orders that could be dispatched now, find the busy eligible machine that would finish the order's
+    current operation earliest, provided it beats every idle eligible machine. Returns
+    (finish, order, task, machine, gain): the completion time of that operation if the order waits for the machine,
+    the representative order and its task, the machine, and the completion-time advantage over the best idle
+    eligible machine; None when no ready order has such a machine (waiting is then inadmissible).
+    """
+    waiting = np.flatnonzero(status == WAITING)
+    if waiting.size == 0:
+        return None
+    idle = (machine_busy_with < 0) & (machine_free_at <= now + 1e-9)
+    best = None
+    seen = set()
+    for order in waiting:
+        task = problem.task_of(int(order), int(stage[order]))
+        if task in seen:            # same task => same eligible machines and processing times
+            continue
+        seen.add(task)
+        machines = problem.eligible[task]
+        times = inst.proc_times[task, machines]
+        idle_here = idle[machines]
+        if not idle_here.any():     # not dispatchable now: the simulator advances by itself
+            continue
+        now_best = now + float(times[idle_here].min())
+        for m, p in zip(machines, times):
+            if idle[m]:
+                continue
+            finish = float(machine_free_at[m]) + float(p)
+            if finish + 1e-9 < now_best and (best is None or finish < best[0]):
+                best = (finish, int(order), int(task), int(m), now_best - finish)
+    return best
+
+
 @dataclass
 class StepStats:
     """逐决策点的诊断量。"""
@@ -49,9 +84,6 @@ class SchedulingEnv:
         # 因果尺度：DDT 参数（交期政策）与最大工时（工艺数据）都是决策前已知的量
         self.t_ref = max(float(inst.meta.get("DDT", 0.0)) or float(p.residual[:, 0].mean()), 1.0)
         self.p_ref = max(float(inst.proc_times.max()), 1.0)
-        self.wait_interval = float(cfg.action_space.wait_interval) or float(np.median(inst.proc_times[inst.proc_times > 0])) / 4.0
-        if not np.isfinite(self.wait_interval) or self.wait_interval <= 0:
-            raise ValueError("wait_interval must be finite and positive")
 
         # 静态结构表
         self._elig_matrix = inst.proc_times > 0                                   # [N, M]
@@ -220,9 +252,14 @@ class SchedulingEnv:
                     actions.append((int(task), int(m), int(order)))
         return actions
 
+    def awaited(self):
+        """Public wait-for-a-machine target (see dominating_wait), or None."""
+        return dominating_wait(self.inst, self.problem, self.status, self.stage, self.machine_free_at,
+                               self.machine_busy_with, self.now)
+
     def _noop_available(self) -> bool:
-        """A public positive timer makes waiting independent of hidden arrivals."""
-        return self.allow_noop and not self.done and self._has_feasible()
+        """Waiting is admissible only to hold a ready order for a busy machine that beats every idle one."""
+        return self.allow_noop and not self.done and self._has_feasible() and self.awaited() is not None
 
     def candidate_actions(self) -> List[Tuple[int, int, int]]:
         """当前决策点的候选动作：派工三元组，末尾可能带一个 no-op。"""
@@ -287,17 +324,18 @@ class SchedulingEnv:
             "terminated": self.done and not self.truncated, "truncated": self.truncated}
 
     def _step_noop(self) -> Tuple[float, bool, dict]:
-        """保留产能：本时刻不派工，推进到下一事件。奖励与派工同一计数式。"""
+        """等机：本时刻不派工，推进到下一事件（被等机器释放或更早的到达/释放）。奖励与派工同一计数式。"""
         before_c, before_d = self.n_completed, self.n_discarded
+        awaited = self.awaited()
         self.stats.noop_used += 1
         self.step_count += 1
         machines = {a[1] for a in self._feasible_actions()}
-        nxt = self._next_event_time()
-        wake = self.now + self.wait_interval
-        if nxt is not None and nxt > self.now + 1e-9:
-            wake = min(wake, nxt)
+        wake = self._next_event_time()
+        if wake is None or wake <= self.now + 1e-9:
+            raise RuntimeError("an admissible wait always has a pending machine release")
         self.stats.held_time += len(machines) * (wake - self.now)
-        self._event('wait', end=float(wake), machines=sorted(machines), held_machine_time=len(machines)*(wake-self.now))
+        self._event('wait', end=float(wake), machines=sorted(machines), held_machine_time=len(machines)*(wake-self.now),
+                    awaited_machine=awaited[3], awaited_order=awaited[1], awaited_finish=float(awaited[0]))
         self.now = wake
         self._advance_to_decision()
         self._check_limit()

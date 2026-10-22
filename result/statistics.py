@@ -11,7 +11,11 @@ from data.benchmark import prepare
 from result.storage import read_csv, write_csv, atomic_json, digest
 from result.recording import records, verify
 from result.provenance import evaluation_hash
-from result.evaluation import evaluation_plan, load_policy, policy_identity
+from result.evaluation import evaluation_plan, load_policy, policy_identity, PRIMARY
+
+AGGREGATED=(PRIMARY,'contested_small','main','small','long_stream','large_shop','sensitivity',f'{PRIMARY}_best','initialization')
+LEGACY_GROUPS=('all','frequent','infrequent','overload','underload')
+FACTORS=(('rho','rho_target'),('due','due_factor'),('orders','orders'))
 
 
 def validate(root,data,c,specs):
@@ -41,7 +45,7 @@ def validate(root,data,c,specs):
                 budget=filename[len('checkpoint_'):-len('.pt')]
                 if budget.isdigit() and int(r['budget'])!=int(budget):raise ValueError('Evaluation budget mismatch')
     exact=json.loads((root/'exact_manifest.json').read_text())
-    if set(exact['cases'])!={i+'.json' for i in dataset['splits']['small']}:raise ValueError('Missing offline reference cases')
+    if set(exact['cases'])!={i+'.json' for split in c['experiment']['exact_splits'] for i in dataset['splits'][split]}:raise ValueError('Missing offline reference cases')
     for filename,sha in exact['cases'].items():
         if digest(root/'exact'/filename)!=sha:raise ValueError('Offline result changed')
     for filename,sha in exact['outputs'].items():
@@ -52,9 +56,24 @@ def validate(root,data,c,specs):
 
 
 def grouped(rows,group):
+    """'all', the legacy frequency/load groups, or one level of a contested design factor ('rho=1.3', 'due=1.2', 'orders=48')."""
+    if '=' in group:
+        name,value=group.split('=');field=dict(FACTORS)[name]
+        return [r for r in rows if float(r[field])==float(value)]
     return [r for r in rows if group=='all' or group=='frequent' and float(r['iota'])>=1 or
             group=='infrequent' and float(r['iota'])<1 or group=='overload' and float(r['rho'])>=1 or
             group=='underload' and float(r['rho'])<1]
+
+
+def groups_of(rows):
+    """Groups reported for a table: factor levels on a contested split, the legacy groups otherwise."""
+    if rows and all(float(r['rho_target'])>=0 for r in rows):
+        return ['all']+[f'{name}={v:g}' for name,field in FACTORS for v in sorted({float(r[field]) for r in rows})]
+    return list(LEGACY_GROUPS)
+
+
+def cell_of(row):
+    return (float(row['rho_target']),float(row['due_factor']),int(row['orders']))
 
 
 def seed_values(rows,method):
@@ -80,8 +99,8 @@ def interval(values,rng,repeats):
 def aggregate(root,data,c,specs):
     root=Path(root);manifest=validate(root,data,c,specs);seed=c['experiment']['statistics_seed'];repeats=c['experiment']['bootstrap_repeats']
     rng=np.random.default_rng(seed);cell_rng=np.random.default_rng([seed,1])
-    summaries=[];effects=[];case_rows=[];seed_rows=[];tests=[];case_effects=[]
-    for split in ('main','small','long_stream','large_shop','sensitivity','main_best','initialization'):
+    summaries=[];effects=[];case_rows=[];seed_rows=[];tests=[];case_effects=[];cell_effects=[]
+    for split in [s for s in AGGREGATED if s in manifest['outputs']]:
         rows=read_csv(root/f'{split}.csv');methods=sorted({r['variant'] for r in rows})
         for method in methods:
             seeds,ids,values=seed_values(rows,method)
@@ -89,8 +108,8 @@ def aggregate(root,data,c,specs):
                 original=next(r for r in rows if r['variant']==method and r['instance_id']==inst)
                 case_rows.append(dict(split=split,variant=method,instance_id=inst,eta=float(values[:,j].mean()),
                     seed_sd=float(values[:,j].std(ddof=1)) if len(seeds)>1 else None,seeds=len(seeds),
-                    **{k:original[k] for k in ('orders','products','stages','machines','iota','rho','due_factor')}))
-        for group in ('all','frequent','infrequent','overload','underload'):
+                    **{k:original[k] for k in ('orders','products','stages','machines','iota','rho','due_factor','rho_target','replicate')}))
+        for group in groups_of(rows):
             sub=grouped(rows,group)
             if not sub:continue
             for method in methods:
@@ -115,10 +134,19 @@ def aggregate(root,data,c,specs):
                         case_effects.append(dict(split=split,contrast='full minus '+method,instance_id=inst,difference=float(per_case[j]),
                             seed_sd=float(diff[:,j].std(ddof=1)) if len(ss)>1 else None,ci_low=lo_j,ci_high=hi_j,
                             positive_seeds=int((diff[:,j]>1e-9).sum()),seeds=len(ss)))
+                    # On a contested split, the same effect per design cell: replicates are averaged within each seed first.
+                    info={r['instance_id']:r for r in sub}
+                    if all(float(r['rho_target'])>=0 for r in sub):
+                        for cell in sorted({cell_of(info[i]) for i in ids}):
+                            cols=[j for j,i in enumerate(ids) if cell_of(info[i])==cell];per_seed=diff[:,cols].mean(1)
+                            lo_c,hi_c=interval(per_seed,cell_rng,repeats)
+                            cell_effects.append(dict(split=split,contrast='full minus '+method,rho_target=cell[0],due_factor=cell[1],orders=cell[2],
+                                replicates=len(cols),difference=float(per_seed.mean()),seed_sd=float(per_seed.std(ddof=1)) if len(ss)>1 else None,
+                                ci_low=lo_c,ci_high=hi_c,positive_seeds=int((per_seed>1e-9).sum()),seeds=len(ss)))
                 p=1. if np.allclose(means,0) else float(wilcoxon(means,zero_method='wilcox',method='auto').pvalue)
                 tests.append(dict(split=split,group=group,comparison='full minus '+method,p=p,seeds=len(ss),unit='training seed; fixed grid',
                                   test='two-sided paired Wilcoxon; unadjusted appendix reference, not the primary evidence'))
-    for name,rows in [('summary',summaries),('effects',effects),('case_effects',case_effects),('per_case',case_rows),('per_seed',seed_rows),('tests',tests)]:
+    for name,rows in [('summary',summaries),('effects',effects),('case_effects',case_effects),('cell_effects',cell_effects),('per_case',case_rows),('per_seed',seed_rows),('tests',tests)]:
         write_csv(root/f'{name}.csv',rows)
     curves=[];costs=[];preference=[]
     for spec in specs:
@@ -136,12 +164,14 @@ def aggregate(root,data,c,specs):
                 mean=label['mean'],standard_error=label['standard_error'],reliability=label['reliability'],probability=label['probability'],source=label['source']))
     write_csv(root/'learning_curves.csv',curves);write_csv(root/'costs.csv',costs)
     write_csv(root/'preference_diagnostics.csv',preference,['run','query_id','complete','steps','mean','standard_error','reliability','probability','source'])
-    write_csv(root/'behavior.csv',[{k:v for k,v in r.items() if k in ('variant','seed','instance_id','wait_fraction','held_share') or any(k.startswith(p+'_') for p in ('startup','arrivals','drain'))} for r in read_csv(root/'main.csv')])
+    write_csv(root/'behavior.csv',[{k:v for k,v in r.items() if k in ('variant','seed','instance_id','wait_fraction','held_share') or any(k.startswith(p+'_') for p in ('startup','arrivals','drain'))} for r in read_csv(root/f'{PRIMARY}.csv')])
     exact={r['instance_id']:r for r in read_csv(root/'exact.csv')};gaps=[]
-    for r in read_csv(root/'small.csv'):
-        e=exact[r['instance_id']];reference=float(e['eta']) if e['eta'] else None
-        gaps.append(dict(variant=r['variant'],seed=r['seed'],instance_id=r['instance_id'],eta=r['eta'],reference=reference,
-            upper=e['upper'],status=e['status'],incumbent_difference=reference-float(r['eta']) if reference is not None else None))
+    for split in c['experiment']['exact_splits']:
+        for r in read_csv(root/f'{split}.csv'):
+            e=exact[r['instance_id']];reference=float(e['eta']) if e['eta'] else None;upper=float(e['upper']) if e['upper'] else None
+            gaps.append(dict(split=split,variant=r['variant'],seed=r['seed'],instance_id=r['instance_id'],eta=r['eta'],reference=reference,
+                upper=e['upper'],status=e['status'],incumbent_difference=reference-float(r['eta']) if reference is not None else None,
+                gap_to_bound=upper-float(r['eta']) if upper is not None else None))
     write_csv(root/'offline_gaps.csv',gaps)
     trace_audit=[];evaluation_cost=0;evaluation_seconds=0.;complete_raw=set()
     for p in sorted((root/'evaluations').glob('*/complete.json')):
