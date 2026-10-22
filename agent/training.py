@@ -14,7 +14,7 @@ import numpy as np
 import torch
 from configs.experiment import identity, environment_config, uses_demo, uses_scenario
 from data.online import sample
-from data.benchmark import fixtures
+from data.benchmark import fixtures, instance_by_id
 from environment.public import SchedulingEnv
 from agent.observation import observe
 from agent.rules import RulePolicy
@@ -54,7 +54,10 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
     real=branch=lost=epoch=demo_epoch=q_steps=eval_steps=0;elapsed_offset=0.;next_eval=0;best=-1.
     labels=failed=usable=0;next_scenario=0;frozen_version=0;next_frozen=sc['frozen_interval'];demo_finished=not uses_demo(c['method'])
     cp=run/'checkpoint_last.pt';code=source_hash();fp=identity(c);ledger=run/'budget.json';log=run/'log.jsonl'
-    history=[];monitor=fixtures(c,data,'monitor');began=time.perf_counter();scenario_seconds=0.;best_checkpoint=None
+    # Single-instance study: every training episode and every monitor evaluation uses the same fixed instance.
+    fixed=instance_by_id(c,data,c['instance']) if c.get('instance') else None
+    history=[];monitor=[fixed] if fixed is not None else fixtures(c,data,'monitor');began=time.perf_counter();scenario_seconds=0.;best_checkpoint=None
+    episodes=0;best_episode=-1.;finished=[]   # training episodes completed (not truncated) and their fulfillment
     recorder_state=None
     if cp.exists():
         s=torch.load(cp,weights_only=False,map_location='cpu')
@@ -67,7 +70,7 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
         envs=[SchedulingEnv.from_state_dict(e) if e else None for e in s['environments']];next_obs=s['next_observations']
         scenario.load_state_dict(s['scenario_state']);pref=s['preferences'];replay=s['replay'];elapsed_offset=s['elapsed_seconds']
         best=s['best'];next_eval=s['next_eval'];labels=s['labels'];failed=s['failed_labels'];usable=s['usable_labels'];next_scenario=s['next_scenario']
-        best_checkpoint=s['best_checkpoint']
+        best_checkpoint=s['best_checkpoint'];episodes=s['episodes'];best_episode=s['best_episode']
         frozen_version=s['frozen_version'];next_frozen=s['next_frozen'];history=s['history'];scenario_seconds=s['scenario_seconds']
         recorder_state=s['recorder']
         reserved=json.loads(ledger.read_text())['charged_upper_bound'] if ledger.exists() else s['steps']
@@ -96,7 +99,8 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
     for e in envs:
         if e is not None: e.attach_recorder(recorder,e._record_id,'real')
     def make_env(kind):
-        return SchedulingEnv(sample(c,irng),environment_config(c)).attach_recorder(recorder,kind=kind)
+        inst=deepcopy(fixed) if fixed is not None else sample(c,irng)
+        return SchedulingEnv(inst,environment_config(c)).attach_recorder(recorder,kind=kind)
 
     def total():return real+branch+demo.steps+lost
     def reserve(limit):atomic_json(ledger,dict(charged_upper_bound=limit,committed=total(),limit=budget))
@@ -108,7 +112,8 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
             demonstrations=demo,demo_finished=demo_finished,demo_environment=demo_env.state_dict() if demo_env else None,
             environments=[e.state_dict() if e else None for e in envs],next_observations=next_obs,scenario_state=scenario.state_dict(),
             preferences=pref,replay=replay,elapsed_seconds=elapsed_offset+time.perf_counter()-began,best=best,best_checkpoint=best_checkpoint,next_eval=next_eval,labels=labels,
-            failed_labels=failed,usable_labels=usable,next_scenario=next_scenario,frozen_version=frozen_version,next_frozen=next_frozen,history=history,scenario_seconds=scenario_seconds,recorder=recorder.snapshot())
+            failed_labels=failed,usable_labels=usable,next_scenario=next_scenario,frozen_version=frozen_version,next_frozen=next_frozen,history=history,scenario_seconds=scenario_seconds,
+            episodes=episodes,best_episode=best_episode,recorder=recorder.snapshot())
     keep=int(c['recording']['keep_recovery_copies'])
     if keep<1:raise ValueError('recording.keep_recovery_copies must be at least 1')
     copies=[cp]+[run/('checkpoint_previous.pt' if k==2 else f'checkpoint_previous_{k}.pt') for k in range(2,keep+1)]
@@ -168,6 +173,9 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
             count=min(len(envs),end-total(),rollout-len(records));obs=[]
             for i in range(count):
                 while envs[i] is None or envs[i].done:
+                    if envs[i] is not None:
+                        episodes+=1
+                        if not envs[i].truncated:finished.append(envs[i].eta);best_episode=max(best_episode,envs[i].eta)
                     envs[i]=make_env('real');next_obs[i]=None
                 obs.append(next_obs[i] if next_obs[i] is not None else observe(envs[i]));next_obs[i]=None
             epsilon=max(c['classic']['epsilon_final'],1-(1-c['classic']['epsilon_final'])*real/c['classic']['epsilon_steps'])
@@ -221,9 +229,10 @@ def _train(c,run,seed,budget,data,holders,stop_requested=None):
                 best=eta;best_checkpoint=deepcopy(lightweight(run/'checkpoint_best.pt',eta_validation=eta))
         row=dict(epoch=epoch,total_steps=total(),real_steps=real,scenario_steps=branch,demonstration_steps=demo.steps,lost_upper_bound=lost,
             eta_validation=eta,labels=labels,failed_labels=failed,usable_labels=usable,contested_checks=scenario.checks if uses_scenario(c['method']) else 0,
-            frozen_version=frozen_version,evaluation_steps=eval_steps,
+            frozen_version=frozen_version,evaluation_steps=eval_steps,episodes=episodes,best_episode_eta=best_episode if best_episode>=0 else None,
+            epoch_episode_eta=float(np.mean(finished)) if finished else None,
             elapsed_seconds=elapsed_offset+time.perf_counter()-began,scenario_seconds=scenario_seconds,recording_seconds=recorder.io_seconds,**metrics)
-        history.append(row)
+        history.append(row);finished=[]
         with log.open('a',encoding='utf-8') as f:f.write(json.dumps(row)+'\n')
         if total() in c['training']['milestones'] or total()>=budget:lightweight(run/f'checkpoint_{total()}.pt')
         if not is_q or epoch%8==0 or eta is not None or total()>=budget:save()

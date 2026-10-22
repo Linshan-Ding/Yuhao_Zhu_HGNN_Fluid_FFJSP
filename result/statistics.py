@@ -173,7 +173,22 @@ def aggregate(root,data,c,specs):
                 upper=e['upper'],status=e['status'],incumbent_difference=reference-float(r['eta']) if reference is not None else None,
                 gap_to_bound=upper-float(r['eta']) if upper is not None else None))
     write_csv(root/'offline_gaps.csv',gaps)
-    trace_audit=[];evaluation_cost=0;evaluation_seconds=0.;complete_raw=set()
+    trace_audit,evaluation_cost,evaluation_seconds,failed_attempts=audit(root)
+    write_csv(root/'trace_audit.csv',trace_audit)
+    atomic_json(root/'evaluation_costs.json',dict(unique_complete_evaluations=len(trace_audit),steps=evaluation_cost,
+        failed_attempt_steps=sum(r['steps'] for r in failed_attempts),failed_attempts=failed_attempts,seconds=evaluation_seconds,
+        training_monitor_steps=sum(int(r['evaluation_steps']) for r in costs),offline_replay_steps=sum(int(r['replay_steps']) for r in exact.values())))
+    inputs={k:digest(root/k) for k in [*(v['file'] for v in manifest['outputs'].values()),'exact.csv','latency.csv']}
+    outputs={p.name:digest(p) for p in root.glob('*.csv') if p.name not in inputs}
+    atomic_json(root/'statistics_manifest.json',dict(inputs=inputs,outputs=outputs,seed=seed,
+        bootstrap='resample whole training-seed vectors; no resampling of fixed cases',comparison='conditional component effects; no factorial interaction',
+        primary='seed-vector bootstrap intervals and paired per-cell effects',secondary='unadjusted paired Wilcoxon p-values in tests.csv'))
+
+
+def audit(root):
+    """Replay every complete evaluation's raw records against its summary row: rewards, waits, held time, operation
+    durations, machine non-overlap and busy time. Returns (audit rows, evaluation steps, evaluation seconds, failed attempts)."""
+    root=Path(root);trace_audit=[];evaluation_cost=0;evaluation_seconds=0.;complete_raw=set()
     for p in sorted((root/'evaluations').glob('*/complete.json')):
         entry=json.loads(p.read_text());raw=p.parent/entry['raw_directory'];verify(raw);row=entry['row'];rewards=0.;completed=0
         held=0.;waits=0;starts={};finishes=set();busy=np.zeros(int(row['machines']));last_end=np.zeros_like(busy)
@@ -204,12 +219,4 @@ def aggregate(root,data,c,specs):
         if manifest_path.parent.resolve() in complete_raw:continue
         state=verify(manifest_path.parent)
         failed_attempts.append(dict(raw=manifest_path.parent.relative_to(root).as_posix(),steps=state['steps']))
-    write_csv(root/'trace_audit.csv',trace_audit)
-    atomic_json(root/'evaluation_costs.json',dict(unique_complete_evaluations=len(trace_audit),steps=evaluation_cost,
-        failed_attempt_steps=sum(r['steps'] for r in failed_attempts),failed_attempts=failed_attempts,seconds=evaluation_seconds,
-        training_monitor_steps=sum(int(r['evaluation_steps']) for r in costs),offline_replay_steps=sum(int(r['replay_steps']) for r in exact.values())))
-    inputs={k:digest(root/k) for k in [*(v['file'] for v in manifest['outputs'].values()),'exact.csv','latency.csv']}
-    outputs={p.name:digest(p) for p in root.glob('*.csv') if p.name not in inputs}
-    atomic_json(root/'statistics_manifest.json',dict(inputs=inputs,outputs=outputs,seed=seed,
-        bootstrap='resample whole training-seed vectors; no resampling of fixed cases',comparison='conditional component effects; no factorial interaction',
-        primary='seed-vector bootstrap intervals and paired per-cell effects',secondary='unadjusted paired Wilcoxon p-values in tests.csv'))
+    return trace_audit,evaluation_cost,evaluation_seconds,failed_attempts

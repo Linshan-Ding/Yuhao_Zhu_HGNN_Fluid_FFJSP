@@ -27,11 +27,12 @@ def paths(micro=False,jobs=1,study='formal'):
     """Result root and fixed-data root of a study (formal, pilot) or of the engineering smoke."""
     if study not in STUDIES:raise ValueError(f'unknown study: {study}')
     if not micro:
-        c=config();return ROOT/(c['pilot']['root'] if study=='pilot' else c['experiment']['root']),ROOT/c['experiment']['data']
+        c=config();roots=dict(formal=c['experiment']['root'],pilot=c['pilot']['root'],instance=c['instance_study']['root'])
+        return ROOT/roots[study],ROOT/c['experiment']['data']
     from result.acceptance import runtime_key
     runtime=runtime_info();runtime['torch_threads']=config()['runtime']['threads']
     root=ROOT/'result/engineering'/smoke_identity()[:12]/object_hash(runtime_key(runtime))[:8]/f'jobs_{jobs}'
-    return root,ROOT/'data/instances/smoke'
+    return (root/'instance_study' if study=='instance' else root),ROOT/'data/instances/smoke'
 
 
 def prepare_study(c,root,data,specs):
@@ -196,11 +197,14 @@ def retire_stale_smoke_data(c,data):
 
 def run(stage,jobs,micro=False,study='formal'):
     c=config(micro);root,data=paths(micro,jobs,study)
-    if study=='pilot' and not micro:c['purpose']='pilot'
+    if study!='formal' and not micro:c['purpose']=study
     if micro:retire_stale_smoke_data(c,data)
     with run_lock(root):
         # The teacher is selected on the fixed validation split before any job identity is frozen.
-        c=resolve_teacher(c,data);specs=matrix(c,study)
+        c=resolve_teacher(c,data)
+        if study=='instance':
+            _run_instance_study(stage,jobs,micro,c,root,data);print(f'[OK] {stage}: {root}',flush=True);return
+        specs=matrix(c,study)
         prepare_study(c,root,data,specs);ledger(root,specs)
         if stage in ('main','comparators','sensitivity','all'):
             storage_preflight(root,c,specs)
@@ -225,6 +229,24 @@ def run(stage,jobs,micro=False,study='formal'):
                 from result.pilot import verdict
                 verdict(root,c,specs)
     print(f'[OK] {stage}: {root}',flush=True)
+
+
+def _run_instance_study(stage,jobs,micro,c,root,data):
+    """Single-instance convergence study: each job trains on one fixed instance of instance_study.split (result/instance.py)."""
+    from result import instance
+    ids=prepare(c,data)['splits'][c['instance_study']['split']];specs=matrix(c,'instance',ids)
+    prepare_study(c,root,data,specs);ledger(root,specs)
+    if stage in ('main','all'):
+        storage_preflight(root,c,specs)
+        if not micro:memory_preflight(root,jobs,specs)
+        execute(specs,root,data,jobs,specs)
+    if stage in ('evaluate','all'):instance.evaluate(root,data,c,specs)
+    if stage in ('exact','all'):instance.exact(root,data,c)
+    if stage in ('statistics','all'):instance.aggregate(root,data,c,specs)
+    if stage in ('export','all'):instance.export(root,data,c,specs)
+    if stage=='all':
+        atomic_json(root/'complete.json',dict(purpose=c['purpose'],study='instance',training=sum(s.budget for s in specs),
+            source=source_hash(),assets=digest(root/'paper_assets/manifest.json')))
 
 
 def smoke(jobs=1):
@@ -253,6 +275,7 @@ def _smoke(jobs):
     if result.returncode:raise RuntimeError('Regression tests failed; formal training not started')
     with counted('smoke:parent'):
         run('all',jobs,True)
+        run('all',jobs,True,study='instance')   # the single-instance study on one micro instance
         # Actual scenario labels must reach the preference optimizer; this is not a performance run. The probe starts from
         # an uninitialized policy (no_demo) so that the rule challenger wins reliably and the improved-action update fires.
         from agent.training import train

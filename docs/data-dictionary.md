@@ -35,7 +35,7 @@ DQN/DDQN的scores是Q值，probabilities和value为空；规则没有神经分�
 
 收益差为挑战动作分支减锚点分支的按时完成订单数（整数，不再按队列规模归一；cohort_sizes 仅记录队列规模）。查询只在争用状态发出：候选承诺后“无法按时完成的订单集合”不同；共享未来逐个加入，直到 |mean|>2·standard_error、全部为零或达到 scenario.max_count。配对分支共享同一未来及冻结策略延续；reliability=|mean|/(|mean|+se+reliability_floor) 是训练启发式，不是统计置信保证。只有 winner=challenger 且 reliability≥scenario.reliability_threshold 的标签作为改进动作交叉熵目标进入更新；未完成分支的complete=false，保留成本与轨迹，不进入监督缓冲。训练日志的 usable_labels 累计可用标签数，contested_checks 累计争用判定次数。
 
-训练total_steps=real_steps+scenario_steps+demonstration_steps+lost_upper_bound。记录器steps还包括该运行中的验证评测，不能直接当训练预算。预留账本在执行前持久化，恢复时未提交预留保守计费；未提交块和failed_raw清单保留但不混入已提交轨迹。
+训练日志每个 epoch 一行：total_steps=real_steps+scenario_steps+demonstration_steps+lost_upper_bound；eta_validation 为监控评测（争用验证集；单算例研究为该算例本身）的贪心履约率；episodes 为已完成的训练采样回合数，best_episode_eta 为其中到目前为止的最佳履约率，epoch_episode_eta 为本 epoch 内完成回合的平均履约率（无则为空）。记录器steps还包括该运行中的验证评测，不能直接当训练预算。预留账本在执行前持久化，恢复时未提交预留保守计费；未提交块和failed_raw清单保留但不混入已提交轨迹。
 
 工程账本采用 engineering-accounting-2：`limit=null` 表示无累计硬上限，`historical_charged` 是原样保留的旧账本基数；`accounting/sessions/*.json` 每个进程独立写入 committed 与 charged_upper_bound，未正常结束的预留保守保留。汇总账本不会覆盖其他进程的消耗。该计数包含自检中的训练、监测、失败尝试和离线回放，不能当作正式训练预算。
 
@@ -52,6 +52,10 @@ decision_ms为平均网络/规则推断耗时，observation_ms为平均公开观
 latency.csv为SPT固定公共状态面板上的原始计时，不重复生成算例。orders/operations/machines/candidates描述该状态规模；seed是模型训练种子。规则seed=0仅是非训练标记，不增加重复。
 
 统计以固定参数格上的训练种子向量为随机单位。旧网格相同参数一个实例，争用网格每单元 3 个独立实例（cell_effects 按设计单元给出复制实例均值的配对效应，分组 rho=/due=/orders= 按设计因子）；区间不覆盖随机算例生成波动。对照规则没有种子标准差。多方法的主比较以full为参照：summary/effects给出各条件组的自助95%区间与正向种子数、胜/平/负单元数，case_effects给出每个固定单元的配对种子均值差、种子标准差、自助区间与正向种子数（主证据）；tests只保留未校正的配对Wilcoxon原始p值作附录参考，有效样本数是训练种子数，不做Holm等多重比较校正。
+
+## 单算例收敛研究
+
+`result/instance/` 下：instance.csv 为各作业里程碑/最终检查点与七条规则在各自算例上的缓存评测；instance_curves.csv 为逐作业曲线（steps 已计费交互、epoch、real_steps、greedy_eta、best_episode_eta、epoch_episode_eta、episodes）；instance_final.csv 为每个作业的最终贪心履约率、最佳回合履约率、CP-SAT 可行解/上界与差距（gap_to_incumbent、gap_to_bound）；instance_summary.csv 按方法与指标给出 12 例均值的种子向量自助区间；instance_effects.csv 为 full 相对各对照的配对效应；instance_per_instance.csv 为逐算例的种子均值。exact 记录与试点根同身份时直接复用并标注 reused_from。
 
 ## 离线与来源
 

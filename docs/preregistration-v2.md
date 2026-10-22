@@ -76,11 +76,21 @@
 
 正式 v2 完成后，稿件主文报告争用基准结果；v1 的 73 作业结果（`result/formal/`、[results-analysis.md](results-analysis.md)）作为附录/补充材料，说明重构动机与负结果；主张—证据映射见 [claim-evidence.md](claim-evidence.md)。
 
-## 8. 复现
+## 8. 单算例收敛研究（描述性证据，不设通过门槛）
+
+- 目的：在同一个小规模固定算例上反复训练并评测，展示各方法的收敛过程与最终目标值，并与 CP‑SAT 参照、规则对照同图同表；回答"方法能否在单一工况上逼近最优"，不回答泛化问题。
+- 算例：争用离线参照 12 例（CS24/CS36 × ρ=1.3 × κ∈{1.5,2.0} × r1–r3）。
+- 配置：full、no_graph、no_scenario、no_demo、hgnn、ppo 各 3 种子（1,2,3），每作业 10 万交互（示范步数改为 2000，占预算 2%），共 216 作业、2,160 万交互；七条规则零训练；CP‑SAT 记录若与试点根下同身份则复用。
+- 曲线：横坐标为已计费交互（附 epoch、real_steps），每 5,000 交互与里程碑（1 万/3 万/5 万/10 万）用贪心策略在该算例上评测得到主曲线；辅曲线为训练采样回合中到目前为止的最佳履约率。
+- 最终目标值：最终检查点的贪心履约率（主）与训练中最佳回合履约率（辅）；报告对 CP‑SAT 可行解与上界的差距、规则对照、按方法的 12 例均值与种子向量自助区间、full 相对各对照的配对效应（逐例胜/平/负）。
+- 入口：`python scripts/run_instance_study.py <并发数>`，产物在 `result/instance/`（`instance_curves.csv`、`instance_final.csv`、`instance_summary.csv`、`paper_assets/instance_convergence.pdf`）。
+
+## 9. 复现
 
 ```powershell
 $Python = 'E:\anaconda3\envs\python3.13\python.exe'
 & $Python -B -X utf8 scripts/run_00_smoke.py 8      # 新代码的工程验收（必做）
 & $Python -B -X utf8 scripts/run_01_prepare_data.py # 校验 102 例并记录教师择优
 & $Python -B -X utf8 scripts/run_pilot.py 8         # 试点：训练、评测、离线参照、统计、导出、裁决
+& $Python -B -X utf8 scripts/run_instance_study.py 8 # 单算例收敛研究：216 作业、曲线与最终目标值
 ```

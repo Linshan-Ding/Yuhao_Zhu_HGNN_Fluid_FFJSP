@@ -91,6 +91,7 @@ $Python = 'E:\anaconda3\envs\python3.13\python.exe'
 | 研究 | 训练组 | 配置与种子 | 每作业预算 | 合计 |
 |---|---|---|---:|---:|
 | 预注册试点 | 主方法与关键对照 | `full`、`no_graph`、`no_scenario`、`no_demo`、`hgnn`、`ppo`，各 3 种子 | 50 万 | 900 万 |
+| 单算例收敛研究 | 12 个争用离线参照算例各自训练 | 同上 6 配置，各 3 种子，每算例一组作业 | 10 万 | 2,160 万 |
 | 正式 v2 | 主方法 | `full`，5 种子 | 100 万 | 500 万 |
 | 正式 v2 | 学习对照与消融 | 10 方法，各 5 种子 | 100 万 | 5,000 万 |
 | 正式 v2 | 敏感性 | 6 个单因素变化，各 3 种子 | 50 万 | 900 万 |
@@ -107,6 +108,7 @@ SPT、FCFS、EDD、MST、CR、LWKR 无需训练；额外保留 SPT-mixed 平局�
 |---|---|---|
 | 准备 | `& $Python scripts/run_01_prepare_data.py` | 校验 102 例并记录教师择优，生成正式 freeze、matrix 和零用量账本 |
 | 试点 | `& $Python scripts/run_pilot.py 1` | 冒烟通过；18 作业、评测、离线参照、统计、导出与 `result/pilot/pilot_verdict.json` |
+| 单算例收敛 | `& $Python scripts/run_instance_study.py 1` | 冒烟通过；216 作业各在自己的算例上训练与评测，产出 `result/instance/instance_curves.csv`、`instance_final.csv` 与 `paper_assets/instance_convergence.pdf` |
 | 主方法 | `& $Python scripts/run_02_train_main.py 1` | 当前源码冒烟通过；5 个作业完成 |
 | 对照与消融 | `& $Python scripts/run_03_train_comparators.py 1` | 50 个作业完成 |
 | 敏感性 | `& $Python scripts/run_04_train_sensitivity.py 1` | 18 个作业完成 |
@@ -136,7 +138,7 @@ PyCharm 中选择相同解释器、对应脚本及仓库根目录作为工作目
 
 ## 6. 保存、失败与恢复
 
-每个作业位于 `<根目录>/runs/<方法>_s<种子>/`（试点 `result/pilot/`，正式 v2 `result/formal2/`，第一轮 `result/formal/`），包含独立 `stdout.log`、`status.json`、`budget.json`、检查点和 `raw/`。
+每个作业位于 `<根目录>/runs/<方法>_s<种子>/`（试点 `result/pilot/`，正式 v2 `result/formal2/`，第一轮 `result/formal/`；单算例研究 `result/instance/runs/<方法>_<算例>_s<种子>/`），包含独立 `stdout.log`、`status.json`、`budget.json`、检查点和 `raw/`。
 
 正式 `total_steps = real_steps + scenario_steps + demonstration_steps + lost_upper_bound`。验证评测另记成本。崩溃时无法确认的预留按上界计费，不额外赠送预算。
 

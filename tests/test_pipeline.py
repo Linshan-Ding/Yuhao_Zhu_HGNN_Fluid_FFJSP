@@ -25,6 +25,13 @@ def test_formal_matrix_and_one_factor_sensitivity():
     pilot=matrix(c,'pilot')
     assert [j.name for j in pilot]==[f'{m}_s{s}' for m in c['pilot']['methods'] for s in (1,2,3)] and sum(j.budget for j in pilot)==9000000
     assert all(j.config['training']['milestones'][-1]==500000 and j.group==('main' if j.method=='full' else 'comparators') for j in pilot)
+    ids=[f'CS{n}-R1.3-K{k}-r{r}' for n in (24,36) for k in ('1.5','2.0') for r in (1,2,3)]
+    single=matrix(c,'instance',ids)
+    assert len(single)==216 and sum(j.budget for j in single)==21600000 and single[0].name=='full_CS24-R1.3-K1.5-r1_s1'
+    assert all(j.instance==j.config['instance'] and j.group=='instance' and j.config['training']['evaluate_every']==5000 and
+               j.config['training']['milestones']==[10000,30000,50000,100000] and j.config['demonstration']['steps']==2000 for j in single)
+    assert all(set(j.name)<=set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._') for j in single)
+    with pytest.raises(ValueError,match='fixed instances'):matrix(c,'instance')
     for j in jobs:
         if j.group=='sensitivity':
             assert sum(j.config['scenario'][k]!=c['scenario'][k] for k in c['scenario'])==1
@@ -139,7 +146,7 @@ def test_full_size_graph_and_zero_module_boundaries():
 def test_entry_points_and_code_only_export():
     from configs.experiment import ROOT
     names=['run_00_smoke','run_01_prepare_data','run_02_train_main','run_03_train_comparators','run_04_train_sensitivity',
-           'run_05_evaluate','run_06_exact_reference','run_07_statistics','run_08_export','run_formal_all','run_pilot']
+           'run_05_evaluate','run_06_exact_reference','run_07_statistics','run_08_export','run_formal_all','run_pilot','run_instance_study']
     for name in names:assert (ROOT/'scripts'/f'{name}.py').is_file()
     for name in ('result/export.py','scripts/pipeline.py'):
         assert 'Yuhao_Zhu_FFJSP_Order_GNN_Fluid_model' not in (ROOT/name).read_text(encoding='utf-8')

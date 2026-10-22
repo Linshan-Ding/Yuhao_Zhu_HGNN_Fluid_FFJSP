@@ -130,6 +130,7 @@ runtime:
   threads: 1
 method: full
 teacher: auto
+instance: null
 demonstration:
   steps: 10000
   epochs: 10
@@ -285,6 +286,29 @@ pilot:
     minimum_usable_labels: 50
     minimum_entropy: 0.02
     maximum_wait_fraction: 0.1
+instance_study:
+  root: result/instance
+  split: contested_small
+  methods:
+  - full
+  - no_graph
+  - no_scenario
+  - no_demo
+  - hgnn
+  - ppo
+  seeds:
+  - 1
+  - 2
+  - 3
+  budget: 100000
+  evaluate_every: 5000
+  milestones:
+  - 10000
+  - 30000
+  - 50000
+  - 100000
+  demonstration_steps: 2000
+  exact_from: result/pilot
 smoke:
   budget: 128
   scenario_probe_budget: 4096
